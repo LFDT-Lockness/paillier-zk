@@ -1,0 +1,11 @@
+[package]
+name = "paillier-zk"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand_core = "0.6"
+libpaillier = { path = "../paillier-rs/", features = ["rust"] }
+unknown_order = { version = "0.4", default_features = false, features = ["rust"] }
