@@ -250,11 +250,11 @@ mod paillier_encryption_in_range {
         }
         #[test]
         fn failing() {
-            let p = BigNumber::from_slice(glass_pumpkin::prime::new(L + 1).unwrap().to_bytes_le());
-            let q = BigNumber::from_slice(glass_pumpkin::prime::new(EPSILON + 1).unwrap().to_bytes_le());
-            let private_key = libpaillier::DecryptionKey::with_primes_unchecked(&p, &q).unwrap();
+            let p = BigNumber::prime(L + 1);
+            let q = BigNumber::prime(EPSILON + 1);
+            let private_key = libpaillier::DecryptionKey::with_primes(&p, &q).unwrap();
             let key = libpaillier::EncryptionKey::from(&private_key);
-            let plaintext: BigNumber = BigNumber::one() << (L + EPSILON + 1);
+            let plaintext: BigNumber = (BigNumber::one() << (L + EPSILON)) + 1;
             let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
             let data = super::Data { key, ciphertext };
             let pdata = super::PrivateData { plaintext, nonce };
