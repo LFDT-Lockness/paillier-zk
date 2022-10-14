@@ -131,8 +131,8 @@ mod paillier_encryption_in_range {
         rsa_modulo: BigNumber,
     }
 
-    const L: usize = 1337;
-    const EPSILON: usize = 1337;
+    const L: usize = 228;
+    const EPSILON: usize = 322;
 
     impl crate::fiat_shamir::FiatShamir for P {
         type Data = Data;
@@ -195,8 +195,22 @@ mod paillier_encryption_in_range {
             check1().and_then(check2).and_then(check3)
         }
 
-        fn challenge(_aux: &Aux, _data: &Data, _commitment: &Commitment) -> Hash {
-            1.into() // XXX should be random
+        fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Hash {
+            use sha2::Digest;
+            let mut digest = sha2::Sha512::new();
+
+            digest.update(aux.s.to_bytes());
+            digest.update(aux.t.to_bytes());
+            digest.update(aux.rsa_modulo.to_bytes());
+
+            digest.update(data.key.to_bytes());
+            digest.update(data.ciphertext.to_bytes());
+
+            digest.update(commitment.s.to_bytes());
+            digest.update(commitment.a.to_bytes());
+            digest.update(commitment.c.to_bytes());
+
+            BigNumber::from_slice(digest.finalize())
         }
     }
 
@@ -207,9 +221,10 @@ mod paillier_encryption_in_range {
     #[cfg(test)]
     mod test {
         use unknown_order::BigNumber;
+        use super::{L, EPSILON};
 
         #[test]
-        fn check() {
+        fn passing() {
             let private_key = libpaillier::DecryptionKey::random().unwrap();
             let key = libpaillier::EncryptionKey::from(&private_key);
             let plaintext: BigNumber = 228.into();
@@ -217,8 +232,8 @@ mod paillier_encryption_in_range {
             let data = super::Data { key, ciphertext };
             let pdata = super::PrivateData { plaintext, nonce };
 
-            let p = BigNumber::prime(super::L);
-            let q = BigNumber::prime(super::L);
+            let p = BigNumber::prime(L + EPSILON + 1);
+            let q = BigNumber::prime(L + EPSILON + 1);
             let rsa_modulo = p * q;
             let s: BigNumber = 123.into();
             let t: BigNumber = 321.into();
@@ -231,6 +246,33 @@ mod paillier_encryption_in_range {
             match r {
                 Ok(()) => (),
                 Err(e) => panic!("{}", e),
+            }
+        }
+        #[test]
+        fn failing() {
+            let p = BigNumber::from_slice(glass_pumpkin::prime::new(L + 1).unwrap().to_bytes_le());
+            let q = BigNumber::from_slice(glass_pumpkin::prime::new(EPSILON + 1).unwrap().to_bytes_le());
+            let private_key = libpaillier::DecryptionKey::with_primes_unchecked(&p, &q).unwrap();
+            let key = libpaillier::EncryptionKey::from(&private_key);
+            let plaintext: BigNumber = BigNumber::one() << (L + EPSILON + 1);
+            let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
+            let data = super::Data { key, ciphertext };
+            let pdata = super::PrivateData { plaintext, nonce };
+
+            let p = BigNumber::prime(L + EPSILON + 1);
+            let q = BigNumber::prime(L + EPSILON + 1);
+            let rsa_modulo = p * q;
+            let s: BigNumber = 123.into();
+            let t: BigNumber = 321.into();
+            assert_eq!(s.gcd(&rsa_modulo), 1.into());
+            assert_eq!(t.gcd(&rsa_modulo), 1.into());
+            let aux = super::Aux { s, t, rsa_modulo };
+
+            let ((commitment, challenge, proof), _pcomm) = crate::fiat_shamir::run_scheme::<super::P, _>(&aux, &data, &pdata, rand_core::OsRng::default());
+            let r = crate::fiat_shamir::scheme_verify::<super::P>(&aux, &data, &commitment, &challenge, &proof);
+            match r {
+                Ok(()) => panic!("proof should not pass"),
+                Err(_) => (),
             }
         }
     }

@@ -9,3 +9,5 @@ edition = "2021"
 rand_core = "0.6"
 libpaillier = { path = "../paillier-rs/", features = ["rust"] }
 unknown_order = { version = "0.4", default_features = false, features = ["rust"] }
+glass_pumpkin = { version = "1.3" }
+sha2 = { version = "0.10", default-features = false }
