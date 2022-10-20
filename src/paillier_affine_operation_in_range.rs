@@ -253,11 +253,35 @@ impl crate::fiat_shamir::FiatShamir for P {
     }
 
     fn challenge(
-        _aux: &Aux,
-        _data: &Data<BigNumber>,
-        _commitment: &Commitment<BigNumber>,
+        aux: &Aux,
+        data: &Data<BigNumber>,
+        commitment: &Commitment<BigNumber>,
     ) -> Hash {
-        1.into()
+        use sha2::Digest;
+        let mut digest = sha2::Sha512::new();
+
+        digest.update(aux.s.to_bytes());
+        digest.update(aux.t.to_bytes());
+        digest.update(aux.rsa_modulo.to_bytes());
+
+        digest.update(data.g.to_bytes());
+        digest.update(data.q.to_bytes());
+        digest.update(data.key0.to_bytes());
+        digest.update(data.key1.to_bytes());
+        digest.update(data.c.to_bytes());
+        digest.update(data.d.to_bytes());
+        digest.update(data.y.to_bytes());
+        digest.update(data.x.to_bytes());
+
+        digest.update(commitment.a.to_bytes());
+        digest.update(commitment.b_x.to_bytes());
+        digest.update(commitment.b_y.to_bytes());
+        digest.update(commitment.e.to_bytes());
+        digest.update(commitment.s.to_bytes());
+        digest.update(commitment.f.to_bytes());
+        digest.update(commitment.t.to_bytes());
+
+        BigNumber::from_slice(digest.finalize())
     }
 }
 
