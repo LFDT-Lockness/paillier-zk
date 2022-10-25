@@ -1,5 +1,7 @@
-mod paillier_encryption_in_range;
-mod paillier_affine_operation_in_range;
+pub mod paillier_encryption_in_range;
+pub mod paillier_affine_operation_in_range;
+pub mod paillier_blum_modulus;
+mod sqrt;
 
 use unknown_order::BigNumber;
 
