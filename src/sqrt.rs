@@ -21,26 +21,26 @@ pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> 
 /// - `jacobi(w, n) = -1`, that is w is quadratic non-residue in Zn with jacobi
 /// symbol of -1
 /// If these don't hold, the y' might not exist. In this case, returns `y' = 0`
-pub fn find_residue(y: &BigNumber, w: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> (bool, bool, BigNumber) {
+pub fn find_residue(
+    y: &BigNumber,
+    w: &BigNumber,
+    p: &BigNumber,
+    q: &BigNumber,
+    n: &BigNumber,
+) -> (bool, bool, BigNumber) {
     for (a, b) in TWO_BOOLS {
         let y = if b { w.modmul(&y, &n) } else { y.clone() };
         let y = if a { n - y } else { y };
         let jp = jacobi(&y, p);
         let jq = jacobi(&y, q);
         if jp == 1 && jq == 1 {
-            return (a, b, y)
+            return (a, b, y);
         }
     }
     (false, false, BigNumber::zero())
 }
 
-const TWO_BOOLS: [(bool, bool); 4] = [
-    (false, false),
-    (true, false),
-    (false, true),
-    (true, true),
-];
-
+const TWO_BOOLS: [(bool, bool); 4] = [(false, false), (true, false), (false, true), (true, true)];
 
 /// Find a quadratic non-residue in Zn. Does so by generating a random number
 /// and checking its jacobi symbol. The return value is guaranteed to have

@@ -1,189 +1,219 @@
-//! Paillier encryption in range, Пenc
+//! ZK-proof of paillier encryption in range. Called Пenc or Renc in the CGGMP
+//! paper.
 //!
-//! For public key N, verify that the plaintext of given ciphertext C is in
-//! desired range I.  
-//! Range is given as bitsize by parameters epsilon and l
+//! ## Description
+//!
+//! A party P has `key`, `pkey` - public and private keys in paillier
+//! cryptosystem. P also has `plaintext`, `nonce`, and
+//! `ciphertext = key.encrypt(plaintext, nonce)`.
+//!
+//! P wants to prove that `plaintext` is at most `L` bits, without disclosing
+//! it, the `pkey`, and `nonce`
 
-use libpaillier::{EncryptionKey, Ciphertext, Nonce};
+use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 use unknown_order::BigNumber;
 
-use crate::{combine, EPSILON, L, gen_inversible};
+use crate::common::{combine, gen_inversible};
+use crate::{EPSILON, L};
 
 pub struct P;
 
+/// Public data that both parties know
 pub struct Data {
     /// N0 in paper, public key that k -> K was encrypted on
-    key: EncryptionKey,
+    pub key: EncryptionKey,
     /// K in paper
-    ciphertext: Ciphertext,
+    pub ciphertext: Ciphertext,
 }
+
+/// Private data of prover
 pub struct PrivateData {
     /// k in paper, plaintext of K
-    plaintext: BigNumber,
+    pub plaintext: BigNumber,
     /// rho in paper, nonce of encryption k -> K
-    nonce: Nonce,
+    pub nonce: Nonce,
 }
-/// As described in cggmp21 at page 33
+
+// As described in cggmp21 at page 33
+/// Prover's first message, obtained by `commit`
 pub struct Commitment {
     s: BigNumber,
     a: BigNumber,
     c: BigNumber,
 }
+
+/// Prover's data accompanying the commitment. Kept as state between rounds in
+/// the interactive protocol.
 pub struct PrivateCommitment {
     alpha: BigNumber,
     mu: BigNumber,
     r: BigNumber,
     gamma: BigNumber,
 }
+
+/// Verifier's challenge to prover. Can be obtained deterministically by
+/// `challenge`
 pub type Hash = BigNumber;
-/// As described in cggmp21 at page 33
+
+// As described in cggmp21 at page 33
+/// The ZK proof. Computed by `prove`
 pub struct Proof {
     _1: BigNumber,
     _2: BigNumber,
     _3: BigNumber,
 }
+
+/// Auxiliary data known to both prover and verifier
 pub struct Aux {
     /// ring-pedersen parameter
-    s: BigNumber,
+    pub s: BigNumber,
     /// ring-pedersen parameter
-    t: BigNumber,
+    pub t: BigNumber,
     /// N^ in paper
-    rsa_modulo: BigNumber,
+    pub rsa_modulo: BigNumber,
 }
 
-impl crate::fiat_shamir::FiatShamir for P {
-    type Data = Data;
-    type PrivateData = PrivateData;
-    type Commitment = Commitment;
-    type PrivateCommitment = PrivateCommitment;
-    type Hash = Hash;
-    type Proof = Proof;
-    type Aux = Aux;
+/// Create random commitment
+pub fn commit<R: RngCore>(
+    aux: &Aux,
+    data: &Data,
+    pdata: &PrivateData,
+    mut rng: R,
+) -> (Commitment, PrivateCommitment) {
+    let two_to_l = BigNumber::from(1) << L;
+    let two_to_l_plus_e = BigNumber::from(1) << (L + EPSILON);
+    let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
+    let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
+    let r = gen_inversible(&data.key.n(), &mut rng);
+    let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
-    fn commit<R: RngCore>(
-        aux: &Aux,
-        data: &Data,
-        pdata: &PrivateData,
-        mut rng: R,
-    ) -> (Commitment, PrivateCommitment) {
-        let two_to_l = BigNumber::from(1) << L;
-        let two_to_l_plus_e = BigNumber::from(1) << (L + EPSILON);
-        let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
-        let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
-        let r = gen_inversible(&data.key.n(), &mut rng);
-        let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
+    let s = combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
+    let a = combine(
+        &(data.key.n() + 1),
+        &alpha,
+        &r,
+        &data.key.n(),
+        &data.key.nn(),
+    );
+    let c = combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
+    (
+        Commitment { s, a, c },
+        PrivateCommitment {
+            alpha,
+            mu,
+            r,
+            gamma,
+        },
+    )
+}
 
-        let s = combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
-        let a = combine(
-            &(data.key.n() + 1),
-            &alpha,
-            &r,
-            &data.key.n(),
-            &data.key.nn(),
+/// Compute proof for given data and prior protocol values
+fn prove(
+    data: &Data,
+    pdata: &PrivateData,
+    private_commitment: &PrivateCommitment,
+    challenge: &Hash,
+) -> Proof {
+    let m = unknown_order::Group {
+        modulus: data.key.n().clone(),
+    };
+    let _2 = &m
+        * (
+            &private_commitment.r,
+            &pdata.nonce.modpow(challenge, &data.key.n()),
         );
-        let c = combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
-        (
-            Commitment { s, a, c },
-            PrivateCommitment {
-                alpha,
-                mu,
-                r,
-                gamma,
-            },
-        )
-    }
+    let _1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
+    let _3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
+    Proof { _1, _2, _3 }
+}
 
-    fn prove(
-        _: &Aux,
-        data: &Data,
-        pdata: &PrivateData,
-        _: &Commitment,
-        private_commitment: &PrivateCommitment,
-        challenge: &Hash,
-    ) -> Self::Proof {
-        let m = unknown_order::Group {
-            modulus: data.key.n().clone(),
-        };
-        let _2 = &m
-            * (
-                &private_commitment.r,
-                &pdata.nonce.modpow(challenge, &data.key.n()),
-            );
-        let _1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
-        let _3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
-        Proof { _1, _2, _3 }
-    }
-
-    fn verify(
-        aux: &Aux,
-        data: &Data,
-        commitment: &Commitment,
-        challenge: &Hash,
-        proof: &Proof,
-    ) -> Result<(), &'static str> {
-        let check1 = || {
-            let pt = &proof._1 % data.key.n();
-            match data.key.encrypt(pt.to_bytes(), Some(proof._2.clone())) {
-                Some((cipher, _nonce)) => {
-                    if cipher
-                        != commitment.a.modmul(
-                            &data.ciphertext.modpow(challenge, data.key.nn()),
-                            data.key.nn(),
-                        )
-                    {
-                        Err("check1 failed")
-                    } else {
-                        Ok(())
-                    }
+/// Verify the proof
+pub fn verify(
+    aux: &Aux,
+    data: &Data,
+    commitment: &Commitment,
+    challenge: &Hash,
+    proof: &Proof,
+) -> Result<(), &'static str> {
+    let check1 = || {
+        let pt = &proof._1 % data.key.n();
+        match data.key.encrypt(pt.to_bytes(), Some(proof._2.clone())) {
+            Some((cipher, _nonce)) => {
+                if cipher
+                    != commitment.a.modmul(
+                        &data.ciphertext.modpow(challenge, data.key.nn()),
+                        data.key.nn(),
+                    )
+                {
+                    Err("check1 failed")
+                } else {
+                    Ok(())
                 }
-                None => Err("encrypt failed"),
             }
-        };
-        fn fail_if(b: bool, msg: &'static str) -> Result<(), &'static str> {
-            if b {
-                Ok(())
-            } else {
-                Err(msg)
-            }
+            None => Err("encrypt failed"),
         }
-        let check2 = || {
-            fail_if(
-                combine(&aux.s, &proof._1, &aux.t, &proof._3, &aux.rsa_modulo)
-                    == combine(
-                        &commitment.c,
-                        &1.into(),
-                        &commitment.s,
-                        challenge,
-                        &aux.rsa_modulo,
-                    ),
-                "check2",
-            )
-        };
-        let check3 = || fail_if(proof._1 <= (BigNumber::one() << (L + EPSILON)), "check3");
-
-        // need to explicitly erase type
-        let c1: &dyn Fn() -> Result<(), &'static str> = &check1;
-        crate::traverse([c1, &check2, &check3])
+    };
+    fn fail_if(b: bool, msg: &'static str) -> Result<(), &'static str> {
+        if b {
+            Ok(())
+        } else {
+            Err(msg)
+        }
     }
+    let check2 = || {
+        fail_if(
+            combine(&aux.s, &proof._1, &aux.t, &proof._3, &aux.rsa_modulo)
+                == combine(
+                    &commitment.c,
+                    &1.into(),
+                    &commitment.s,
+                    challenge,
+                    &aux.rsa_modulo,
+                ),
+            "check2",
+        )
+    };
+    let check3 = || fail_if(proof._1 <= (BigNumber::one() << (L + EPSILON)), "check3");
 
-    fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Hash {
-        use sha2::Digest;
-        let mut digest = sha2::Sha512::new();
+    // need to explicitly erase type
+    let c1: &dyn Fn() -> Result<(), &'static str> = &check1;
+    crate::common::sequence([c1, &check2, &check3])
+}
 
-        digest.update(aux.s.to_bytes());
-        digest.update(aux.t.to_bytes());
-        digest.update(aux.rsa_modulo.to_bytes());
+/// Deterministically compute challenge based on prior known values in protocol
+pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Hash {
+    use sha2::Digest;
+    let mut digest = sha2::Sha512::new();
 
-        digest.update(data.key.to_bytes());
-        digest.update(data.ciphertext.to_bytes());
+    digest.update(aux.s.to_bytes());
+    digest.update(aux.t.to_bytes());
+    digest.update(aux.rsa_modulo.to_bytes());
 
-        digest.update(commitment.s.to_bytes());
-        digest.update(commitment.a.to_bytes());
-        digest.update(commitment.c.to_bytes());
+    digest.update(data.key.to_bytes());
+    digest.update(data.ciphertext.to_bytes());
 
-        BigNumber::from_slice(digest.finalize())
-    }
+    digest.update(commitment.s.to_bytes());
+    digest.update(commitment.a.to_bytes());
+    digest.update(commitment.c.to_bytes());
+
+    BigNumber::from_slice(digest.finalize())
+}
+
+/// Compute proof for the given data, producing random commitment and
+/// deriving determenistic challenge.
+///
+/// Obtained from the above interactive proof via Fiat-Shamir heuristic.
+pub fn compute_proof<R: RngCore>(
+    aux: &Aux,
+    data: &Data,
+    pdata: &PrivateData,
+    rng: R,
+) -> (Commitment, Hash, Proof) {
+    let (comm, pcomm) = commit(aux, data, pdata, rng);
+    let challenge = challenge(aux, data, &comm);
+    let proof = prove(data, pdata, &pcomm, &challenge);
+    (comm, challenge, proof)
 }
 
 #[cfg(test)]
@@ -209,20 +239,9 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
-        let ((commitment, challenge, proof), _pcomm) =
-            crate::fiat_shamir::run_scheme::<super::P, _>(
-                &aux,
-                &data,
-                &pdata,
-                rand_core::OsRng::default(),
-            );
-        let r = crate::fiat_shamir::scheme_verify::<super::P>(
-            &aux,
-            &data,
-            &commitment,
-            &challenge,
-            &proof,
-        );
+        let (commitment, challenge, proof) =
+            super::compute_proof(&aux, &data, &pdata, rand_core::OsRng::default());
+        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{}", e),
@@ -248,24 +267,12 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
-        let ((commitment, challenge, proof), _pcomm) =
-            crate::fiat_shamir::run_scheme::<super::P, _>(
-                &aux,
-                &data,
-                &pdata,
-                rand_core::OsRng::default(),
-            );
-        let r = crate::fiat_shamir::scheme_verify::<super::P>(
-            &aux,
-            &data,
-            &commitment,
-            &challenge,
-            &proof,
-        );
+        let (commitment, challenge, proof) =
+            super::compute_proof(&aux, &data, &pdata, rand_core::OsRng::default());
+        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(_) => (),
         }
     }
 }
-

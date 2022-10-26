@@ -6,7 +6,7 @@
 //! without disclosing p and q.
 //!
 //! ## Example
-//! 0. Proover P derives two Blum primes and makes a Paillier-Blum modulus
+//! 0. Prover P derives two Blum primes and makes a Paillier-Blum modulus
 //!     ``` no_run
 //!     # use unknown_order::BigNumber;
 //!     fn blum_prime(s: usize) -> BigNumber {
@@ -55,7 +55,10 @@
 use rand_core::RngCore;
 use unknown_order::BigNumber;
 
-use crate::sqrt::{blum_sqrt, find_residue, non_residue_in};
+use crate::{
+    sqrt::{blum_sqrt, find_residue, non_residue_in},
+    M,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InvalidProof {
@@ -65,21 +68,18 @@ pub enum InvalidProof {
     IncorrectFourthRoot,
 }
 
-/// TODO: choose appropriate value
-pub const M: usize = 13;
-
 /// Public data that both parties know: the Paillier-Blum modulus
 pub struct Data {
     pub n: BigNumber,
 }
 
-/// Private data of proover
+/// Private data of prover
 pub struct PrivateData {
     pub p: BigNumber,
     pub q: BigNumber,
 }
 
-/// Proover's first message, obtained by `commit`
+/// Prover's first message, obtained by `commit`
 pub struct Commitment {
     w: BigNumber,
 }
@@ -168,12 +168,12 @@ pub fn verify(
             return Err(InvalidProof::IncorrectNthRoot);
         }
         let y = y.clone();
-        let y = if point.a {
-            &data.n - y
+        let y = if point.a { &data.n - y } else { y };
+        let y = if point.b {
+            y.modmul(&commitment.w, &data.n)
         } else {
             y
         };
-        let y = if point.b { y.modmul(&commitment.w, &data.n) } else { y };
         if point.x.modpow(&4.into(), &data.n) != y {
             return Err(InvalidProof::IncorrectFourthRoot);
         }
@@ -181,8 +181,8 @@ pub fn verify(
     Ok(())
 }
 
-/// Compute proof for the given data, deriving random commitment and
-/// determenistic challenge.
+/// Compute proof for the given data, producing random commitment and
+/// deriving determenistic challenge.
 ///
 /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
 pub fn compute_proof<R: RngCore>(
