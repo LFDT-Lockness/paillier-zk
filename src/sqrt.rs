@@ -1,15 +1,29 @@
 use rand_core::RngCore;
 use unknown_order::BigNumber;
 
-/// n = pq
+/// Find principal square root in a Blum modulus quotient ring.
+///
+/// Pre-requisites:
+/// - x is a quadratic residue in Zn
+/// - `n = pq`, p and q are Blum primes
+/// If these don't hold, the result is a bogus number in Zn
 pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> BigNumber {
     let e = ((p - 1) * (q - 1) + 4) / 8;
     x.modpow(&e, &n)
 }
 
+/// Find `(y' = (-1)^a w^b y, a, b)` such that y' is a quadratic residue in Zn.
+///
+/// a and b are treated as false = 0, true = 1
+///
+/// Pre-requisites:
+/// - `n = pq`, p and q are Blum primes
+/// - `jacobi(w, n) = -1`, that is w is quadratic non-residue in Zn with jacobi
+/// symbol of -1
+/// If these don't hold, the y' might not exist. In this case, returns `y' = 0`
 pub fn find_residue(y: &BigNumber, w: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> (bool, bool, BigNumber) {
     for (a, b) in TWO_BOOLS {
-        let y = if b { w * y } else { y.clone() };
+        let y = if b { w.modmul(&y, &n) } else { y.clone() };
         let y = if a { n - y } else { y };
         let jp = jacobi(&y, p);
         let jq = jacobi(&y, q);
@@ -17,10 +31,10 @@ pub fn find_residue(y: &BigNumber, w: &BigNumber, p: &BigNumber, q: &BigNumber, 
             return (a, b, y)
         }
     }
-    panic!("so w should have had jacobi of -1, not just be a non-residue")
+    (false, false, BigNumber::zero())
 }
 
-pub const TWO_BOOLS: [(bool, bool); 4] = [
+const TWO_BOOLS: [(bool, bool); 4] = [
     (false, false),
     (true, false),
     (false, true),
@@ -28,6 +42,9 @@ pub const TWO_BOOLS: [(bool, bool); 4] = [
 ];
 
 
+/// Find a quadratic non-residue in Zn. Does so by generating a random number
+/// and checking its jacobi symbol. The return value is guaranteed to have
+/// jacobi symbol of -1
 pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
     loop {
         let w = BigNumber::from_rng(&n, &mut rng);
@@ -37,6 +54,7 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
     }
 }
 
+/// Compute jacobi symbol of x over y
 #[allow(clippy::many_single_char_names)]
 pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
     let five = BigNumber::from(5);
