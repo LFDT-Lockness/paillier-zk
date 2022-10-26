@@ -8,7 +8,6 @@ pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> 
 }
 
 pub fn find_residue(y: &BigNumber, w: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> (bool, bool, BigNumber) {
-    eprintln!("y = {}\nw = {}\np = {}\nq = {}\nn = {}", y, w, p, q, n);
     for (a, b) in TWO_BOOLS {
         let y = if b { w * y } else { y.clone() };
         let y = if a { n - y } else { y };
@@ -16,8 +15,6 @@ pub fn find_residue(y: &BigNumber, w: &BigNumber, p: &BigNumber, q: &BigNumber, 
         let jq = jacobi(&y, q);
         if jp == 1 && jq == 1 {
             return (a, b, y)
-        } else {
-            eprintln!("y = {}\njp = {}, jq = {}", y, jp, jq);
         }
     }
     panic!("so w should have had jacobi of -1, not just be a non-residue")

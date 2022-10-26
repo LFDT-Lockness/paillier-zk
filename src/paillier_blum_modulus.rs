@@ -152,8 +152,8 @@ mod test {
     #[test]
     fn passing() {
         let mut rng = rand_core::OsRng::default();
-        let p = paillier_prime(256);
-        let q = paillier_prime(256);
+        let p = blum_prime(256);
+        let q = blum_prime(256);
         let n = &p * &q;
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
@@ -177,12 +177,45 @@ mod test {
         }
     }
 
-    fn paillier_prime(s: usize) -> BigNumber {
+    #[test]
+    fn failing() {
+        let mut rng = rand_core::OsRng::default();
+        let p = BigNumber::prime(256);
+        let q = loop { // non blum prime
+            let q = BigNumber::prime(256);
+            if &q % 4 == BigNumber::one() {
+                break q;
+            }
+        };
+        let n = &p * &q;
+        let data = super::Data { n };
+        let pdata = super::PrivateData { p, q };
+        let ((commitment, challenge, proof), _pcomm) =
+            crate::fiat_shamir::run_scheme::<super::P, _>(
+                &(),
+                &data,
+                &pdata,
+                &mut rng,
+            );
+        let r = crate::fiat_shamir::scheme_verify::<super::P>(
+            &(),
+            &data,
+            &commitment,
+            &challenge,
+            &proof,
+        );
+        match r {
+            Ok(()) => panic!("should have failed"),
+            Err(_) => (),
+        }
+    }
+
+    fn blum_prime(s: usize) -> BigNumber {
         let three = BigNumber::from(3);
         loop {
             let p = BigNumber::prime(s);
             if &p % 4 == three {
-                break p
+                break p;
             }
         }
     }
