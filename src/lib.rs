@@ -2,7 +2,6 @@ mod common;
 pub mod paillier_affine_operation_in_range;
 pub mod paillier_blum_modulus;
 pub mod paillier_encryption_in_range;
-mod sqrt;
 
 /// Bit size in Пenc and Пaff-g
 /// TODO: choose appropriate value

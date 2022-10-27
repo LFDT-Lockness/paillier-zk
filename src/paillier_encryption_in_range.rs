@@ -10,6 +10,58 @@
 //! P wants to prove that `plaintext` is at most `L` bits, without disclosing
 //! it, the `pkey`, and `nonce`
 
+//! ## Example
+//!
+//! ``` no_run
+//! # use unknown_order::BigNumber;
+//! use paillier_zk::paillier_encryption_in_range as p;
+//! use paillier_zk::{L, EPSILON};
+//!
+//! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
+//!
+//! let p = BigNumber::prime(L + EPSILON + 1);
+//! let q = BigNumber::prime(L + EPSILON + 1);
+//! let rsa_modulo = p * q;
+//! let s: BigNumber = 123.into();
+//! let t: BigNumber = 321.into();
+//! assert_eq!(s.gcd(&rsa_modulo), 1.into());
+//! assert_eq!(t.gcd(&rsa_modulo), 1.into());
+//!
+//! let aux = p::Aux { s, t, rsa_modulo };
+//!
+//! // 1. Setup: prover prepares the paillier keys
+//!
+//! let private_key = libpaillier::DecryptionKey::random().unwrap();
+//! let key = libpaillier::EncryptionKey::from(&private_key);
+//!
+//! // 2. Setup: prover has some plaintext and encrypts it
+//!
+//! let plaintext: BigNumber = 228.into();
+//! let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
+//!
+//! // 3. Prover computes a non-interactive proof that plaintext is at most `L` bits:
+//!
+//! let rng = rand_core::OsRng::default();
+//! let data = p::Data { key, ciphertext };
+//! let pdata = p::PrivateData { plaintext, nonce };
+//! let (commitment, challenge, proof) =
+//!     p::compute_proof(&aux, &data, &pdata, rng);
+//!
+//! // 4. Prover sends this data to verifier
+//!
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Challenge, _: &p::Proof) { todo!() }
+//! # fn recv() -> (p::Data, p::Commitment, p::Challenge, p::Proof) { todo!() }
+//! send(&data, &commitment, &challenge, &proof);
+//!
+//! // 5. Verifier receives the data and the proof and verifies it
+//!
+//! let (data, commitment, challenge, proof) = recv();
+//! p::verify(&aux, &data, &commitment, &challenge, &proof);
+//!
+//! ```
+//!
+//! If the verification succeeded, verifier can continue communication with prover
+
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 use unknown_order::BigNumber;
@@ -54,7 +106,7 @@ pub struct PrivateCommitment {
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
 /// `challenge`
-pub type Hash = BigNumber;
+pub type Challenge = BigNumber;
 
 // As described in cggmp21 at page 33
 /// The ZK proof. Computed by `prove`
@@ -113,7 +165,7 @@ fn prove(
     data: &Data,
     pdata: &PrivateData,
     private_commitment: &PrivateCommitment,
-    challenge: &Hash,
+    challenge: &Challenge,
 ) -> Proof {
     let m = unknown_order::Group {
         modulus: data.key.n().clone(),
@@ -133,56 +185,46 @@ pub fn verify(
     aux: &Aux,
     data: &Data,
     commitment: &Commitment,
-    challenge: &Hash,
+    challenge: &Challenge,
     proof: &Proof,
 ) -> Result<(), &'static str> {
-    let check1 = || {
-        let pt = &proof._1 % data.key.n();
-        match data.key.encrypt(pt.to_bytes(), Some(proof._2.clone())) {
-            Some((cipher, _nonce)) => {
-                if cipher
-                    != commitment.a.modmul(
-                        &data.ciphertext.modpow(challenge, data.key.nn()),
-                        data.key.nn(),
-                    )
-                {
-                    Err("check1 failed")
-                } else {
-                    Ok(())
-                }
+    // check 1
+    let pt = &proof._1 % data.key.n();
+    match data.key.encrypt(pt.to_bytes(), Some(proof._2.clone())) {
+        Some((cipher, _nonce)) => {
+            if cipher
+                != commitment.a.modmul(
+                    &data.ciphertext.modpow(challenge, data.key.nn()),
+                    data.key.nn(),
+                )
+            {
+                return Err("check1 failed");
             }
-            None => Err("encrypt failed"),
         }
-    };
-    fn fail_if(b: bool, msg: &'static str) -> Result<(), &'static str> {
-        if b {
-            Ok(())
-        } else {
-            Err(msg)
-        }
+        None => return Err("encrypt failed"),
     }
-    let check2 = || {
-        fail_if(
-            combine(&aux.s, &proof._1, &aux.t, &proof._3, &aux.rsa_modulo)
-                == combine(
-                    &commitment.c,
-                    &1.into(),
-                    &commitment.s,
-                    challenge,
-                    &aux.rsa_modulo,
-                ),
-            "check2",
-        )
-    };
-    let check3 = || fail_if(proof._1 <= (BigNumber::one() << (L + EPSILON)), "check3");
 
-    // need to explicitly erase type
-    let c1: &dyn Fn() -> Result<(), &'static str> = &check1;
-    crate::common::sequence([c1, &check2, &check3])
+    let check2 = combine(&aux.s, &proof._1, &aux.t, &proof._3, &aux.rsa_modulo)
+        == combine(
+            &commitment.c,
+            &1.into(),
+            &commitment.s,
+            challenge,
+            &aux.rsa_modulo,
+        );
+    if !check2 {
+        return Err("check 2");
+    }
+
+    if !(proof._1 <= (BigNumber::one() << (L + EPSILON))) {
+        return Err("check 3");
+    }
+
+    Ok(())
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Hash {
+pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
     use sha2::Digest;
     let mut digest = sha2::Sha512::new();
 
@@ -209,7 +251,7 @@ pub fn compute_proof<R: RngCore>(
     data: &Data,
     pdata: &PrivateData,
     rng: R,
-) -> (Commitment, Hash, Proof) {
+) -> (Commitment, Challenge, Proof) {
     let (comm, pcomm) = commit(aux, data, pdata, rng);
     let challenge = challenge(aux, data, &comm);
     let proof = prove(data, pdata, &pcomm, &challenge);

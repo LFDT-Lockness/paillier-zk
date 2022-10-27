@@ -26,6 +26,104 @@
 //! - `bitsize(x) <= L'`
 //!
 //! Disclosing only: `g`, `q`, `key0`, `key1`, `C`, `D`, `Y`, `X`
+//!
+//! ## Example
+//!
+//! ``` no_run
+//! # use unknown_order::BigNumber;
+//! use paillier_zk::paillier_affine_operation_in_range as p;
+//! use paillier_zk::{L, EPSILON};
+//!
+//! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
+//!
+//! let p = BigNumber::prime(L + EPSILON + 1);
+//! let q = BigNumber::prime(L + EPSILON + 1);
+//! let rsa_modulo = p * q;
+//! let s: BigNumber = 123.into();
+//! let t: BigNumber = 321.into();
+//! assert_eq!(s.gcd(&rsa_modulo), 1.into());
+//! assert_eq!(t.gcd(&rsa_modulo), 1.into());
+//!
+//! let aux = p::Aux { s, t, rsa_modulo };
+//!
+//! // 1. Setup: prover prepares the paillier keys
+//!
+//! // this key is used to decrypt C and D, and also Y in the affine operation
+//! let private_key0 = libpaillier::DecryptionKey::random().unwrap();
+//! let key0 = libpaillier::EncryptionKey::from(&private_key0);
+//! // this key is used to decrypt Y in this ZK-protocol
+//! let private_key1 = libpaillier::DecryptionKey::random().unwrap();
+//! let key1 = libpaillier::EncryptionKey::from(&private_key1);
+//!
+//! // 2. Setup: prover prepares the group used to encrypt x
+//!
+//! let q = BigNumber::from(1_000_000_007);
+//! let g = BigNumber::from(2);
+//! assert_eq!(g.gcd(&q), 1.into());
+//!
+//! // 3. Setup: prover prepares all plain texts
+//!
+//! // c in paper
+//! let plaintext_orig = BigNumber::from(100);
+//! // x in paper
+//! let plaintext_mult = BigNumber::from(2);
+//! // y in paper
+//! let plaintext_add = BigNumber::from(28);
+//!
+//! // 4. Setup: prover encrypts everything on correct keys and remembers some nonces
+//!
+//! // C in paper
+//! let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
+//! // X in paper
+//! let ciphertext_mult = g.modpow(&plaintext_mult, &q);
+//! // Y' in further docs, and ρy in paper
+//! let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
+//! // Y and ρ in paper
+//! let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), None).unwrap();
+//! // D in paper
+//! let transformed = key0
+//!     .add(
+//!         &key0.mul(&ciphertext_orig, &plaintext_mult).unwrap(),
+//!         &ciphertext_add_action,
+//!     )
+//!     .unwrap();
+//!
+//! // 5. Prover computes a non-interactive proof that plaintext_add and
+//! //    plaintext_mult are at most L and L' bits
+//!
+//! let rng = rand_core::OsRng::default();
+//! let data = p::Data {
+//!     g,
+//!     q,
+//!     key0,
+//!     key1,
+//!     c: ciphertext_orig,
+//!     d: transformed,
+//!     y: ciphertext_add,
+//!     x: ciphertext_mult,
+//! };
+//! let pdata = p::PrivateData {
+//!     x: plaintext_mult,
+//!     y: plaintext_add,
+//!     nonce,
+//!     nonce_y,
+//! };
+//! let (commitment, challenge, proof) =
+//!     p::compute_proof(&aux, &data, &pdata, rng);
+//!
+//! // 6. Prover sends this data to verifier
+//!
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Challenge, _: &p::Proof) { todo!() }
+//! # fn recv() -> (p::Data, p::Commitment, p::Challenge, p::Proof) { todo!() }
+//! send(&data, &commitment, &challenge, &proof);
+//!
+//! // 7. Verifier receives the data and the proof and verifies it
+//!
+//! let (data, commitment, challenge, proof) = recv();
+//! let r = p::verify(&aux, &data, &commitment, &challenge, &proof);
+//! ```
+//!
+//! If the verification succeeded, verifier can continue communication with prover
 
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
@@ -33,8 +131,6 @@ use unknown_order::BigNumber;
 
 use crate::common::{combine, gen_inversible};
 use crate::{EPSILON, L};
-
-pub struct P;
 
 /// Public data that both parties know
 pub struct Data {
@@ -95,7 +191,7 @@ pub struct PrivateCommitment {
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
 /// `challenge`
-pub type Hash = BigNumber;
+pub type Challenge = BigNumber;
 
 /// The ZK proof. Computed by `prove`
 pub struct Proof {
@@ -176,7 +272,7 @@ pub fn prove(
     data: &Data,
     pdata: &PrivateData,
     pcomm: &PrivateCommitment,
-    challenge: &Hash,
+    challenge: &Challenge,
 ) -> Proof {
     Proof {
         z1: &pcomm.alpha + challenge * &pdata.x,
@@ -205,7 +301,7 @@ pub fn verify(
     aux: &Aux,
     data: &Data,
     commitment: &Commitment,
-    challenge: &Hash,
+    challenge: &Challenge,
     proof: &Proof,
 ) -> Result<(), &'static str> {
     let one = BigNumber::one();
@@ -216,7 +312,8 @@ pub fn verify(
             Err(msg)
         }
     }
-    let check1 = || {
+    // Five equality checks and two range checks
+    {
         let enc = data
             .key0
             .encrypt(proof.z2.to_bytes(), Some(proof.w.clone()))
@@ -227,61 +324,54 @@ pub fn verify(
             .add(&data.key0.mul(&data.c, &proof.z1).unwrap(), &enc)
             .unwrap();
         let rhs = combine(&commitment.a, &one, &data.d, &challenge, &data.key0.nn());
-        fail_if("check1", lhs == rhs)
-    };
-    let check2 = || {
+        fail_if("check1", lhs == rhs)?;
+    }
+    {
         let lhs = data.g.modpow(&proof.z1, &data.q);
         let rhs = combine(&commitment.b_x, &one, &data.x, &challenge, &data.q);
-        fail_if("check2", lhs == rhs)
-    };
-    let check3 = || {
+        fail_if("check2", lhs == rhs)?;
+    }
+    {
         let lhs = data
             .key1
             .encrypt(proof.z2.to_bytes(), Some(proof.w_y.clone()))
             .unwrap()
             .0;
         let rhs = combine(&commitment.b_y, &one, &data.y, &challenge, &data.key1.nn());
-        fail_if("check3", lhs == rhs)
-    };
-    let check4 = || {
-        fail_if(
-            "check4",
-            combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
-                == combine(
-                    &commitment.e,
-                    &one,
-                    &commitment.s,
-                    &challenge,
-                    &aux.rsa_modulo,
-                ),
-        )
-    };
-    let check5 = || {
-        fail_if(
-            "check5",
-            combine(&aux.s, &proof.z2, &aux.t, &proof.z4, &aux.rsa_modulo)
-                == combine(
-                    &commitment.f,
-                    &one,
-                    &commitment.t,
-                    &challenge,
-                    &aux.rsa_modulo,
-                ),
-        )
-    };
-    let check6 = || fail_if("range check6", proof.z1 <= &one << (L + EPSILON));
-    let check7 = || {
-        fail_if(
-            "range check7",
-            proof.z2 <= &one << (L + EPSILON), // TODO: L'
-        )
-    };
-    let c1: &dyn Fn() -> Result<(), &'static str> = &check1;
-    crate::common::sequence([c1, &check2, &check3, &check4, &check5, &check6, &check7])
+        fail_if("check3", lhs == rhs)?;
+    }
+    fail_if(
+        "check4",
+        combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
+            == combine(
+                &commitment.e,
+                &one,
+                &commitment.s,
+                &challenge,
+                &aux.rsa_modulo,
+            ),
+    )?;
+    fail_if(
+        "check5",
+        combine(&aux.s, &proof.z2, &aux.t, &proof.z4, &aux.rsa_modulo)
+            == combine(
+                &commitment.f,
+                &one,
+                &commitment.t,
+                &challenge,
+                &aux.rsa_modulo,
+            ),
+    )?;
+    fail_if("range check6", proof.z1 <= &one << (L + EPSILON))?;
+    fail_if(
+        "range check7",
+        proof.z2 <= &one << (L + EPSILON), // TODO: L'
+    )?;
+    Ok(())
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Hash {
+pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
     use sha2::Digest;
     let mut digest = sha2::Sha512::new();
 
@@ -318,7 +408,7 @@ pub fn compute_proof<R: RngCore>(
     data: &Data,
     pdata: &PrivateData,
     rng: R,
-) -> (Commitment, Hash, Proof) {
+) -> (Commitment, Challenge, Proof) {
     let (comm, pcomm) = commit(aux, data, pdata, rng);
     let challenge = challenge(aux, data, &comm);
     let proof = prove(data, pdata, &pcomm, &challenge);

@@ -56,7 +56,7 @@ use rand_core::RngCore;
 use unknown_order::BigNumber;
 
 use crate::{
-    sqrt::{blum_sqrt, find_residue, non_residue_in},
+    common::sqrt::{blum_sqrt, find_residue, non_residue_in},
     M,
 };
 
