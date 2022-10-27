@@ -21,6 +21,8 @@
 //!     let p = blum_prime(256);
 //!     let q = blum_prime(256);
 //!     let n = &p * &q;
+//!     // Prover can then make a key from it
+//!     let pkey = libpaillier::DecryptionKey::with_primes_unchecked(&p, &q);
 //!     ```
 //! 1. P computes a non-interactive proof that `n` is a Paillier-Blum modulus:
 //!     ``` no_run
