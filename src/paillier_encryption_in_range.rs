@@ -137,7 +137,7 @@ pub fn commit<R: RngCore>(
     let two_to_l_plus_e = BigNumber::from(1) << (L + EPSILON);
     let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
     let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
-    let r = gen_inversible(&data.key.n(), &mut rng);
+    let r = gen_inversible(data.key.n(), &mut rng);
     let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
     let s = combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
@@ -145,8 +145,8 @@ pub fn commit<R: RngCore>(
         &(data.key.n() + 1),
         &alpha,
         &r,
-        &data.key.n(),
-        &data.key.nn(),
+        data.key.n(),
+        data.key.nn(),
     );
     let c = combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
     (
@@ -161,6 +161,7 @@ pub fn commit<R: RngCore>(
 }
 
 /// Compute proof for given data and prior protocol values
+#[allow(clippy::just_underscores_and_digits)]
 fn prove(
     data: &Data,
     pdata: &PrivateData,
@@ -173,7 +174,7 @@ fn prove(
     let _2 = &m
         * (
             &private_commitment.r,
-            &pdata.nonce.modpow(challenge, &data.key.n()),
+            &pdata.nonce.modpow(challenge, data.key.n()),
         );
     let _1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
     let _3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
@@ -216,7 +217,7 @@ pub fn verify(
         return Err("check 2");
     }
 
-    if !(proof._1 <= (BigNumber::one() << (L + EPSILON))) {
+    if proof._1 > (BigNumber::one() << (L + EPSILON)) {
         return Err("check 3");
     }
 

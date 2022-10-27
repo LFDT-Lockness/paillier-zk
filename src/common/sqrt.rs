@@ -9,7 +9,7 @@ use unknown_order::BigNumber;
 /// If these don't hold, the result is a bogus number in Zn
 pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> BigNumber {
     let e = ((p - 1) * (q - 1) + 4) / 8;
-    x.modpow(&e, &n)
+    x.modpow(&e, n)
 }
 
 /// Find `(y' = (-1)^a w^b y, a, b)` such that y' is a quadratic residue in Zn.
@@ -29,7 +29,7 @@ pub fn find_residue(
     n: &BigNumber,
 ) -> (bool, bool, BigNumber) {
     for (a, b) in TWO_BOOLS {
-        let y = if b { w.modmul(&y, &n) } else { y.clone() };
+        let y = if b { w.modmul(y, n) } else { y.clone() };
         let y = if a { n - y } else { y };
         let jp = jacobi(&y, p);
         let jq = jacobi(&y, q);
@@ -47,8 +47,8 @@ const TWO_BOOLS: [(bool, bool); 4] = [(false, false), (true, false), (false, tru
 /// jacobi symbol of -1
 pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
     loop {
-        let w = BigNumber::from_rng(&n, &mut rng);
-        if jacobi(&w, &n) == -1 {
+        let w = BigNumber::from_rng(n, &mut rng);
+        if jacobi(&w, n) == -1 {
             break w;
         }
     }
@@ -87,7 +87,7 @@ pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
         if &n % &four == three && &k % &four == three {
             j = -j;
         }
-        n = n % &k;
+        n %= &k;
     }
 
     if k == one {

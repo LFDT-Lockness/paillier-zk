@@ -20,5 +20,5 @@ pub fn combine(
     re: &BigNumber,
     m: &BigNumber,
 ) -> BigNumber {
-    l.modpow(&le, &m).modmul(&r.modpow(&re, &m), &m)
+    l.modpow(le, m).modmul(&r.modpow(re, m), m)
 }

@@ -283,15 +283,15 @@ pub fn prove(
             &pcomm.r,
             &BigNumber::one(),
             &pdata.nonce,
-            &challenge,
-            &data.key0.n(),
+            challenge,
+            data.key0.n(),
         ),
         w_y: combine(
             &pcomm.r_y,
             &BigNumber::one(),
             &pdata.nonce_y,
-            &challenge,
-            &data.key1.n(),
+            challenge,
+            data.key1.n(),
         ),
     }
 }
@@ -323,12 +323,12 @@ pub fn verify(
             .key0
             .add(&data.key0.mul(&data.c, &proof.z1).unwrap(), &enc)
             .unwrap();
-        let rhs = combine(&commitment.a, &one, &data.d, &challenge, &data.key0.nn());
+        let rhs = combine(&commitment.a, &one, &data.d, challenge, data.key0.nn());
         fail_if("check1", lhs == rhs)?;
     }
     {
         let lhs = data.g.modpow(&proof.z1, &data.q);
-        let rhs = combine(&commitment.b_x, &one, &data.x, &challenge, &data.q);
+        let rhs = combine(&commitment.b_x, &one, &data.x, challenge, &data.q);
         fail_if("check2", lhs == rhs)?;
     }
     {
@@ -337,7 +337,7 @@ pub fn verify(
             .encrypt(proof.z2.to_bytes(), Some(proof.w_y.clone()))
             .unwrap()
             .0;
-        let rhs = combine(&commitment.b_y, &one, &data.y, &challenge, &data.key1.nn());
+        let rhs = combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
         fail_if("check3", lhs == rhs)?;
     }
     fail_if(
@@ -347,7 +347,7 @@ pub fn verify(
                 &commitment.e,
                 &one,
                 &commitment.s,
-                &challenge,
+                challenge,
                 &aux.rsa_modulo,
             ),
     )?;
@@ -358,7 +358,7 @@ pub fn verify(
                 &commitment.f,
                 &one,
                 &commitment.t,
-                &challenge,
+                challenge,
                 &aux.rsa_modulo,
             ),
     )?;

@@ -108,7 +108,7 @@ pub struct Proof {
 /// Create random commitment
 pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
     Commitment {
-        w: non_residue_in(&n, rng),
+        w: non_residue_in(n, rng),
     }
 }
 
@@ -121,10 +121,10 @@ pub fn challenge(data: &Data, commitment: &Commitment) -> Challenge {
     digest.update(commitment.w.to_bytes());
 
     let mut ys: [BigNumber; M] = Default::default();
-    for i in 0..M {
+    for (i, y_ref) in ys.iter_mut().enumerate() {
         let mut digest = digest.clone();
         digest.update((i as u64 + 1).to_le_bytes());
-        ys[i] = BigNumber::from_slice(digest.finalize()) % &data.n;
+        *y_ref = BigNumber::from_slice(digest.finalize()) % &data.n;
     }
     Challenge { ys }
 }
@@ -136,7 +136,7 @@ pub fn prove(
     Commitment { ref w }: &Commitment,
     challenge: &Challenge,
 ) -> Proof {
-    let sqrt = |x| blum_sqrt(&x, &p, &q, &n);
+    let sqrt = |x| blum_sqrt(&x, p, q, n);
     let phi = (p - 1) * (q - 1);
     let n_inverse = n.extended_gcd(&phi).x;
     assert_eq!(n_inverse.modmul(&(n % &phi), &phi), BigNumber::one());
