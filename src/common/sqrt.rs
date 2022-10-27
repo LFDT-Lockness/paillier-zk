@@ -1,5 +1,5 @@
+use crate::unknown_order::BigNumber;
 use rand_core::RngCore;
-use unknown_order::BigNumber;
 
 /// Find principal square root in a Blum modulus quotient ring.
 ///

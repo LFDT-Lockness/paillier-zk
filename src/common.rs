@@ -1,6 +1,6 @@
 pub mod sqrt;
 
-use unknown_order::BigNumber;
+use crate::unknown_order::BigNumber;
 
 /// Generate element in Zm*. Does so by trial.
 pub fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, mut rng: R) -> BigNumber {

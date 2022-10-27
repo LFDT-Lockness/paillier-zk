@@ -8,7 +8,7 @@
 //! ## Example
 //! 0. Prover P derives two Blum primes and makes a Paillier-Blum modulus
 //!     ``` no_run
-//!     # use unknown_order::BigNumber;
+//!     # use paillier_zk::unknown_order::BigNumber;
 //!     fn blum_prime(s: usize) -> BigNumber {
 //!         let three = BigNumber::from(3);
 //!         loop {
@@ -52,8 +52,8 @@
 //!     ```
 //! 4. If the verification succeeded, V can continue communication with P
 
+use crate::unknown_order::BigNumber;
 use rand_core::RngCore;
-use unknown_order::BigNumber;
 
 use crate::{
     common::sqrt::{blum_sqrt, find_residue, non_residue_in},
@@ -198,7 +198,7 @@ pub fn compute_proof<R: RngCore>(
 
 #[cfg(test)]
 mod test {
-    use unknown_order::BigNumber;
+    use crate::unknown_order::BigNumber;
 
     #[test]
     fn passing() {

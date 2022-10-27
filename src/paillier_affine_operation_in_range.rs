@@ -30,7 +30,7 @@
 //! ## Example
 //!
 //! ``` no_run
-//! # use unknown_order::BigNumber;
+//! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_affine_operation_in_range as p;
 //! use paillier_zk::{L, EPSILON};
 //!
@@ -125,9 +125,9 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
+use crate::unknown_order::BigNumber;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
-use unknown_order::BigNumber;
 
 use crate::common::{combine, gen_inversible};
 use crate::{EPSILON, L};
@@ -417,7 +417,7 @@ pub fn compute_proof<R: RngCore>(
 
 #[cfg(test)]
 mod test {
-    use unknown_order::BigNumber;
+    use crate::unknown_order::BigNumber;
 
     use crate::{EPSILON, L};
 

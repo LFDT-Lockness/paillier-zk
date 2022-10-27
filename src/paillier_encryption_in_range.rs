@@ -13,7 +13,7 @@
 //! ## Example
 //!
 //! ``` no_run
-//! # use unknown_order::BigNumber;
+//! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_encryption_in_range as p;
 //! use paillier_zk::{L, EPSILON};
 //!
@@ -62,9 +62,9 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
+use crate::unknown_order::BigNumber;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
-use unknown_order::BigNumber;
 
 use crate::common::{combine, gen_inversible};
 use crate::{EPSILON, L};
@@ -141,13 +141,7 @@ pub fn commit<R: RngCore>(
     let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
     let s = combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
-    let a = combine(
-        &(data.key.n() + 1),
-        &alpha,
-        &r,
-        data.key.n(),
-        data.key.nn(),
-    );
+    let a = combine(&(data.key.n() + 1), &alpha, &r, data.key.n(), data.key.nn());
     let c = combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
     (
         Commitment { s, a, c },
@@ -168,7 +162,7 @@ fn prove(
     private_commitment: &PrivateCommitment,
     challenge: &Challenge,
 ) -> Proof {
-    let m = unknown_order::Group {
+    let m = crate::unknown_order::Group {
         modulus: data.key.n().clone(),
     };
     let _2 = &m
@@ -262,7 +256,7 @@ pub fn compute_proof<R: RngCore>(
 #[cfg(test)]
 mod test {
     use super::{EPSILON, L};
-    use unknown_order::BigNumber;
+    use crate::unknown_order::BigNumber;
 
     #[test]
     fn passing() {
