@@ -22,3 +22,14 @@ pub fn combine(
 ) -> BigNumber {
     l.modpow(le, m).modmul(&r.modpow(re, m), m)
 }
+
+/// Reason for failure. Mainly interesting for debugging purposes
+#[derive(Debug, PartialEq, Eq)]
+pub enum InvalidProof {
+    /// One equality doesn't hold. Parameterized by equality index
+    EqualityCheckFailed(usize),
+    /// One range check doesn't hold. Parameterized by check index
+    RangeCheckFailed(usize),
+    /// Encryption of supplied data failed when attempting to verify
+    EncryptionFailed,
+}

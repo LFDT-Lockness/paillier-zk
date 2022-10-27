@@ -1,4 +1,4 @@
-//! ZK-proof of Paillier-Blum modulus. Called Пmod or Rmod in the CGGMP paper.
+//! ZK-proof of Paillier-Blum modulus. Called Пmod or Rmod in the CGGMP21 paper.
 //!
 //! ## Description
 //! A party P has a modulus `N = pq`, with p and q being Blum primes, and

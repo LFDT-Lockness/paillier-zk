@@ -131,6 +131,7 @@ use rand_core::RngCore;
 
 use crate::common::{combine, gen_inversible};
 use crate::{EPSILON, L};
+pub use crate::common::InvalidProof;
 
 /// Public data that both parties know
 pub struct Data {
@@ -303,9 +304,9 @@ pub fn verify(
     commitment: &Commitment,
     challenge: &Challenge,
     proof: &Proof,
-) -> Result<(), &'static str> {
+) -> Result<(), InvalidProof> {
     let one = BigNumber::one();
-    fn fail_if(msg: &'static str, b: bool) -> Result<(), &'static str> {
+    fn fail_if(msg: InvalidProof, b: bool) -> Result<(), InvalidProof> {
         if b {
             Ok(())
         } else {
@@ -324,12 +325,12 @@ pub fn verify(
             .add(&data.key0.mul(&data.c, &proof.z1).unwrap(), &enc)
             .unwrap();
         let rhs = combine(&commitment.a, &one, &data.d, challenge, data.key0.nn());
-        fail_if("check1", lhs == rhs)?;
+        fail_if(InvalidProof::EqualityCheckFailed(1), lhs == rhs)?;
     }
     {
         let lhs = data.g.modpow(&proof.z1, &data.q);
         let rhs = combine(&commitment.b_x, &one, &data.x, challenge, &data.q);
-        fail_if("check2", lhs == rhs)?;
+        fail_if(InvalidProof::EqualityCheckFailed(2), lhs == rhs)?;
     }
     {
         let lhs = data
@@ -338,10 +339,10 @@ pub fn verify(
             .unwrap()
             .0;
         let rhs = combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
-        fail_if("check3", lhs == rhs)?;
+        fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
     }
     fail_if(
-        "check4",
+        InvalidProof::EqualityCheckFailed(4),
         combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
             == combine(
                 &commitment.e,
@@ -352,7 +353,7 @@ pub fn verify(
             ),
     )?;
     fail_if(
-        "check5",
+        InvalidProof::EqualityCheckFailed(5),
         combine(&aux.s, &proof.z2, &aux.t, &proof.z4, &aux.rsa_modulo)
             == combine(
                 &commitment.f,
@@ -362,9 +363,9 @@ pub fn verify(
                 &aux.rsa_modulo,
             ),
     )?;
-    fail_if("range check6", proof.z1 <= &one << (L + EPSILON))?;
+    fail_if(InvalidProof::RangeCheckFailed(6), proof.z1 <= &one << (L + EPSILON))?;
     fail_if(
-        "range check7",
+        InvalidProof::RangeCheckFailed(7),
         proof.z2 <= &one << (L + EPSILON), // TODO: L'
     )?;
     Ok(())
@@ -482,7 +483,7 @@ mod test {
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
-            Err(e) => panic!("{}", e),
+            Err(e) => panic!("{:?}", e),
         }
     }
 

@@ -1,4 +1,4 @@
-//! ZK-proof of paillier encryption in range. Called Пenc or Renc in the CGGMP
+//! ZK-proof of paillier encryption in range. Called Пenc or Renc in the CGGMP21
 //! paper.
 //!
 //! ## Description
@@ -68,6 +68,7 @@ use rand_core::RngCore;
 
 use crate::common::{combine, gen_inversible};
 use crate::{EPSILON, L};
+pub use crate::common::InvalidProof;
 
 pub struct P;
 
@@ -182,7 +183,7 @@ pub fn verify(
     commitment: &Commitment,
     challenge: &Challenge,
     proof: &Proof,
-) -> Result<(), &'static str> {
+) -> Result<(), InvalidProof> {
     // check 1
     let pt = &proof._1 % data.key.n();
     match data.key.encrypt(pt.to_bytes(), Some(proof._2.clone())) {
@@ -193,10 +194,10 @@ pub fn verify(
                     data.key.nn(),
                 )
             {
-                return Err("check1 failed");
+                return Err(InvalidProof::EqualityCheckFailed(1));
             }
         }
-        None => return Err("encrypt failed"),
+        None => return Err(InvalidProof::EncryptionFailed),
     }
 
     let check2 = combine(&aux.s, &proof._1, &aux.t, &proof._3, &aux.rsa_modulo)
@@ -208,11 +209,11 @@ pub fn verify(
             &aux.rsa_modulo,
         );
     if !check2 {
-        return Err("check 2");
+        return Err(InvalidProof::EqualityCheckFailed(2));
     }
 
     if proof._1 > (BigNumber::one() << (L + EPSILON)) {
-        return Err("check 3");
+        return Err(InvalidProof::RangeCheckFailed(3));
     }
 
     Ok(())
@@ -281,7 +282,7 @@ mod test {
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
-            Err(e) => panic!("{}", e),
+            Err(e) => panic!("{:?}", e),
         }
     }
     #[test]

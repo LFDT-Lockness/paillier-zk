@@ -55,6 +55,8 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
 }
 
 /// Compute jacobi symbol of x over y
+///
+/// If y is not odd, returns 0
 #[allow(clippy::many_single_char_names)]
 pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
     let five = BigNumber::from(5);
@@ -64,10 +66,8 @@ pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
     let one = BigNumber::one();
     let zero = BigNumber::zero();
     if y % &two == zero || y <= &zero {
-        panic!(
-            "invalid arguments, y must be an odd integer,but got {:?}",
-            y
-        );
+        // invalid argument
+        return 0;
     }
 
     let mut k = y.clone();
