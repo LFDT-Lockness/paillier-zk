@@ -33,6 +33,8 @@
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_affine_operation_in_range as p;
 //! use paillier_zk::{L, EPSILON};
+//! use generic_ec_core::hash_to_curve::Tag;
+//! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
@@ -57,9 +59,8 @@
 //!
 //! // 2. Setup: prover prepares the group used to encrypt x
 //!
-//! let q = BigNumber::from(1_000_000_007);
-//! let g = BigNumber::from(2);
-//! assert_eq!(g.gcd(&q), 1.into());
+//! type C = generic_ec_curves::Secp256r1;
+//! let g = generic_ec::Point::<C>::generator();
 //!
 //! // 3. Setup: prover prepares all plain texts
 //!
@@ -75,7 +76,7 @@
 //! // C in paper
 //! let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
 //! // X in paper
-//! let ciphertext_mult = g.modpow(&plaintext_mult, &q);
+//! let ciphertext_mult = g * p::convert_scalar(&plaintext_mult);
 //! // Y' in further docs, and ρy in paper
 //! let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
 //! // Y and ρ in paper
@@ -93,8 +94,6 @@
 //!
 //! let rng = rand_core::OsRng::default();
 //! let data = p::Data {
-//!     g,
-//!     q,
 //!     key0,
 //!     key1,
 //!     c: ciphertext_orig,
@@ -109,36 +108,40 @@
 //!     nonce_y,
 //! };
 //! let (commitment, challenge, proof) =
-//!     p::compute_proof(&aux, &data, &pdata, rng);
+//!     p::compute_proof(TAG, &aux, &data, &pdata, rng).expect("proof failed");
 //!
 //! // 6. Prover sends this data to verifier
 //!
-//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Challenge, _: &p::Proof) { todo!() }
-//! # fn recv() -> (p::Data, p::Commitment, p::Challenge, p::Proof) { todo!() }
+//! # use generic_ec::Curve;
+//! # fn send<C: Curve>(_: &p::Data<C>, _: &p::Commitment<C>, _: &p::Challenge, _: &p::Proof) { todo!() }
+//! # fn recv<C: Curve>() -> (p::Data<C>, p::Commitment<C>, p::Challenge, p::Proof) { todo!() }
 //! send(&data, &commitment, &challenge, &proof);
 //!
 //! // 7. Verifier receives the data and the proof and verifies it
 //!
-//! let (data, commitment, challenge, proof) = recv();
+//! let (data, commitment, challenge, proof) = recv::<C>();
 //! let r = p::verify(&aux, &data, &commitment, &challenge, &proof);
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
 use crate::unknown_order::BigNumber;
+use generic_ec::{Curve, Point, Scalar, hash_to_curve::Tag};
+use generic_ec_core::hash_to_curve::HashToCurve;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
 use crate::common::{combine, gen_inversible};
+pub use crate::common::{InvalidProof, ProtocolError};
 use crate::{EPSILON, L};
-pub use crate::common::InvalidProof;
+
+/// Embed BigInt into chosen scalar type
+pub fn convert_scalar<C: Curve>(x: &BigNumber) -> Scalar<C> {
+    Scalar::<C>::from_be_bytes_mod_order(x.to_bytes())
+}
 
 /// Public data that both parties know
-pub struct Data {
-    /// Group generator
-    pub g: BigNumber,
-    /// Group rank
-    pub q: BigNumber,
+pub struct Data<C: Curve> {
     /// N0 in paper, public key that C was encrypted on
     pub key0: EncryptionKey,
     /// N1 in paper, public key that y -> Y was encrypted on
@@ -150,7 +153,7 @@ pub struct Data {
     /// Y in paper, y encrypted on N1
     pub y: Ciphertext,
     /// X in paper, obtained as g^x
-    pub x: BigNumber,
+    pub x: Point<C>,
 }
 
 /// Private data of prover
@@ -167,9 +170,9 @@ pub struct PrivateData {
 
 // As described in cggmp21 at page 35
 /// Prover's first message, obtained by `commit`
-pub struct Commitment {
+pub struct Commitment<C: Curve> {
     a: BigNumber,
-    b_x: BigNumber,
+    b_x: Point<C>,
     b_y: BigNumber,
     e: BigNumber,
     s: BigNumber,
@@ -215,12 +218,12 @@ pub struct Aux {
 }
 
 /// Create random commitment
-pub fn commit<R: RngCore>(
+pub fn commit<C: Curve, R: RngCore>(
     aux: &Aux,
-    data: &Data,
+    data: &Data<C>,
     pdata: &PrivateData,
     mut rng: R,
-) -> (Commitment, PrivateCommitment) {
+) -> Result<(Commitment<C>, PrivateCommitment), ProtocolError> {
     let two_to_l = BigNumber::one() << L;
     let two_to_l_e = BigNumber::one() << (L + EPSILON);
     let modulo_l = two_to_l * &aux.rsa_modulo;
@@ -238,17 +241,23 @@ pub fn commit<R: RngCore>(
     let a_add = data
         .key0
         .encrypt(beta.to_bytes(), Some(r.clone()))
-        .unwrap()
+        .ok_or(ProtocolError::EncryptionFailed)?
         .0;
-    let c_to_alpha = data.key0.mul(&data.c, &alpha).unwrap();
-    let a = data.key0.add(&c_to_alpha, &a_add).unwrap();
+    let c_to_alpha = data
+        .key0
+        .mul(&data.c, &alpha)
+        .ok_or(ProtocolError::EncryptionFailed)?;
+    let a = data
+        .key0
+        .add(&c_to_alpha, &a_add)
+        .ok_or(ProtocolError::EncryptionFailed)?;
     let commitment = Commitment {
         a,
-        b_x: data.g.modpow(&alpha, &data.q),
+        b_x: Point::<C>::generator() * convert_scalar(&alpha),
         b_y: data
             .key1
             .encrypt(beta.to_bytes(), Some(r_y.clone()))
-            .unwrap()
+            .ok_or(ProtocolError::EncryptionFailed)?
             .0,
         e: combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
         s: combine(&aux.s, &pdata.x, &aux.t, &m, &aux.rsa_modulo),
@@ -265,12 +274,12 @@ pub fn commit<R: RngCore>(
         delta,
         mu,
     };
-    (commitment, private_commitment)
+    Ok((commitment, private_commitment))
 }
 
 /// Compute proof for given data and prior protocol values
-pub fn prove(
-    data: &Data,
+pub fn prove<C: Curve>(
+    data: &Data<C>,
     pdata: &PrivateData,
     pcomm: &PrivateCommitment,
     challenge: &Challenge,
@@ -298,10 +307,10 @@ pub fn prove(
 }
 
 /// Verify the proof
-pub fn verify(
+pub fn verify<C: Curve>(
     aux: &Aux,
-    data: &Data,
-    commitment: &Commitment,
+    data: &Data<C>,
+    commitment: &Commitment<C>,
     challenge: &Challenge,
     proof: &Proof,
 ) -> Result<(), InvalidProof> {
@@ -318,25 +327,31 @@ pub fn verify(
         let enc = data
             .key0
             .encrypt(proof.z2.to_bytes(), Some(proof.w.clone()))
-            .unwrap()
+            .ok_or(InvalidProof::EncryptionFailed)?
             .0;
         let lhs = data
             .key0
-            .add(&data.key0.mul(&data.c, &proof.z1).unwrap(), &enc)
-            .unwrap();
+            .add(
+                &data
+                    .key0
+                    .mul(&data.c, &proof.z1)
+                    .ok_or(InvalidProof::EncryptionFailed)?,
+                &enc,
+            )
+            .ok_or(InvalidProof::EncryptionFailed)?;
         let rhs = combine(&commitment.a, &one, &data.d, challenge, data.key0.nn());
         fail_if(InvalidProof::EqualityCheckFailed(1), lhs == rhs)?;
     }
     {
-        let lhs = data.g.modpow(&proof.z1, &data.q);
-        let rhs = combine(&commitment.b_x, &one, &data.x, challenge, &data.q);
+        let lhs = Point::<C>::generator() * convert_scalar(&proof.z1);
+        let rhs = commitment.b_x + data.x * convert_scalar(challenge);
         fail_if(InvalidProof::EqualityCheckFailed(2), lhs == rhs)?;
     }
     {
         let lhs = data
             .key1
             .encrypt(proof.z2.to_bytes(), Some(proof.w_y.clone()))
-            .unwrap()
+            .ok_or(InvalidProof::EncryptionFailed)?
             .0;
         let rhs = combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
         fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
@@ -363,7 +378,10 @@ pub fn verify(
                 &aux.rsa_modulo,
             ),
     )?;
-    fail_if(InvalidProof::RangeCheckFailed(6), proof.z1 <= &one << (L + EPSILON))?;
+    fail_if(
+        InvalidProof::RangeCheckFailed(6),
+        proof.z1 <= &one << (L + EPSILON),
+    )?;
     fail_if(
         InvalidProof::RangeCheckFailed(7),
         proof.z2 <= &one << (L + EPSILON), // TODO: L'
@@ -372,73 +390,89 @@ pub fn verify(
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
-    use sha2::Digest;
-    let mut digest = sha2::Sha512::new();
+pub fn challenge<C: Curve + HashToCurve>(
+    tag: Tag,
+    aux: &Aux,
+    data: &Data<C>,
+    commitment: &Commitment<C>,
+) -> Result<Challenge, ProtocolError> {
+    use generic_ec::hash_to_curve::FromHash;
+    let scalar = Scalar::<C>::hash_concat(
+        tag,
+        &[
+            aux.s.to_bytes().as_ref(), // hint for array to become [&[u8]]
+            &aux.t.to_bytes(),
+            &aux.rsa_modulo.to_bytes(),
+            &data.key0.to_bytes(),
+            &data.key1.to_bytes(),
+            &data.c.to_bytes(),
+            &data.d.to_bytes(),
+            &data.y.to_bytes(),
+            &data.x.to_bytes(true),
+            &commitment.a.to_bytes(),
+            &commitment.b_x.to_bytes(true),
+            &commitment.b_y.to_bytes(),
+            &commitment.e.to_bytes(),
+            &commitment.s.to_bytes(),
+            &commitment.f.to_bytes(),
+            &commitment.t.to_bytes(),
+        ],
+    )
+    .map_err(|_| ProtocolError::HashFailed)?;
 
-    digest.update(aux.s.to_bytes());
-    digest.update(aux.t.to_bytes());
-    digest.update(aux.rsa_modulo.to_bytes());
-
-    digest.update(data.g.to_bytes());
-    digest.update(data.q.to_bytes());
-    digest.update(data.key0.to_bytes());
-    digest.update(data.key1.to_bytes());
-    digest.update(data.c.to_bytes());
-    digest.update(data.d.to_bytes());
-    digest.update(data.y.to_bytes());
-    digest.update(data.x.to_bytes());
-
-    digest.update(commitment.a.to_bytes());
-    digest.update(commitment.b_x.to_bytes());
-    digest.update(commitment.b_y.to_bytes());
-    digest.update(commitment.e.to_bytes());
-    digest.update(commitment.s.to_bytes());
-    digest.update(commitment.f.to_bytes());
-    digest.update(commitment.t.to_bytes());
-
-    BigNumber::from_slice(digest.finalize())
+    Ok(BigNumber::from_slice(scalar.to_be_bytes().as_bytes()))
 }
 
 /// Compute proof for the given data, producing random commitment and
 /// deriving determenistic challenge.
 ///
 /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-pub fn compute_proof<R: RngCore>(
+pub fn compute_proof<C: Curve + HashToCurve, R: RngCore>(
+    tag: Tag,
     aux: &Aux,
-    data: &Data,
+    data: &Data<C>,
     pdata: &PrivateData,
     rng: R,
-) -> (Commitment, Challenge, Proof) {
-    let (comm, pcomm) = commit(aux, data, pdata, rng);
-    let challenge = challenge(aux, data, &comm);
+) -> Result<(Commitment<C>, Challenge, Proof), ProtocolError> {
+    let (comm, pcomm) = commit(aux, data, pdata, rng)?;
+    let challenge = challenge(tag, aux, data, &comm)?;
     let proof = prove(data, pdata, &pcomm, &challenge);
-    (comm, challenge, proof)
+    Ok((comm, challenge, proof))
 }
 
 #[cfg(test)]
 mod test {
-    use crate::unknown_order::BigNumber;
+    use generic_ec::Curve;
+    use generic_ec_core::hash_to_curve::HashToCurve;
 
+    use crate::unknown_order::BigNumber;
     use crate::{EPSILON, L};
 
     #[test]
-    fn passing() {
+    fn conversion() {
+        // checks that bignumbers use BE encoding, same as the method we use in
+        // conversion
+        type Scalar = generic_ec::Scalar<generic_ec_curves::Secp256r1>;
+        let number: u64 = 0x11_22_33_44_55_66_77_88;
+        let bignumber = BigNumber::from(number);
+        let scalar1 = Scalar::from(number);
+        let scalar2 = super::convert_scalar(&bignumber);
+        assert_eq!(scalar1, scalar2);
+    }
+
+    fn passing_test<C: Curve + HashToCurve>() {
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
         let private_key1 = libpaillier::DecryptionKey::random().unwrap();
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
+        let g = generic_ec::Point::<C>::generator();
         let plaintext: BigNumber = 228.into();
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = BigNumber::from(2);
         let plaintext_add = BigNumber::from(28);
-        let q = BigNumber::from(1_000_000_007);
-        let g = BigNumber::from(2);
-        // verify that g is generator in Z/q
-        assert_eq!(g.gcd(&q), 1.into());
         let (ciphertext, _) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
         let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
-        let ciphertext_mult = g.modpow(&plaintext_mult, &q);
+        let ciphertext_mult = g * super::convert_scalar(&plaintext_mult);
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
         let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), None).unwrap();
         // verify that D is obtained from affine transformation of C
@@ -453,8 +487,6 @@ mod test {
             private_key0.decrypt(&ciphertext).unwrap(),
         );
         let data = super::Data {
-            g,
-            q,
             key0,
             key1,
             c: ciphertext_orig,
@@ -478,8 +510,9 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
         let (commitment, challenge, proof) =
-            super::compute_proof(&aux, &data, &pdata, rand_core::OsRng::default());
+            super::compute_proof(tag, &aux, &data, &pdata, rand_core::OsRng::default()).unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -487,21 +520,17 @@ mod test {
         }
     }
 
-    #[test]
-    fn failing() {
+    fn failing_test<C: Curve + HashToCurve>() {
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
         let private_key1 = libpaillier::DecryptionKey::random().unwrap();
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
+        let g = generic_ec::Point::<C>::generator();
         let plaintext_orig = BigNumber::from(1337);
         let plaintext_mult = BigNumber::one() << (L + EPSILON) + 1;
         let plaintext_add = BigNumber::one() << (L + EPSILON) + 2;
-        let q = BigNumber::from(1_000_000_007);
-        let g = BigNumber::from(2);
-        // verify that g is generator in Z/q
-        assert_eq!(g.gcd(&q), 1.into());
         let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
-        let ciphertext_mult = g.modpow(&plaintext_mult, &q);
+        let ciphertext_mult = g * super::convert_scalar(&plaintext_mult);
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
         let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), None).unwrap();
         // verify that D is obtained from affine transformation of C
@@ -512,8 +541,6 @@ mod test {
             )
             .unwrap();
         let data = super::Data {
-            g,
-            q,
             key0,
             key1,
             c: ciphertext_orig,
@@ -537,12 +564,31 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
         let (commitment, challenge, proof) =
-            super::compute_proof(&aux, &data, &pdata, rand_core::OsRng::default());
+            super::compute_proof(tag, &aux, &data, &pdata, rand_core::OsRng::default()).unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(_) => (),
         }
+    }
+
+    #[test]
+    fn passing_p256() {
+        passing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
+    }
+    #[test]
+    fn failing_p256() {
+        failing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
+    }
+
+    #[test]
+    fn passing_million() {
+        passing_test::<crate::curve::C>()
+    }
+    #[test]
+    fn failing_million() {
+        failing_test::<crate::curve::C>()
     }
 }

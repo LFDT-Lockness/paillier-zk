@@ -33,3 +33,11 @@ pub enum InvalidProof {
     /// Encryption of supplied data failed when attempting to verify
     EncryptionFailed,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ProtocolError {
+    /// Encryption of supplied data failed when computing proof
+    EncryptionFailed,
+    /// Hashing of supplied data failed when computing proof or challenge
+    HashFailed,
+}
