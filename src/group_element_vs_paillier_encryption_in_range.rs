@@ -1,8 +1,87 @@
-use crate::{unknown_order::BigNumber, common::{combine, convert_scalar, gen_inversible, ProtocolError, InvalidProof}, EPSILON, L};
+//! ZK-proof, called Пlog* or Rlog* in the CGGMP21 paper.
+//!
+//! ## Description
+//!
+//! A party P has a number `X = g ^ x`, with g being a generator of
+//! multiplicative group G. P wants to prove to party V that the logarithm of X,
+//! i.e. x, is at most L bits.
+//!
+//! Given:
+//! - `key0`, `pkey0` - pair of public and private keys in paillier cryptosystem
+//! - `G` - a group of order `q` with generator `q`
+//! - `X = g ^ x` and `C = key0.encrypt(x)` - data to obtain proof about
+//!
+//! Prove:
+//! - `decrypt(C) = log X`
+//! - `bitsize(x) <= L`
+//!
+//! Disclosing only: `key0`, `C`, `X`
+//!
+//! ## Example
+//!
+//! ```no_run
+//! # use paillier_zk::unknown_order::BigNumber;
+//! use paillier_zk::group_element_vs_paillier_encryption_in_range as p;
+//! use paillier_zk::{L, EPSILON};
+//! use generic_ec_core::hash_to_curve::Tag;
+//! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
+//!
+//! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
+//!
+//! let p = BigNumber::prime(L + EPSILON + 1);
+//! let q = BigNumber::prime(L + EPSILON + 1);
+//! let rsa_modulo = p * q;
+//! let s: BigNumber = 123.into();
+//! let t: BigNumber = 321.into();
+//! assert_eq!(s.gcd(&rsa_modulo), 1.into());
+//! assert_eq!(t.gcd(&rsa_modulo), 1.into());
+//!
+//! let aux = p::Aux { s, t, rsa_modulo };
+//!
+//! // 1. Setup: prover prepares the paillier keys
+//!
+//! let private_key = libpaillier::DecryptionKey::random().unwrap();
+//! let key0 = libpaillier::EncryptionKey::from(&private_key);
+//!
+//! // 2. Setup: prover has some plaintext, encrypts it and computes X
+//!
+//! type C = generic_ec_curves::Secp256r1;
+//! let g = generic_ec::Point::<C>::generator();
+//!
+//! let plaintext: BigNumber = 228.into();
+//! let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
+//! let power = g * p::convert_scalar(&plaintext);
+//!
+//! // 3. Prover computes a non-interactive proof that plaintext is at most `L` bits:
+//!
+//! let rng = rand_core::OsRng::default();
+//! let data = p::Data { key0, c: ciphertext, x: power };
+//! let pdata = p::PrivateData { x: plaintext, nonce };
+//! let (commitment, challenge, proof) =
+//!     p::compute_proof(TAG, &aux, &data, &pdata, rng).expect("proof failed");
+//!
+//! // 4. Prover sends this data to verifier
+//!
+//! # use generic_ec::Curve;
+//! # fn send<C: Curve>(_: &p::Data<C>, _: &p::Commitment<C>, _: &p::Challenge, _: &p::Proof) { todo!() }
+//! # fn recv<C: Curve>() -> (p::Data<C>, p::Commitment<C>, p::Challenge, p::Proof) { todo!() }
+//! send(&data, &commitment, &challenge, &proof);
+//!
+//! // 5. Verifier receives the data and the proof and verifies it
+//!
+//! let (data, commitment, challenge, proof) = recv::<C>();
+//! p::verify(&aux, &data, &commitment, &challenge, &proof);
+//! ```
+//!
+//! If the verification succeeded, verifier can continue communication with prover
+
+use crate::{unknown_order::BigNumber, common::{combine, gen_inversible, ProtocolError, InvalidProof}, EPSILON, L};
 use generic_ec::{Curve, Point, hash_to_curve::Tag, Scalar};
 use generic_ec_core::hash_to_curve::HashToCurve;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
+
+pub use crate::common::convert_scalar;
 
 pub struct Data<C: Curve> {
     pub key0: EncryptionKey,

@@ -255,11 +255,12 @@ impl generic_ec::Curve for C {
 
 impl generic_ec_core::hash_to_curve::HashToCurve for C {
     fn hash_to_curve(
-        _: generic_ec::hash_to_curve::Tag,
+        tag: generic_ec::hash_to_curve::Tag,
         msgs: &[&[u8]],
     ) -> Result<Self::Point, generic_ec_core::Error> {
         use sha2::Digest;
         let mut digest = sha2::Sha256::new();
+        digest.update(tag.as_bytes());
         for msg in msgs {
             digest.update(msg);
         }
@@ -270,11 +271,12 @@ impl generic_ec_core::hash_to_curve::HashToCurve for C {
     }
 
     fn hash_to_scalar(
-        _: generic_ec::hash_to_curve::Tag,
+        tag: generic_ec::hash_to_curve::Tag,
         msgs: &[&[u8]],
     ) -> Result<Self::Scalar, generic_ec_core::Error> {
         use sha2::Digest;
         let mut digest = sha2::Sha256::new();
+        digest.update(tag.as_bytes());
         for msg in msgs {
             digest.update(msg);
         }

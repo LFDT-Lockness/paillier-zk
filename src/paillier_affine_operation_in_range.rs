@@ -25,7 +25,7 @@
 //! - `bitsize(y) <= L`
 //! - `bitsize(x) <= L'`
 //!
-//! Disclosing only: `g`, `q`, `key0`, `key1`, `C`, `D`, `Y`, `X`
+//! Disclosing only: `key0`, `key1`, `C`, `D`, `Y`, `X`
 //!
 //! ## Example
 //!
@@ -131,8 +131,8 @@ use generic_ec_core::hash_to_curve::HashToCurve;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
-use crate::common::{combine, gen_inversible, convert_scalar};
-pub use crate::common::{InvalidProof, ProtocolError};
+use crate::common::{combine, gen_inversible};
+pub use crate::common::{InvalidProof, ProtocolError, convert_scalar};
 use crate::{EPSILON, L};
 
 /// Public data that both parties know
