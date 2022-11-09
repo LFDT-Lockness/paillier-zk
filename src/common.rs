@@ -23,6 +23,11 @@ pub fn combine(
     l.modpow(le, m).modmul(&r.modpow(re, m), m)
 }
 
+/// Embed BigInt into chosen scalar type
+pub fn convert_scalar<C: generic_ec::Curve>(x: &BigNumber) -> generic_ec::Scalar<C> {
+    generic_ec::Scalar::<C>::from_be_bytes_mod_order(x.to_bytes())
+}
+
 /// Reason for failure. Mainly interesting for debugging purposes
 #[derive(Debug, PartialEq, Eq)]
 pub enum InvalidProof {
@@ -40,4 +45,21 @@ pub enum ProtocolError {
     EncryptionFailed,
     /// Hashing of supplied data failed when computing proof or challenge
     HashFailed,
+}
+
+#[cfg(test)]
+mod test {
+    use libpaillier::unknown_order::BigNumber;
+
+    #[test]
+    fn conversion() {
+        // checks that bignumbers use BE encoding, same as the method we use in
+        // conversion
+        type Scalar = generic_ec::Scalar<generic_ec_curves::Secp256r1>;
+        let number: u64 = 0x11_22_33_44_55_66_77_88;
+        let bignumber = BigNumber::from(number);
+        let scalar1 = Scalar::from(number);
+        let scalar2 = super::convert_scalar(&bignumber);
+        assert_eq!(scalar1, scalar2);
+    }
 }

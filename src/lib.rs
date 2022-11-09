@@ -1,4 +1,5 @@
 mod common;
+pub mod group_element_vs_paillier_encryption_in_range;
 pub mod paillier_affine_operation_in_range;
 pub mod paillier_blum_modulus;
 pub mod paillier_encryption_in_range;

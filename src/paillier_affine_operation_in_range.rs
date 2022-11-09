@@ -131,14 +131,9 @@ use generic_ec_core::hash_to_curve::HashToCurve;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
-use crate::common::{combine, gen_inversible};
+use crate::common::{combine, gen_inversible, convert_scalar};
 pub use crate::common::{InvalidProof, ProtocolError};
 use crate::{EPSILON, L};
-
-/// Embed BigInt into chosen scalar type
-pub fn convert_scalar<C: Curve>(x: &BigNumber) -> Scalar<C> {
-    Scalar::<C>::from_be_bytes_mod_order(x.to_bytes())
-}
 
 /// Public data that both parties know
 pub struct Data<C: Curve> {
@@ -447,18 +442,6 @@ mod test {
 
     use crate::unknown_order::BigNumber;
     use crate::{EPSILON, L};
-
-    #[test]
-    fn conversion() {
-        // checks that bignumbers use BE encoding, same as the method we use in
-        // conversion
-        type Scalar = generic_ec::Scalar<generic_ec_curves::Secp256r1>;
-        let number: u64 = 0x11_22_33_44_55_66_77_88;
-        let bignumber = BigNumber::from(number);
-        let scalar1 = Scalar::from(number);
-        let scalar2 = super::convert_scalar(&bignumber);
-        assert_eq!(scalar1, scalar2);
-    }
 
     fn passing_test<C: Curve + HashToCurve>() {
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
