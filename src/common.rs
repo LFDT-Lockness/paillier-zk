@@ -2,6 +2,16 @@ pub mod sqrt;
 
 use crate::unknown_order::BigNumber;
 
+/// Auxiliary data known to both prover and verifier
+pub struct Aux {
+    /// ring-pedersen parameter
+    pub s: BigNumber,
+    /// ring-pedersen parameter
+    pub t: BigNumber,
+    /// N^ in paper
+    pub rsa_modulo: BigNumber,
+}
+
 /// Generate element in Zm*. Does so by trial.
 pub fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, mut rng: R) -> BigNumber {
     loop {
@@ -13,7 +23,7 @@ pub fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, mut rng: R) -> 
 }
 
 /// Compute l^le * r^re modulo m
-pub fn combine(
+pub(crate) fn combine(
     l: &BigNumber,
     le: &BigNumber,
     r: &BigNumber,

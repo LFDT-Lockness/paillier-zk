@@ -70,8 +70,6 @@ use crate::common::{combine, gen_inversible};
 use crate::{EPSILON, L};
 pub use crate::common::InvalidProof;
 
-pub struct P;
-
 /// Public data that both parties know
 pub struct Data {
     /// N0 in paper, public key that k -> K was encrypted on
@@ -117,15 +115,7 @@ pub struct Proof {
     _3: BigNumber,
 }
 
-/// Auxiliary data known to both prover and verifier
-pub struct Aux {
-    /// ring-pedersen parameter
-    pub s: BigNumber,
-    /// ring-pedersen parameter
-    pub t: BigNumber,
-    /// N^ in paper
-    pub rsa_modulo: BigNumber,
-}
+pub use crate::common::Aux;
 
 /// Create random commitment
 pub fn commit<R: RngCore>(
@@ -235,6 +225,7 @@ pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
     digest.update(commitment.a.to_bytes());
     digest.update(commitment.c.to_bytes());
 
+    // FIXME: hash to bignumber
     BigNumber::from_slice(digest.finalize())
 }
 
