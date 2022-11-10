@@ -1,11 +1,12 @@
+//! Пdec
 use crate::unknown_order::BigNumber;
 use generic_ec::hash_to_curve::Tag;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
+pub use crate::common::InvalidProof;
 use crate::common::{combine, ProtocolError};
 use crate::{EPSILON, L};
-pub use crate::common::InvalidProof;
 
 pub struct Data {
     pub q: BigNumber,
@@ -58,7 +59,10 @@ pub fn commit<R: RngCore>(
     let mu = BigNumber::from_rng(&modulo_l, &mut rng);
     let nu = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
-    let (a, r) = data.key0.encrypt(alpha.to_bytes(), None).ok_or(ProtocolError::EncryptionFailed)?;
+    let (a, r) = data
+        .key0
+        .encrypt(alpha.to_bytes(), None)
+        .ok_or(ProtocolError::EncryptionFailed)?;
 
     let commitment = Commitment {
         s: combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
@@ -66,40 +70,30 @@ pub fn commit<R: RngCore>(
         a,
         gamma: &alpha % &data.q,
     };
-    let private_commitment = PrivateCommitment {alpha, mu, nu, r};
+    let private_commitment = PrivateCommitment { alpha, mu, nu, r };
     Ok((commitment, private_commitment))
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(
-    tag: Tag,
-    aux: &Aux,
-    data: &Data,
-    commitment: &Commitment,
-) -> Challenge {
-    use sha2::Digest;
-    let mut digest = sha2::Sha512::new();
-
-    digest.update(tag.as_bytes());
-
-    digest.update(aux.s.to_bytes());
-    digest.update(aux.t.to_bytes());
-    digest.update(aux.rsa_modulo.to_bytes());
-
-    digest.update(data.q.to_bytes());
-    digest.update(data.key0.to_bytes());
-    digest.update(data.c.to_bytes());
-    digest.update(data.x.to_bytes());
-
-    digest.update(commitment.s.to_bytes());
-    digest.update(commitment.t.to_bytes());
-    digest.update(commitment.a.to_bytes());
-    digest.update(commitment.gamma.to_bytes());
-
-    // FIXME: hash to bignumber
-    BigNumber::from_slice(digest.finalize())
+pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
+    crate::common::hash2field::hash_to_field(
+        tag,
+        &data.q,
+        &[
+            &aux.s.to_bytes(),
+            &aux.t.to_bytes(),
+            &aux.rsa_modulo.to_bytes(),
+            &data.q.to_bytes(),
+            &data.key0.to_bytes(),
+            &data.c.to_bytes(),
+            &data.x.to_bytes(),
+            &commitment.s.to_bytes(),
+            &commitment.t.to_bytes(),
+            &commitment.a.to_bytes(),
+            &commitment.gamma.to_bytes(),
+        ],
+    )
 }
-
 
 pub fn prove(
     data: &Data,
@@ -110,7 +104,13 @@ pub fn prove(
     Proof {
         z1: &pcomm.alpha + challenge * &pdata.y,
         z2: &pcomm.nu + challenge * &pcomm.mu,
-        w: combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge, data.key0.n()),
+        w: combine(
+            &pcomm.r,
+            &BigNumber::one(),
+            &pdata.nonce,
+            challenge,
+            data.key0.n(),
+        ),
     }
 }
 
@@ -132,18 +132,29 @@ pub fn verify(
     }
     // Three equality checks
     {
-        let (lhs, _) = data.key0.encrypt(proof.z1.to_bytes(), Some(proof.w.clone())).ok_or(InvalidProof::EncryptionFailed)?;
+        let (lhs, _) = data
+            .key0
+            .encrypt(proof.z1.to_bytes(), Some(proof.w.clone()))
+            .ok_or(InvalidProof::EncryptionFailed)?;
         let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key0.nn());
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
     }
     {
         let lhs = &proof.z1 % &data.q;
-        let rhs = commitment.gamma.modadd(&challenge.modmul(&data.x, &data.q), &data.q);
+        let rhs = commitment
+            .gamma
+            .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
     }
     {
         let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo);
-        let rhs = combine(&commitment.t, &one, &commitment.s, challenge, &aux.rsa_modulo);
+        let rhs = combine(
+            &commitment.t,
+            &one,
+            &commitment.s,
+            challenge,
+            &aux.rsa_modulo,
+        );
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
     }
 

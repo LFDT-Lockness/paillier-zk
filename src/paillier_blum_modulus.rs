@@ -27,7 +27,9 @@
 //! 1. P computes a non-interactive proof that `n` is a Paillier-Blum modulus:
 //!     ``` no_run
 //!     use paillier_zk::paillier_blum_modulus as p;
+//!     # use generic_ec_core::hash_to_curve::Tag;
 //!     # let (n, p, q) = todo!();
+//!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!
 //!     let data = p::Data { n };
 //!     let pdata = p::PrivateData { p, q };
@@ -35,6 +37,7 @@
 //!
 //!     let (commitment, challenge, proof) =
 //!         p::compute_proof(
+//!             TAG,
 //!             &data,
 //!             &pdata,
 //!             &mut rng,
@@ -55,6 +58,7 @@
 //! 4. If the verification succeeded, V can continue communication with P
 
 use crate::unknown_order::BigNumber;
+use generic_ec::hash_to_curve::Tag;
 use rand_core::RngCore;
 
 use crate::{
@@ -115,18 +119,18 @@ pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(data: &Data, commitment: &Commitment) -> Challenge {
-    use sha2::Digest;
-    let mut digest = sha2::Sha512::new();
-
-    digest.update(data.n.to_bytes());
-    digest.update(commitment.w.to_bytes());
-
+pub fn challenge(tag: Tag, data: &Data, commitment: &Commitment) -> Challenge {
     let mut ys: [BigNumber; M] = Default::default();
     for (i, y_ref) in ys.iter_mut().enumerate() {
-        let mut digest = digest.clone();
-        digest.update((i as u64 + 1).to_le_bytes());
-        *y_ref = BigNumber::from_slice(digest.finalize()) % &data.n;
+        *y_ref = crate::common::hash2field::hash_to_field(
+            tag,
+            &data.n,
+            &[
+                &data.n.to_bytes(),
+                &commitment.w.to_bytes(),
+                &(i as u64 + 1).to_le_bytes(),
+            ],
+        );
     }
     Challenge { ys }
 }
@@ -188,12 +192,13 @@ pub fn verify(
 ///
 /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
 pub fn compute_proof<R: RngCore>(
+    tag: Tag,
     data: &Data,
     pdata: &PrivateData,
     rng: R,
 ) -> (Commitment, Challenge, Proof) {
     let commitment = commit(data, rng);
-    let challenge = challenge(data, &commitment);
+    let challenge = challenge(tag, data, &commitment);
     let proof = prove(data, pdata, &commitment, &challenge);
     (commitment, challenge, proof)
 }
@@ -210,7 +215,8 @@ mod test {
         let n = &p * &q;
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
-        let (commitment, challenge, proof) = super::compute_proof(&data, &pdata, &mut rng);
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
+        let (commitment, challenge, proof) = super::compute_proof(tag, &data, &pdata, &mut rng);
         let r = super::verify(&data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -232,7 +238,8 @@ mod test {
         let n = &p * &q;
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
-        let (commitment, challenge, proof) = super::compute_proof(&data, &pdata, &mut rng);
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
+        let (commitment, challenge, proof) = super::compute_proof(tag, &data, &pdata, &mut rng);
         let r = super::verify(&data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("should have failed"),

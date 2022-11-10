@@ -142,7 +142,6 @@ impl generic_ec_core::Multiplicative<Scalar> for Scalar {
 
     fn mul(a: &Self, b: &Self) -> Self {
         (a.0 * b.0 % MODULO).into()
-
     }
 }
 

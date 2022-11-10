@@ -126,13 +126,13 @@
 //! If the verification succeeded, verifier can continue communication with prover
 
 use crate::unknown_order::BigNumber;
-use generic_ec::{Curve, Point, Scalar, hash_to_curve::Tag};
+use generic_ec::{hash_to_curve::Tag, Curve, Point, Scalar};
 use generic_ec_core::hash_to_curve::HashToCurve;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
 use crate::common::{combine, gen_inversible};
-pub use crate::common::{InvalidProof, ProtocolError, convert_scalar};
+pub use crate::common::{convert_scalar, InvalidProof, ProtocolError};
 use crate::{EPSILON, L};
 
 /// Public data that both parties know
@@ -225,7 +225,7 @@ pub fn commit<C: Curve, R: RngCore>(
     let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
     let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-    let beta = BigNumber::from_rng(&two_to_l_e, &mut rng); // XXX l'
+    let beta = BigNumber::from_rng(&two_to_l_e, &mut rng); // TODO l'
     let r = gen_inversible(data.key0.n(), &mut rng);
     let r_y = gen_inversible(data.key1.n(), &mut rng);
     let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);

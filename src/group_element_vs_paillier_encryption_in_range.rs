@@ -75,8 +75,12 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use crate::{unknown_order::BigNumber, common::{combine, gen_inversible, ProtocolError, InvalidProof}, EPSILON, L};
-use generic_ec::{Curve, Point, hash_to_curve::Tag, Scalar};
+use crate::{
+    common::{combine, gen_inversible, InvalidProof, ProtocolError},
+    unknown_order::BigNumber,
+    EPSILON, L,
+};
+use generic_ec::{hash_to_curve::Tag, Curve, Point, Scalar};
 use generic_ec_core::hash_to_curve::HashToCurve;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
@@ -143,7 +147,10 @@ pub fn commit<C: Curve, R: RngCore>(
     let r = gen_inversible(data.key0.n(), &mut rng);
     let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
-    let (a, _) = data.key0.encrypt(alpha.to_bytes(), Some(r.clone())).ok_or(ProtocolError::EncryptionFailed)?;
+    let (a, _) = data
+        .key0
+        .encrypt(alpha.to_bytes(), Some(r.clone()))
+        .ok_or(ProtocolError::EncryptionFailed)?;
 
     let commitment = Commitment {
         s: combine(&aux.s, &pdata.x, &aux.t, &mu, &aux.rsa_modulo),
@@ -152,7 +159,10 @@ pub fn commit<C: Curve, R: RngCore>(
         d: combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
     };
     let private_commitment = PrivateCommitment {
-        alpha, mu, r, gamma
+        alpha,
+        mu,
+        r,
+        gamma,
     };
     Ok((commitment, private_commitment))
 }
@@ -193,7 +203,13 @@ pub fn prove<C: Curve>(
 ) -> Proof {
     Proof {
         z1: &pcomm.alpha + challenge * &pdata.x,
-        z2: combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge, data.key0.n()),
+        z2: combine(
+            &pcomm.r,
+            &BigNumber::one(),
+            &pdata.nonce,
+            challenge,
+            data.key0.n(),
+        ),
         z3: &pcomm.gamma + challenge * &pcomm.mu,
     }
 }
@@ -216,7 +232,10 @@ pub fn verify<C: Curve>(
     }
     // Three equality checks and one range check
     {
-        let (lhs, _) = data.key0.encrypt(proof.z1.to_bytes(), Some(proof.z2.clone())).ok_or(InvalidProof::EncryptionFailed)?;
+        let (lhs, _) = data
+            .key0
+            .encrypt(proof.z1.to_bytes(), Some(proof.z2.clone()))
+            .ok_or(InvalidProof::EncryptionFailed)?;
         let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key0.nn());
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
     }
@@ -227,10 +246,19 @@ pub fn verify<C: Curve>(
     }
     {
         let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo);
-        let rhs = combine(&commitment.d, &one, &commitment.s, challenge, &aux.rsa_modulo);
+        let rhs = combine(
+            &commitment.d,
+            &one,
+            &commitment.s,
+            challenge,
+            &aux.rsa_modulo,
+        );
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
     }
-    fail_if( proof.z1 <= one << (L + EPSILON), InvalidProof::RangeCheckFailed(4) )?;
+    fail_if(
+        proof.z1 <= one << (L + EPSILON),
+        InvalidProof::RangeCheckFailed(4),
+    )?;
 
     Ok(())
 }
@@ -258,7 +286,7 @@ mod test {
     use generic_ec_core::hash_to_curve::HashToCurve;
     use libpaillier::unknown_order::BigNumber;
 
-    use crate::{common::convert_scalar, L, EPSILON};
+    use crate::{common::convert_scalar, EPSILON, L};
 
     fn passing_test<C: Curve + HashToCurve>() {
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
@@ -302,7 +330,7 @@ mod test {
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
-        let plaintext = BigNumber::from(1) << ( L + EPSILON ) + 1;
+        let plaintext = BigNumber::from(1) << (L + EPSILON) + 1;
         let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
         let x = generic_ec::Point::<C>::generator() * convert_scalar(&plaintext);
 

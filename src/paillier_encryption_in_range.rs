@@ -16,6 +16,8 @@
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_encryption_in_range as p;
 //! use paillier_zk::{L, EPSILON};
+//! use generic_ec_core::hash_to_curve::Tag;
+//! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
@@ -26,6 +28,7 @@
 //! let t: BigNumber = 321.into();
 //! assert_eq!(s.gcd(&rsa_modulo), 1.into());
 //! assert_eq!(t.gcd(&rsa_modulo), 1.into());
+//! let security_prime = BigNumber::prime(256);
 //!
 //! let aux = p::Aux { s, t, rsa_modulo };
 //!
@@ -42,10 +45,10 @@
 //! // 3. Prover computes a non-interactive proof that plaintext is at most `L` bits:
 //!
 //! let rng = rand_core::OsRng::default();
-//! let data = p::Data { key, ciphertext };
+//! let data = p::Data { key, ciphertext, q: security_prime };
 //! let pdata = p::PrivateData { plaintext, nonce };
 //! let (commitment, challenge, proof) =
-//!     p::compute_proof(&aux, &data, &pdata, rng);
+//!     p::compute_proof(TAG, &aux, &data, &pdata, rng);
 //!
 //! // 4. Prover sends this data to verifier
 //!
@@ -63,12 +66,13 @@
 //! If the verification succeeded, verifier can continue communication with prover
 
 use crate::unknown_order::BigNumber;
+use generic_ec::hash_to_curve::Tag;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
+pub use crate::common::InvalidProof;
 use crate::common::{combine, gen_inversible};
 use crate::{EPSILON, L};
-pub use crate::common::InvalidProof;
 
 /// Public data that both parties know
 pub struct Data {
@@ -76,6 +80,8 @@ pub struct Data {
     pub key: EncryptionKey,
     /// K in paper
     pub ciphertext: Ciphertext,
+    /// q in paper. Security parameter for challenge
+    pub q: BigNumber,
 }
 
 /// Private data of prover
@@ -210,23 +216,21 @@ pub fn verify(
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
-    use sha2::Digest;
-    let mut digest = sha2::Sha512::new();
-
-    digest.update(aux.s.to_bytes());
-    digest.update(aux.t.to_bytes());
-    digest.update(aux.rsa_modulo.to_bytes());
-
-    digest.update(data.key.to_bytes());
-    digest.update(data.ciphertext.to_bytes());
-
-    digest.update(commitment.s.to_bytes());
-    digest.update(commitment.a.to_bytes());
-    digest.update(commitment.c.to_bytes());
-
-    // FIXME: hash to bignumber
-    BigNumber::from_slice(digest.finalize())
+pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
+    crate::common::hash2field::hash_to_field(
+        tag,
+        &data.q,
+        &[
+            &aux.s.to_bytes(),
+            &aux.t.to_bytes(),
+            &aux.rsa_modulo.to_bytes(),
+            &data.key.to_bytes(),
+            &data.ciphertext.to_bytes(),
+            &commitment.s.to_bytes(),
+            &commitment.a.to_bytes(),
+            &commitment.c.to_bytes(),
+        ],
+    )
 }
 
 /// Compute proof for the given data, producing random commitment and
@@ -234,13 +238,14 @@ pub fn challenge(aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
 ///
 /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
 pub fn compute_proof<R: RngCore>(
+    tag: Tag,
     aux: &Aux,
     data: &Data,
     pdata: &PrivateData,
     rng: R,
 ) -> (Commitment, Challenge, Proof) {
     let (comm, pcomm) = commit(aux, data, pdata, rng);
-    let challenge = challenge(aux, data, &comm);
+    let challenge = challenge(tag, aux, data, &comm);
     let proof = prove(data, pdata, &pcomm, &challenge);
     (comm, challenge, proof)
 }
@@ -256,7 +261,8 @@ mod test {
         let key = libpaillier::EncryptionKey::from(&private_key);
         let plaintext: BigNumber = 228.into();
         let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
-        let data = super::Data { key, ciphertext };
+        let q = BigNumber::prime(256);
+        let data = super::Data { key, ciphertext, q };
         let pdata = super::PrivateData { plaintext, nonce };
 
         let p = BigNumber::prime(L + EPSILON + 1);
@@ -268,8 +274,9 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
         let (commitment, challenge, proof) =
-            super::compute_proof(&aux, &data, &pdata, rand_core::OsRng::default());
+            super::compute_proof(tag, &aux, &data, &pdata, rand_core::OsRng::default());
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -284,7 +291,7 @@ mod test {
         let key = libpaillier::EncryptionKey::from(&private_key);
         let plaintext: BigNumber = (BigNumber::one() << (L + EPSILON)) + 1;
         let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
-        let data = super::Data { key, ciphertext };
+        let data = super::Data { key, ciphertext, q };
         let pdata = super::PrivateData { plaintext, nonce };
 
         let p = BigNumber::prime(L + EPSILON + 1);
@@ -296,8 +303,9 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
         let (commitment, challenge, proof) =
-            super::compute_proof(&aux, &data, &pdata, rand_core::OsRng::default());
+            super::compute_proof(tag, &aux, &data, &pdata, rand_core::OsRng::default());
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
