@@ -193,7 +193,7 @@ pub fn prove<C: Curve>(
 ) -> Proof {
     Proof {
         z1: &pcomm.alpha + challenge * &pdata.x,
-        z2: combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, &challenge, data.key0.n()),
+        z2: combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge, data.key0.n()),
         z3: &pcomm.gamma + challenge * &pcomm.mu,
     }
 }
@@ -217,7 +217,7 @@ pub fn verify<C: Curve>(
     // Three equality checks and one range check
     {
         let (lhs, _) = data.key0.encrypt(proof.z1.to_bytes(), Some(proof.z2.clone())).ok_or(InvalidProof::EncryptionFailed)?;
-        let rhs = combine(&commitment.a, &one, &data.c, &challenge, &data.key0.nn());
+        let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key0.nn());
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
     }
     {
@@ -227,7 +227,7 @@ pub fn verify<C: Curve>(
     }
     {
         let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo);
-        let rhs = combine(&commitment.d, &one, &commitment.s, &challenge, &aux.rsa_modulo);
+        let rhs = combine(&commitment.d, &one, &commitment.s, challenge, &aux.rsa_modulo);
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
     }
     fail_if( proof.z1 <= one << (L + EPSILON), InvalidProof::RangeCheckFailed(4) )?;
