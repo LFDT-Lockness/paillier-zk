@@ -30,13 +30,14 @@
 //!     # use generic_ec_core::hash_to_curve::Tag;
 //!     # let (n, p, q) = todo!();
 //!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
+//!     const SECURITY: usize = 33;
 //!
 //!     let data = p::Data { n };
 //!     let pdata = p::PrivateData { p, q };
 //!     let mut rng = rand_core::OsRng::default();
 //!
 //!     let (commitment, challenge, proof) =
-//!         p::compute_proof(
+//!         p::compute_proof::<{SECURITY}, _>(
 //!             TAG,
 //!             &data,
 //!             &pdata,
@@ -48,7 +49,8 @@
 //!     ``` no_run
 //!     # use paillier_zk::paillier_blum_modulus as p;
 //!     # let (data, commitment, challenge, proof) = todo!();
-//!     p::verify(
+//!     # const SECURITY: usize = 33;
+//!     p::verify::<{SECURITY}>(
 //!         &data,
 //!         &commitment,
 //!         &challenge,
@@ -61,10 +63,7 @@ use crate::unknown_order::BigNumber;
 use generic_ec::hash_to_curve::Tag;
 use rand_core::RngCore;
 
-use crate::{
-    common::sqrt::{blum_sqrt, find_residue, non_residue_in},
-    M,
-};
+use crate::common::sqrt::{blum_sqrt, find_residue, non_residue_in};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InvalidProof {
@@ -95,7 +94,7 @@ pub struct Commitment {
 ///
 /// Consists of `M` singular challenges
 #[derive(Debug, PartialEq, Eq)]
-pub struct Challenge {
+pub struct Challenge<const M: usize> {
     ys: [BigNumber; M],
 }
 
@@ -106,8 +105,8 @@ struct ProofPoint {
     z: BigNumber,
 }
 
-/// The ZK proof. Computed by `prove`
-pub struct Proof {
+/// The ZK proof. Computed by `prove`. Consists of M proofs for each challenge
+pub struct Proof<const M: usize> {
     points: [ProofPoint; M],
 }
 
@@ -119,8 +118,10 @@ pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(tag: Tag, data: &Data, commitment: &Commitment) -> Challenge {
-    let mut ys: [BigNumber; M] = Default::default();
+pub fn challenge<const M: usize>(tag: Tag, data: &Data, commitment: &Commitment) -> Challenge<M> {
+    // since we can't use Default and BigNumber isn't copy, we initialize
+    // like this
+    let mut ys = [(); M].map(|()| BigNumber::zero());
     for (i, y_ref) in ys.iter_mut().enumerate() {
         *y_ref = crate::common::hash2field::hash_to_field(
             tag,
@@ -136,12 +137,12 @@ pub fn challenge(tag: Tag, data: &Data, commitment: &Commitment) -> Challenge {
 }
 
 /// Compute proof for given data and prior protocol values
-pub fn prove(
+pub fn prove<const M: usize>(
     Data { ref n }: &Data,
     PrivateData { ref p, ref q }: &PrivateData,
     Commitment { ref w }: &Commitment,
-    challenge: &Challenge,
-) -> Proof {
+    challenge: &Challenge<M>,
+) -> Proof<M> {
     let sqrt = |x| blum_sqrt(&x, p, q, n);
     let phi = (p - 1) * (q - 1);
     let n_inverse = n.extended_gcd(&phi).x;
@@ -157,11 +158,11 @@ pub fn prove(
 
 /// Verify the proof. If this succeeds, the relation Rmod holds with chance
 /// `1/2^M`
-pub fn verify(
+pub fn verify<const M: usize>(
     data: &Data,
     commitment: &Commitment,
-    challenge: &Challenge,
-    proof: &Proof,
+    challenge: &Challenge<M>,
+    proof: &Proof<M>,
 ) -> Result<(), InvalidProof> {
     if data.n.is_prime() {
         return Err(InvalidProof::ModulusIsPrime);
@@ -191,12 +192,12 @@ pub fn verify(
 /// deriving determenistic challenge.
 ///
 /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-pub fn compute_proof<R: RngCore>(
+pub fn compute_proof<const M: usize, R: RngCore>(
     tag: Tag,
     data: &Data,
     pdata: &PrivateData,
     rng: R,
-) -> (Commitment, Challenge, Proof) {
+) -> (Commitment, Challenge<M>, Proof<M>) {
     let commitment = commit(data, rng);
     let challenge = challenge(tag, data, &commitment);
     let proof = prove(data, pdata, &commitment, &challenge);
@@ -216,7 +217,8 @@ mod test {
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) = super::compute_proof(tag, &data, &pdata, &mut rng);
+        let (commitment, challenge, proof) =
+            super::compute_proof::<65, _>(tag, &data, &pdata, &mut rng);
         let r = super::verify(&data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -239,7 +241,8 @@ mod test {
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) = super::compute_proof(tag, &data, &pdata, &mut rng);
+        let (commitment, challenge, proof) =
+            super::compute_proof::<65, _>(tag, &data, &pdata, &mut rng);
         let r = super::verify(&data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("should have failed"),

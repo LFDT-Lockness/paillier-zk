@@ -32,14 +32,13 @@
 //! ``` no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_affine_operation_in_range as p;
-//! use paillier_zk::{L, EPSILON};
 //! use generic_ec_core::hash_to_curve::Tag;
 //! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
-//! let p = BigNumber::prime(L + EPSILON + 1);
-//! let q = BigNumber::prime(L + EPSILON + 1);
+//! let p = BigNumber::prime(1024);
+//! let q = BigNumber::prime(1024);
 //! let rsa_modulo = p * q;
 //! let s: BigNumber = 123.into();
 //! let t: BigNumber = 321.into();
@@ -92,6 +91,12 @@
 //! // 5. Prover computes a non-interactive proof that plaintext_add and
 //! //    plaintext_mult are at most L and L' bits
 //!
+//! let security = p::SecurityParams {
+//!     l_x: 1024,
+//!     l_y: 1024,
+//!     epsilon: 128,
+//! };
+//!
 //! let rng = rand_core::OsRng::default();
 //! let data = p::Data {
 //!     key0,
@@ -108,7 +113,7 @@
 //!     nonce_y,
 //! };
 //! let (commitment, challenge, proof) =
-//!     p::compute_proof(TAG, &aux, &data, &pdata, rng).expect("proof failed");
+//!     p::compute_proof(TAG, &aux, &data, &pdata, &security, rng).expect("proof failed");
 //!
 //! // 6. Prover sends this data to verifier
 //!
@@ -120,7 +125,7 @@
 //! // 7. Verifier receives the data and the proof and verifies it
 //!
 //! let (data, commitment, challenge, proof) = recv::<C>();
-//! let r = p::verify(&aux, &data, &commitment, &challenge, &proof);
+//! let r = p::verify(&aux, &data, &commitment, &security, &challenge, &proof);
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover
@@ -133,7 +138,15 @@ use rand_core::RngCore;
 
 use crate::common::{combine, gen_inversible};
 pub use crate::common::{convert_scalar, InvalidProof, ProtocolError};
-use crate::{EPSILON, L};
+
+pub struct SecurityParams {
+    /// l in paper, bit size of x
+    pub l_x: usize,
+    /// l' in paper, bit size of y
+    pub l_y: usize,
+    /// Epsilon in paper, range extension and security parameter for x and y
+    pub epsilon: usize,
+}
 
 /// Public data that both parties know
 pub struct Data<C: Curve> {
@@ -217,15 +230,16 @@ pub fn commit<C: Curve, R: RngCore>(
     aux: &Aux,
     data: &Data<C>,
     pdata: &PrivateData,
+    security: &SecurityParams,
     mut rng: R,
 ) -> Result<(Commitment<C>, PrivateCommitment), ProtocolError> {
-    let two_to_l = BigNumber::one() << L;
-    let two_to_l_e = BigNumber::one() << (L + EPSILON);
+    let two_to_l = BigNumber::one() << security.l_x;
+    let two_to_l_e = BigNumber::one() << (security.l_x + security.epsilon);
     let modulo_l = two_to_l * &aux.rsa_modulo;
     let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
     let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-    let beta = BigNumber::from_rng(&two_to_l_e, &mut rng); // TODO l'
+    let beta = BigNumber::from_rng(&(BigNumber::one() << security.l_y), &mut rng);
     let r = gen_inversible(data.key0.n(), &mut rng);
     let r_y = gen_inversible(data.key1.n(), &mut rng);
     let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
@@ -306,6 +320,7 @@ pub fn verify<C: Curve>(
     aux: &Aux,
     data: &Data<C>,
     commitment: &Commitment<C>,
+    security: &SecurityParams,
     challenge: &Challenge,
     proof: &Proof,
 ) -> Result<(), InvalidProof> {
@@ -375,11 +390,11 @@ pub fn verify<C: Curve>(
     )?;
     fail_if(
         InvalidProof::RangeCheckFailed(6),
-        proof.z1 <= &one << (L + EPSILON),
+        proof.z1 <= &one << (security.l_x + security.epsilon),
     )?;
     fail_if(
         InvalidProof::RangeCheckFailed(7),
-        proof.z2 <= &one << (L + EPSILON), // TODO: L'
+        proof.z2 <= &one << (security.l_y + security.epsilon),
     )?;
     Ok(())
 }
@@ -427,9 +442,10 @@ pub fn compute_proof<C: Curve + HashToCurve, R: RngCore>(
     aux: &Aux,
     data: &Data<C>,
     pdata: &PrivateData,
+    security: &SecurityParams,
     rng: R,
 ) -> Result<(Commitment<C>, Challenge, Proof), ProtocolError> {
-    let (comm, pcomm) = commit(aux, data, pdata, rng)?;
+    let (comm, pcomm) = commit(aux, data, pdata, security, rng)?;
     let challenge = challenge(tag, aux, data, &comm)?;
     let proof = prove(data, pdata, &pcomm, &challenge);
     Ok((comm, challenge, proof))
@@ -441,9 +457,13 @@ mod test {
     use generic_ec_core::hash_to_curve::HashToCurve;
 
     use crate::unknown_order::BigNumber;
-    use crate::{EPSILON, L};
 
     fn passing_test<C: Curve + HashToCurve>() {
+        let security = super::SecurityParams {
+            l_x: 1024,
+            l_y: 1024,
+            epsilon: 128,
+        };
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
         let private_key1 = libpaillier::DecryptionKey::random().unwrap();
@@ -484,8 +504,8 @@ mod test {
             nonce_y,
         };
 
-        let p = BigNumber::prime(L + EPSILON + 1);
-        let q = BigNumber::prime(L + EPSILON + 1);
+        let p = BigNumber::prime(1024 + 128 + 1);
+        let q = BigNumber::prime(1024 + 128 + 1);
         let rsa_modulo = p * q;
         let s: BigNumber = 123.into();
         let t: BigNumber = 321.into();
@@ -495,8 +515,8 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
         let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, rand_core::OsRng::default()).unwrap();
-        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
+            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{:?}", e),
@@ -504,14 +524,19 @@ mod test {
     }
 
     fn failing_test<C: Curve + HashToCurve>() {
+        let security = super::SecurityParams {
+            l_x: 1024,
+            l_y: 1024,
+            epsilon: 128,
+        };
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
         let private_key1 = libpaillier::DecryptionKey::random().unwrap();
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
         let g = generic_ec::Point::<C>::generator();
         let plaintext_orig = BigNumber::from(1337);
-        let plaintext_mult = BigNumber::one() << (L + EPSILON) + 1;
-        let plaintext_add = BigNumber::one() << (L + EPSILON) + 2;
+        let plaintext_mult = BigNumber::one() << (1024 + 128) + 1;
+        let plaintext_add: BigNumber = BigNumber::one() << (1024 + 128) + 2;
         let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
         let ciphertext_mult = g * super::convert_scalar(&plaintext_mult);
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
@@ -538,8 +563,8 @@ mod test {
             nonce_y,
         };
 
-        let p = BigNumber::prime(L + EPSILON + 1);
-        let q = BigNumber::prime(L + EPSILON + 1);
+        let p = BigNumber::prime(1024 + 128 + 1);
+        let q = BigNumber::prime(1024 + 128 + 1);
         let rsa_modulo = p * q;
         let s: BigNumber = 123.into();
         let t: BigNumber = 321.into();
@@ -549,8 +574,8 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
         let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, rand_core::OsRng::default()).unwrap();
-        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
+            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(_) => (),
