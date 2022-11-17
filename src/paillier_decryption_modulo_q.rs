@@ -1,4 +1,74 @@
-//! Пdec
+//! ZK-proof of knowledge of plaintext of paillier encryption. Called Пdec or
+//! Rdec in the CGGMP21 paper.
+//!
+//! ## Description
+//! A party P has `key`, `pkey` - public and private keys in paillier
+//! cryptosystem. P has plaintext y, `nonce` and `c = key.encrypt(y, nonce)`.
+//! P also prepares a number q and x such that `x = y mod q`.
+//! P wants to prove that it knows y while disclosing x, c and key.
+//!
+//! ## Example
+//!
+//! ```no_run
+//! # use paillier_zk::unknown_order::BigNumber;
+//! use paillier_zk::paillier_decryption_modulo_q as p;
+//! use generic_ec_core::hash_to_curve::Tag;
+//! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
+//! let mut rng = rand_core::OsRng::default();
+//!
+//! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
+//!
+//! let p = BigNumber::prime(1024);
+//! let q = BigNumber::prime(1024);
+//! let rsa_modulo = p * q;
+//! let s: BigNumber = 123.into();
+//! let t: BigNumber = 321.into();
+//! assert_eq!(s.gcd(&rsa_modulo), 1.into());
+//! assert_eq!(t.gcd(&rsa_modulo), 1.into());
+//! let security_prime = BigNumber::prime(256);
+//!
+//! let aux = p::Aux { s, t, rsa_modulo };
+//!
+//! // 1. Setup: prover prepares the paillier keys and q
+//!
+//! let private_key = libpaillier::DecryptionKey::random().unwrap();
+//! let key = libpaillier::EncryptionKey::from(&private_key);
+//! let q = BigNumber::prime(1024);
+//!
+//! // 2. Setup: prover has some plaintext and encrypts it
+//!
+//! let plaintext: BigNumber = 228.into();
+//! let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
+//! let random_koef = BigNumber::from_rng(&q, &mut rng);
+//! let x = &plaintext + &q * random_koef;
+//!
+//! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
+//!
+//! let security = p::SecurityParams {
+//!     l: 1024,
+//!     epsilon: 128,
+//! };
+//!
+//! let data = p::Data { key, c: ciphertext, q, x };
+//! let pdata = p::PrivateData { y: plaintext, nonce };
+//! let (commitment, challenge, proof) =
+//!     p::compute_proof(TAG, &aux, &data, &pdata, &security, &mut rng)
+//!         .expect("could not compute proof");
+//!
+//! // 4. Prover sends this data to verifier
+//!
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Challenge, _: &p::Proof) { todo!() }
+//! # fn recv() -> (p::Data, p::Commitment, p::Challenge, p::Proof) { todo!() }
+//! send(&data, &commitment, &challenge, &proof);
+//!
+//! // 5. Verifier receives the data and the proof and verifies it
+//!
+//! let (data, commitment, challenge, proof) = recv();
+//! p::verify(&aux, &data, &commitment, &challenge, &proof);
+//!
+//! ```
+//!
+//! If the verification succeeded, verifier can continue communication with prover
 use crate::unknown_order::BigNumber;
 use generic_ec::hash_to_curve::Tag;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
@@ -14,18 +84,27 @@ pub struct SecurityParams {
     pub epsilon: usize,
 }
 
+/// Public data that both parties know
 pub struct Data {
+    /// q in paper, modulo value such that `x = y mod q`
     pub q: BigNumber,
-    pub key0: EncryptionKey,
+    /// N0 in paper, public key that y -> C was encrypted on
+    pub key: EncryptionKey,
+    /// C in paper
     pub c: Ciphertext,
+    /// x in paper
     pub x: BigNumber,
 }
 
+/// Private data of prover
 pub struct PrivateData {
+    /// y in paper, plaintext value of C
     pub y: BigNumber,
+    /// rho in paper, nonce of encryption y -> C
     pub nonce: Nonce,
 }
 
+/// Prover's first message, obtained by `commit`
 pub struct Commitment {
     s: BigNumber,
     t: BigNumber,
@@ -33,6 +112,8 @@ pub struct Commitment {
     gamma: BigNumber,
 }
 
+/// Prover's data accompanying the commitment. Kept as state between rounds in
+/// the interactive protocol.
 pub struct PrivateCommitment {
     alpha: BigNumber,
     mu: BigNumber,
@@ -40,8 +121,11 @@ pub struct PrivateCommitment {
     r: Nonce,
 }
 
+/// Verifier's challenge to prover. Can be obtained deterministically by
+/// `challenge`
 pub type Challenge = BigNumber;
 
+/// The ZK proof. Computed by `prove`
 pub struct Proof {
     z1: BigNumber,
     z2: BigNumber,
@@ -67,7 +151,7 @@ pub fn commit<R: RngCore>(
     let nu = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
     let (a, r) = data
-        .key0
+        .key
         .encrypt(alpha.to_bytes(), None)
         .ok_or(ProtocolError::EncryptionFailed)?;
 
@@ -91,7 +175,7 @@ pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment) -> C
             &aux.t.to_bytes(),
             &aux.rsa_modulo.to_bytes(),
             &data.q.to_bytes(),
-            &data.key0.to_bytes(),
+            &data.key.to_bytes(),
             &data.c.to_bytes(),
             &data.x.to_bytes(),
             &commitment.s.to_bytes(),
@@ -102,6 +186,7 @@ pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment) -> C
     )
 }
 
+/// Compute proof for given data and prior protocol values
 pub fn prove(
     data: &Data,
     pdata: &PrivateData,
@@ -116,7 +201,7 @@ pub fn prove(
             &BigNumber::one(),
             &pdata.nonce,
             challenge,
-            data.key0.n(),
+            data.key.n(),
         ),
     }
 }
@@ -140,10 +225,10 @@ pub fn verify(
     // Three equality checks
     {
         let (lhs, _) = data
-            .key0
+            .key
             .encrypt(proof.z1.to_bytes(), Some(proof.w.clone()))
             .ok_or(InvalidProof::EncryptionFailed)?;
-        let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key0.nn());
+        let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key.nn());
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
     }
     {
@@ -207,7 +292,7 @@ mod test {
 
         let data = super::Data {
             q: modulo,
-            key0,
+            key: key0,
             c: ciphertext,
             x: hiddentext,
         };
@@ -233,6 +318,98 @@ mod test {
         match r {
             Ok(()) => (),
             Err(e) => panic!("{:?}", e),
+        }
+    }
+
+    #[test]
+    fn failing_wrong_hidden() {
+        let security = super::SecurityParams {
+            l: 1024,
+            epsilon: 128,
+        };
+        let private_key0 = libpaillier::DecryptionKey::random().unwrap();
+        let key0 = libpaillier::EncryptionKey::from(&private_key0);
+
+        let plaintext = BigNumber::from(28);
+        let hiddentext = BigNumber::from(322);
+        let modulo = BigNumber::from(100);
+        assert_ne!(&plaintext % &modulo, &hiddentext % &modulo);
+        let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
+
+        let data = super::Data {
+            q: modulo,
+            key: key0,
+            c: ciphertext,
+            x: hiddentext,
+        };
+        let pdata = super::PrivateData {
+            y: plaintext,
+            nonce,
+        };
+
+        let p = BigNumber::prime(1024);
+        let q = BigNumber::prime(1024);
+        let rsa_modulo = p * q;
+        let s: BigNumber = 123.into();
+        let t: BigNumber = 321.into();
+        assert_eq!(s.gcd(&rsa_modulo), 1.into());
+        assert_eq!(t.gcd(&rsa_modulo), 1.into());
+        let aux = super::Aux { s, t, rsa_modulo };
+
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
+
+        let (commitment, challenge, proof) =
+            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
+        match r {
+            Ok(()) => panic!("proof should not pass"),
+            Err(_) => (),
+        }
+    }
+
+    #[test]
+    fn failing_wrong_plain() {
+        let security = super::SecurityParams {
+            l: 1024,
+            epsilon: 128,
+        };
+        let private_key0 = libpaillier::DecryptionKey::random().unwrap();
+        let key0 = libpaillier::EncryptionKey::from(&private_key0);
+
+        let wrong_plaintext = BigNumber::from(42);
+        let plaintext = BigNumber::from(28);
+        let hiddentext = BigNumber::from(228);
+        let modulo = BigNumber::from(100);
+        let (ciphertext, nonce) = key0.encrypt(wrong_plaintext.to_bytes(), None).unwrap();
+
+        let data = super::Data {
+            q: modulo,
+            key: key0,
+            c: ciphertext,
+            x: hiddentext,
+        };
+        let pdata = super::PrivateData {
+            y: plaintext,
+            nonce,
+        };
+
+        let p = BigNumber::prime(1024);
+        let q = BigNumber::prime(1024);
+        let rsa_modulo = p * q;
+        let s: BigNumber = 123.into();
+        let t: BigNumber = 321.into();
+        assert_eq!(s.gcd(&rsa_modulo), 1.into());
+        assert_eq!(t.gcd(&rsa_modulo), 1.into());
+        let aux = super::Aux { s, t, rsa_modulo };
+
+        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
+
+        let (commitment, challenge, proof) =
+            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
+        match r {
+            Ok(()) => panic!("proof should not pass"),
+            Err(_) => (),
         }
     }
 }
