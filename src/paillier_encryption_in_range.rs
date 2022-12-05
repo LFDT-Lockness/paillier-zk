@@ -46,10 +46,11 @@
 //! let security = p::SecurityParams {
 //!     l: 1024,
 //!     epsilon: 128,
+//!     q: security_prime,
 //! };
 //!
 //! let rng = rand_core::OsRng::default();
-//! let data = p::Data { key, ciphertext, q: security_prime };
+//! let data = p::Data { key, ciphertext };
 //! let pdata = p::PrivateData { plaintext, nonce };
 //! let (commitment, challenge, proof) =
 //!     p::compute_proof(TAG, &aux, &data, &pdata, &security, rng);
@@ -82,6 +83,8 @@ pub struct SecurityParams {
     pub l: usize,
     /// Epsilon in paper, range extension and security parameter for x
     pub epsilon: usize,
+    /// q in paper. Security parameter for challenge
+    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -90,8 +93,6 @@ pub struct Data {
     pub key: EncryptionKey,
     /// K in paper
     pub ciphertext: Ciphertext,
-    /// q in paper. Security parameter for challenge
-    pub q: BigNumber,
 }
 
 /// Private data of prover
@@ -228,10 +229,10 @@ pub fn verify(
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
+pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment, security: &SecurityParams) -> Challenge {
     crate::common::hash2field::hash_to_field(
         tag,
-        &data.q,
+        &security.q,
         &[
             &aux.s.to_bytes(),
             &aux.t.to_bytes(),
@@ -258,7 +259,7 @@ pub fn compute_proof<R: RngCore>(
     rng: R,
 ) -> (Commitment, Challenge, Proof) {
     let (comm, pcomm) = commit(aux, data, pdata, security, rng);
-    let challenge = challenge(tag, aux, data, &comm);
+    let challenge = challenge(tag, aux, data, &comm, security);
     let proof = prove(data, pdata, &pcomm, &challenge);
     (comm, challenge, proof)
 }
@@ -272,13 +273,13 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
+            q: BigNumber::prime(256),
         };
         let private_key = libpaillier::DecryptionKey::random().unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
         let plaintext: BigNumber = 228.into();
         let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
-        let q = BigNumber::prime(256);
-        let data = super::Data { key, ciphertext, q };
+        let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 
         let p = BigNumber::prime(1024);
@@ -304,6 +305,7 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
+            q: BigNumber::prime(256),
         };
         let p = BigNumber::prime(1024);
         let q = BigNumber::prime(1024);
@@ -311,7 +313,7 @@ mod test {
         let key = libpaillier::EncryptionKey::from(&private_key);
         let plaintext: BigNumber = (BigNumber::one() << (security.l + security.epsilon)) + 1;
         let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
-        let data = super::Data { key, ciphertext, q };
+        let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 
         let p = BigNumber::prime(1024);
