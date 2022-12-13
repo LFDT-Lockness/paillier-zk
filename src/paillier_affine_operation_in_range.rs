@@ -32,7 +32,7 @@
 //! ``` no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_affine_operation_in_range as p;
-//! use generic_ec_core::hash_to_curve::Tag;
+//! use generic_ec::hash_to_curve::Tag;
 //! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
@@ -132,8 +132,7 @@
 //! If the verification succeeded, verifier can continue communication with prover
 
 use crate::unknown_order::BigNumber;
-use generic_ec::{hash_to_curve::Tag, Curve, Point, Scalar};
-use generic_ec_core::hash_to_curve::HashToCurve;
+use generic_ec::{hash_to_curve::{Tag, FromHash}, Curve, Point, Scalar};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
@@ -393,13 +392,15 @@ pub fn verify<C: Curve>(
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge<C: Curve + HashToCurve>(
+pub fn challenge<C: Curve>(
     tag: Tag,
     aux: &Aux,
     data: &Data<C>,
     commitment: &Commitment<C>,
-) -> Result<Challenge, ProtocolError> {
-    use generic_ec::hash_to_curve::FromHash;
+) -> Result<Challenge, ProtocolError>
+    where
+        Scalar<C>: FromHash,
+{
     let scalar = Scalar::<C>::hash_concat(
         tag,
         &[
@@ -430,14 +431,17 @@ pub fn challenge<C: Curve + HashToCurve>(
 /// deriving determenistic challenge.
 ///
 /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-pub fn compute_proof<C: Curve + HashToCurve, R: RngCore>(
+pub fn compute_proof<C: Curve, R: RngCore>(
     tag: Tag,
     aux: &Aux,
     data: &Data<C>,
     pdata: &PrivateData,
     security: &SecurityParams,
     rng: R,
-) -> Result<(Commitment<C>, Challenge, Proof), ProtocolError> {
+) -> Result<(Commitment<C>, Challenge, Proof), ProtocolError>
+where
+    Scalar<C>: FromHash,
+{
     let (comm, pcomm) = commit(aux, data, pdata, security, rng)?;
     let challenge = challenge(tag, aux, data, &comm)?;
     let proof = prove(data, pdata, &pcomm, &challenge);
@@ -446,12 +450,14 @@ pub fn compute_proof<C: Curve + HashToCurve, R: RngCore>(
 
 #[cfg(test)]
 mod test {
-    use generic_ec::Curve;
-    use generic_ec_core::hash_to_curve::HashToCurve;
+    use generic_ec::{Curve, hash_to_curve::FromHash, Scalar};
 
     use crate::unknown_order::BigNumber;
 
-    fn passing_test<C: Curve + HashToCurve>() {
+    fn passing_test<C: Curve>()
+    where
+        Scalar<C>: FromHash,
+    {
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
@@ -516,7 +522,10 @@ mod test {
         }
     }
 
-    fn failing_test<C: Curve + HashToCurve>() {
+    fn failing_test<C: Curve>()
+    where
+        Scalar<C>: FromHash,
+    {
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,

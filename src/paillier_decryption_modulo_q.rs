@@ -12,7 +12,7 @@
 //! ```no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_decryption_modulo_q as p;
-//! use generic_ec_core::hash_to_curve::Tag;
+//! use generic_ec::hash_to_curve::Tag;
 //! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //! let mut rng = rand_core::OsRng::default();
 //!

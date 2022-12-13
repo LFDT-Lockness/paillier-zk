@@ -27,7 +27,7 @@
 //! 1. P computes a non-interactive proof that `n` is a Paillier-Blum modulus:
 //!     ``` no_run
 //!     use paillier_zk::paillier_blum_modulus as p;
-//!     # use generic_ec_core::hash_to_curve::Tag;
+//!     # use generic_ec::hash_to_curve::Tag;
 //!     # let (n, p, q) = todo!();
 //!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!     const SECURITY: usize = 33;
@@ -47,7 +47,7 @@
 //! 2. P sends `data, commitment, proof` to the verifier V
 //! 3. V verifies the proof:
 //!     ``` no_run
-//!     # use generic_ec_core::hash_to_curve::Tag;
+//!     # use generic_ec::hash_to_curve::Tag;
 //!     # use paillier_zk::paillier_blum_modulus as p;
 //!     # let (data, commitment, proof) = todo!();
 //!     # const SECURITY: usize = 33;
