@@ -44,12 +44,15 @@
 //!             &mut rng,
 //!         );
 //!     ```
-//! 2. P sends `data, commitment, challenge, proof` to the verifier V
+//! 2. P sends `data, commitment, proof` to the verifier V
 //! 3. V verifies the proof:
 //!     ``` no_run
+//!     # use generic_ec_core::hash_to_curve::Tag;
 //!     # use paillier_zk::paillier_blum_modulus as p;
-//!     # let (data, commitment, challenge, proof) = todo!();
+//!     # let (data, commitment, proof) = todo!();
 //!     # const SECURITY: usize = 33;
+//!     # const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
+//!     let challenge = p::challenge::<{SECURITY}>(TAG, &data, &commitment);
 //!     p::verify::<{SECURITY}>(
 //!         &data,
 //!         &commitment,

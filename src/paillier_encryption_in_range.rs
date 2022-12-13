@@ -57,13 +57,14 @@
 //!
 //! // 4. Prover sends this data to verifier
 //!
-//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Challenge, _: &p::Proof) { todo!() }
-//! # fn recv() -> (p::Data, p::Commitment, p::Challenge, p::Proof) { todo!() }
-//! send(&data, &commitment, &challenge, &proof);
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof) { todo!() }
+//! # fn recv() -> (p::Data, p::Commitment, p::Proof) { todo!() }
+//! send(&data, &commitment, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
-//! let (data, commitment, challenge, proof) = recv();
+//! let challenge = p::challenge(TAG, &aux, &data, &commitment, &security);
+//! let (data, commitment, proof) = recv();
 //! p::verify(&aux, &data, &commitment, &security, &challenge, &proof);
 //!
 //! ```

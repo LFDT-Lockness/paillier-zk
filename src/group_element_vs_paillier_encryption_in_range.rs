@@ -67,13 +67,14 @@
 //! // 4. Prover sends this data to verifier
 //!
 //! # use generic_ec::Curve;
-//! # fn send<C: Curve>(_: &p::Data<C>, _: &p::Commitment<C>, _: &p::Challenge, _: &p::Proof) { todo!() }
-//! # fn recv<C: Curve>() -> (p::Data<C>, p::Commitment<C>, p::Challenge, p::Proof) { todo!() }
-//! send(&data, &commitment, &challenge, &proof);
+//! # fn send<C: Curve>(_: &p::Data<C>, _: &p::Commitment<C>, _: &p::Proof) { todo!() }
+//! # fn recv<C: Curve>() -> (p::Data<C>, p::Commitment<C>, p::Proof) { todo!() }
+//! send(&data, &commitment, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
-//! let (data, commitment, challenge, proof) = recv::<C>();
+//! let challenge = p::challenge(TAG, &aux, &data, &commitment).expect("challenge failed");
+//! let (data, commitment, proof) = recv::<C>();
 //! p::verify(&aux, &data, &commitment, &security, &challenge, &proof);
 //! ```
 //!
