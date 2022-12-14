@@ -12,7 +12,7 @@
 //! ```no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_decryption_modulo_q as p;
-//! use generic_ec_core::hash_to_curve::Tag;
+//! use generic_ec::hash_to_curve::Tag;
 //! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //! let mut rng = rand_core::OsRng::default();
 //!
@@ -57,13 +57,14 @@
 //!
 //! // 4. Prover sends this data to verifier
 //!
-//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Challenge, _: &p::Proof) { todo!() }
-//! # fn recv() -> (p::Data, p::Commitment, p::Challenge, p::Proof) { todo!() }
-//! send(&data, &commitment, &challenge, &proof);
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof) { todo!() }
+//! # fn recv() -> (p::Data, p::Commitment, p::Proof) { todo!() }
+//! send(&data, &commitment, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
-//! let (data, commitment, challenge, proof) = recv();
+//! let (data, commitment, proof) = recv();
+//! let challenge = p::challenge(TAG, &aux, &data, &commitment);
 //! p::verify(&aux, &data, &commitment, &challenge, &proof);
 //!
 //! ```
@@ -106,19 +107,19 @@ pub struct PrivateData {
 
 /// Prover's first message, obtained by `commit`
 pub struct Commitment {
-    s: BigNumber,
-    t: BigNumber,
-    a: Ciphertext,
-    gamma: BigNumber,
+    pub s: BigNumber,
+    pub t: BigNumber,
+    pub a: Ciphertext,
+    pub gamma: BigNumber,
 }
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
 /// the interactive protocol.
 pub struct PrivateCommitment {
-    alpha: BigNumber,
-    mu: BigNumber,
-    nu: BigNumber,
-    r: Nonce,
+    pub alpha: BigNumber,
+    pub mu: BigNumber,
+    pub nu: BigNumber,
+    pub r: Nonce,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
@@ -127,9 +128,9 @@ pub type Challenge = BigNumber;
 
 /// The ZK proof. Computed by `prove`
 pub struct Proof {
-    z1: BigNumber,
-    z2: BigNumber,
-    w: BigNumber,
+    pub z1: BigNumber,
+    pub z2: BigNumber,
+    pub w: BigNumber,
 }
 
 pub use crate::common::Aux;
@@ -312,8 +313,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -358,8 +366,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
@@ -404,8 +419,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),

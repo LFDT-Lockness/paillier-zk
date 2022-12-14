@@ -15,7 +15,7 @@
 //! ``` no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_encryption_in_range as p;
-//! use generic_ec_core::hash_to_curve::Tag;
+//! use generic_ec::hash_to_curve::Tag;
 //! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
@@ -57,13 +57,14 @@
 //!
 //! // 4. Prover sends this data to verifier
 //!
-//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Challenge, _: &p::Proof) { todo!() }
-//! # fn recv() -> (p::Data, p::Commitment, p::Challenge, p::Proof) { todo!() }
-//! send(&data, &commitment, &challenge, &proof);
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof) { todo!() }
+//! # fn recv() -> (p::Data, p::Commitment, p::Proof) { todo!() }
+//! send(&data, &commitment, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
-//! let (data, commitment, challenge, proof) = recv();
+//! let challenge = p::challenge(TAG, &aux, &data, &commitment, &security);
+//! let (data, commitment, proof) = recv();
 //! p::verify(&aux, &data, &commitment, &security, &challenge, &proof);
 //!
 //! ```
@@ -106,18 +107,18 @@ pub struct PrivateData {
 // As described in cggmp21 at page 33
 /// Prover's first message, obtained by `commit`
 pub struct Commitment {
-    s: BigNumber,
-    a: BigNumber,
-    c: BigNumber,
+    pub s: BigNumber,
+    pub a: BigNumber,
+    pub c: BigNumber,
 }
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
 /// the interactive protocol.
 pub struct PrivateCommitment {
-    alpha: BigNumber,
-    mu: BigNumber,
-    r: BigNumber,
-    gamma: BigNumber,
+    pub alpha: BigNumber,
+    pub mu: BigNumber,
+    pub r: BigNumber,
+    pub gamma: BigNumber,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
@@ -127,9 +128,9 @@ pub type Challenge = BigNumber;
 // As described in cggmp21 at page 33
 /// The ZK proof. Computed by `prove`
 pub struct Proof {
-    _1: BigNumber,
-    _2: BigNumber,
-    _3: BigNumber,
+    pub z1: BigNumber,
+    pub z2: BigNumber,
+    pub z3: BigNumber,
 }
 
 pub use crate::common::Aux;
@@ -181,7 +182,11 @@ fn prove(
         );
     let _1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
     let _3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
-    Proof { _1, _2, _3 }
+    Proof {
+        z1: _1,
+        z2: _2,
+        z3: _3,
+    }
 }
 
 /// Verify the proof
@@ -194,8 +199,8 @@ pub fn verify(
     proof: &Proof,
 ) -> Result<(), InvalidProof> {
     // check 1
-    let pt = &proof._1 % data.key.n();
-    match data.key.encrypt(pt.to_bytes(), Some(proof._2.clone())) {
+    let pt = &proof.z1 % data.key.n();
+    match data.key.encrypt(pt.to_bytes(), Some(proof.z2.clone())) {
         Some((cipher, _nonce)) => {
             if cipher
                 != commitment.a.modmul(
@@ -209,7 +214,7 @@ pub fn verify(
         None => return Err(InvalidProof::EncryptionFailed),
     }
 
-    let check2 = combine(&aux.s, &proof._1, &aux.t, &proof._3, &aux.rsa_modulo)
+    let check2 = combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
         == combine(
             &commitment.c,
             &1.into(),
@@ -221,7 +226,7 @@ pub fn verify(
         return Err(InvalidProof::EqualityCheckFailed(2));
     }
 
-    if proof._1 > (BigNumber::one() << (security.l + security.epsilon)) {
+    if proof.z1 > (BigNumber::one() << (security.l + security.epsilon)) {
         return Err(InvalidProof::RangeCheckFailed(3));
     }
 
@@ -229,7 +234,13 @@ pub fn verify(
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment, security: &SecurityParams) -> Challenge {
+pub fn challenge(
+    tag: Tag,
+    aux: &Aux,
+    data: &Data,
+    commitment: &Commitment,
+    security: &SecurityParams,
+) -> Challenge {
     crate::common::hash2field::hash_to_field(
         tag,
         &security.q,
@@ -292,8 +303,14 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default());
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        );
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -326,8 +343,14 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default());
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        );
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),

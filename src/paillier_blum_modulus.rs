@@ -27,7 +27,7 @@
 //! 1. P computes a non-interactive proof that `n` is a Paillier-Blum modulus:
 //!     ``` no_run
 //!     use paillier_zk::paillier_blum_modulus as p;
-//!     # use generic_ec_core::hash_to_curve::Tag;
+//!     # use generic_ec::hash_to_curve::Tag;
 //!     # let (n, p, q) = todo!();
 //!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!     const SECURITY: usize = 33;
@@ -44,12 +44,15 @@
 //!             &mut rng,
 //!         );
 //!     ```
-//! 2. P sends `data, commitment, challenge, proof` to the verifier V
+//! 2. P sends `data, commitment, proof` to the verifier V
 //! 3. V verifies the proof:
 //!     ``` no_run
+//!     # use generic_ec::hash_to_curve::Tag;
 //!     # use paillier_zk::paillier_blum_modulus as p;
-//!     # let (data, commitment, challenge, proof) = todo!();
+//!     # let (data, commitment, proof) = todo!();
 //!     # const SECURITY: usize = 33;
+//!     # const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
+//!     let challenge = p::challenge::<{SECURITY}>(TAG, &data, &commitment);
 //!     p::verify::<{SECURITY}>(
 //!         &data,
 //!         &commitment,
@@ -86,7 +89,7 @@ pub struct PrivateData {
 
 /// Prover's first message, obtained by `commit`
 pub struct Commitment {
-    w: BigNumber,
+    pub w: BigNumber,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
@@ -95,19 +98,19 @@ pub struct Commitment {
 /// Consists of `M` singular challenges
 #[derive(Debug, PartialEq, Eq)]
 pub struct Challenge<const M: usize> {
-    ys: [BigNumber; M],
+    pub ys: [BigNumber; M],
 }
 
-struct ProofPoint {
-    x: BigNumber,
-    a: bool,
-    b: bool,
-    z: BigNumber,
+pub struct ProofPoint {
+    pub x: BigNumber,
+    pub a: bool,
+    pub b: bool,
+    pub z: BigNumber,
 }
 
 /// The ZK proof. Computed by `prove`. Consists of M proofs for each challenge
 pub struct Proof<const M: usize> {
-    points: [ProofPoint; M],
+    pub points: [ProofPoint; M],
 }
 
 /// Create random commitment

@@ -22,7 +22,7 @@
 //! ```no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::group_element_vs_paillier_encryption_in_range as p;
-//! use generic_ec_core::hash_to_curve::Tag;
+//! use generic_ec::hash_to_curve::Tag;
 //! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
@@ -67,13 +67,14 @@
 //! // 4. Prover sends this data to verifier
 //!
 //! # use generic_ec::Curve;
-//! # fn send<C: Curve>(_: &p::Data<C>, _: &p::Commitment<C>, _: &p::Challenge, _: &p::Proof) { todo!() }
-//! # fn recv<C: Curve>() -> (p::Data<C>, p::Commitment<C>, p::Challenge, p::Proof) { todo!() }
-//! send(&data, &commitment, &challenge, &proof);
+//! # fn send<C: Curve>(_: &p::Data<C>, _: &p::Commitment<C>, _: &p::Proof) { todo!() }
+//! # fn recv<C: Curve>() -> (p::Data<C>, p::Commitment<C>, p::Proof) { todo!() }
+//! send(&data, &commitment, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
-//! let (data, commitment, challenge, proof) = recv::<C>();
+//! let (data, commitment, proof) = recv::<C>();
+//! let challenge = p::challenge(TAG, &aux, &data, &commitment).expect("challenge failed");
 //! p::verify(&aux, &data, &commitment, &security, &challenge, &proof);
 //! ```
 //!
@@ -83,8 +84,10 @@ use crate::{
     common::{combine, gen_inversible, InvalidProof, ProtocolError},
     unknown_order::BigNumber,
 };
-use generic_ec::{hash_to_curve::Tag, Curve, Point, Scalar};
-use generic_ec_core::hash_to_curve::HashToCurve;
+use generic_ec::{
+    hash_to_curve::{FromHash, Tag},
+    Curve, Point, Scalar,
+};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
@@ -111,25 +114,25 @@ pub struct PrivateData {
 }
 
 pub struct Commitment<C: Curve> {
-    s: BigNumber,
-    a: Ciphertext,
-    y: Point<C>,
-    d: BigNumber,
+    pub s: BigNumber,
+    pub a: Ciphertext,
+    pub y: Point<C>,
+    pub d: BigNumber,
 }
 
 pub struct PrivateCommitment {
-    alpha: BigNumber,
-    mu: BigNumber,
-    r: Nonce,
-    gamma: BigNumber,
+    pub alpha: BigNumber,
+    pub mu: BigNumber,
+    pub r: Nonce,
+    pub gamma: BigNumber,
 }
 
 pub type Challenge = BigNumber;
 
 pub struct Proof {
-    z1: BigNumber,
-    z2: BigNumber,
-    z3: BigNumber,
+    pub z1: BigNumber,
+    pub z2: BigNumber,
+    pub z3: BigNumber,
 }
 
 pub use crate::common::Aux;
@@ -172,13 +175,15 @@ pub fn commit<C: Curve, R: RngCore>(
     Ok((commitment, private_commitment))
 }
 
-pub fn challenge<C: Curve + HashToCurve>(
+pub fn challenge<C: Curve>(
     tag: Tag,
     aux: &Aux,
     data: &Data<C>,
     commitment: &Commitment<C>,
-) -> Result<Challenge, ProtocolError> {
-    use generic_ec::hash_to_curve::FromHash;
+) -> Result<Challenge, ProtocolError>
+where
+    Scalar<C>: FromHash,
+{
     let scalar = Scalar::<C>::hash_concat(
         tag,
         &[
@@ -273,14 +278,17 @@ pub fn verify<C: Curve>(
 /// deriving determenistic challenge.
 ///
 /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-pub fn compute_proof<C: Curve + HashToCurve, R: RngCore>(
+pub fn compute_proof<C: Curve, R: RngCore>(
     tag: Tag,
     aux: &Aux,
     data: &Data<C>,
     pdata: &PrivateData,
     security: &SecurityParams,
     rng: R,
-) -> Result<(Commitment<C>, Challenge, Proof), ProtocolError> {
+) -> Result<(Commitment<C>, Challenge, Proof), ProtocolError>
+where
+    Scalar<C>: FromHash,
+{
     let (comm, pcomm) = commit(aux, data, pdata, security, rng)?;
     let challenge = challenge(tag, aux, data, &comm)?;
     let proof = prove(data, pdata, &pcomm, &challenge);
@@ -289,13 +297,15 @@ pub fn compute_proof<C: Curve + HashToCurve, R: RngCore>(
 
 #[cfg(test)]
 mod test {
-    use generic_ec::Curve;
-    use generic_ec_core::hash_to_curve::HashToCurve;
+    use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
     use libpaillier::unknown_order::BigNumber;
 
     use crate::common::convert_scalar;
 
-    fn passing_test<C: Curve + HashToCurve>() {
+    fn passing_test<C: Curve>()
+    where
+        Scalar<C>: FromHash,
+    {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
@@ -330,8 +340,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -339,7 +356,10 @@ mod test {
         }
     }
 
-    fn failing_test<C: Curve + HashToCurve>() {
+    fn failing_test<C: Curve>()
+    where
+        Scalar<C>: FromHash,
+    {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
@@ -374,8 +394,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
