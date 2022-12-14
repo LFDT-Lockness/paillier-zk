@@ -179,26 +179,26 @@ pub struct PrivateData {
 // As described in cggmp21 at page 35
 /// Prover's first message, obtained by `commit`
 pub struct Commitment<C: Curve> {
-    a: BigNumber,
-    b_x: Point<C>,
-    b_y: BigNumber,
-    e: BigNumber,
-    s: BigNumber,
-    f: BigNumber,
-    t: BigNumber,
+    pub a: BigNumber,
+    pub b_x: Point<C>,
+    pub b_y: BigNumber,
+    pub e: BigNumber,
+    pub s: BigNumber,
+    pub f: BigNumber,
+    pub t: BigNumber,
 }
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
 /// the interactive protocol.
 pub struct PrivateCommitment {
-    alpha: BigNumber,
-    beta: BigNumber,
-    r: BigNumber,
-    r_y: BigNumber,
-    gamma: BigNumber,
-    m: BigNumber,
-    delta: BigNumber,
-    mu: BigNumber,
+    pub alpha: BigNumber,
+    pub beta: BigNumber,
+    pub r: BigNumber,
+    pub r_y: BigNumber,
+    pub gamma: BigNumber,
+    pub m: BigNumber,
+    pub delta: BigNumber,
+    pub mu: BigNumber,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
@@ -207,12 +207,12 @@ pub type Challenge = BigNumber;
 
 /// The ZK proof. Computed by `prove`
 pub struct Proof {
-    z1: BigNumber,
-    z2: BigNumber,
-    z3: BigNumber,
-    z4: BigNumber,
-    w: BigNumber,
-    w_y: BigNumber,
+    pub z1: BigNumber,
+    pub z2: BigNumber,
+    pub z3: BigNumber,
+    pub z4: BigNumber,
+    pub w: BigNumber,
+    pub w_y: BigNumber,
 }
 
 pub use crate::common::Aux;

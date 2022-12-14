@@ -111,25 +111,25 @@ pub struct PrivateData {
 }
 
 pub struct Commitment<C: Curve> {
-    s: BigNumber,
-    a: Ciphertext,
-    y: Point<C>,
-    d: BigNumber,
+    pub s: BigNumber,
+    pub a: Ciphertext,
+    pub y: Point<C>,
+    pub d: BigNumber,
 }
 
 pub struct PrivateCommitment {
-    alpha: BigNumber,
-    mu: BigNumber,
-    r: Nonce,
-    gamma: BigNumber,
+    pub alpha: BigNumber,
+    pub mu: BigNumber,
+    pub r: Nonce,
+    pub gamma: BigNumber,
 }
 
 pub type Challenge = BigNumber;
 
 pub struct Proof {
-    z1: BigNumber,
-    z2: BigNumber,
-    z3: BigNumber,
+    pub z1: BigNumber,
+    pub z2: BigNumber,
+    pub z3: BigNumber,
 }
 
 pub use crate::common::Aux;

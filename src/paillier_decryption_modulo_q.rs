@@ -106,19 +106,19 @@ pub struct PrivateData {
 
 /// Prover's first message, obtained by `commit`
 pub struct Commitment {
-    s: BigNumber,
-    t: BigNumber,
-    a: Ciphertext,
-    gamma: BigNumber,
+    pub s: BigNumber,
+    pub t: BigNumber,
+    pub a: Ciphertext,
+    pub gamma: BigNumber,
 }
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
 /// the interactive protocol.
 pub struct PrivateCommitment {
-    alpha: BigNumber,
-    mu: BigNumber,
-    nu: BigNumber,
-    r: Nonce,
+    pub alpha: BigNumber,
+    pub mu: BigNumber,
+    pub nu: BigNumber,
+    pub r: Nonce,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
@@ -127,9 +127,9 @@ pub type Challenge = BigNumber;
 
 /// The ZK proof. Computed by `prove`
 pub struct Proof {
-    z1: BigNumber,
-    z2: BigNumber,
-    w: BigNumber,
+    pub z1: BigNumber,
+    pub z2: BigNumber,
+    pub w: BigNumber,
 }
 
 pub use crate::common::Aux;

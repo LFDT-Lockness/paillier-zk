@@ -86,7 +86,7 @@ pub struct PrivateData {
 
 /// Prover's first message, obtained by `commit`
 pub struct Commitment {
-    w: BigNumber,
+    pub w: BigNumber,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
@@ -95,19 +95,19 @@ pub struct Commitment {
 /// Consists of `M` singular challenges
 #[derive(Debug, PartialEq, Eq)]
 pub struct Challenge<const M: usize> {
-    ys: [BigNumber; M],
+    pub ys: [BigNumber; M],
 }
 
-struct ProofPoint {
-    x: BigNumber,
-    a: bool,
-    b: bool,
-    z: BigNumber,
+pub struct ProofPoint {
+    pub x: BigNumber,
+    pub a: bool,
+    pub b: bool,
+    pub z: BigNumber,
 }
 
 /// The ZK proof. Computed by `prove`. Consists of M proofs for each challenge
 pub struct Proof<const M: usize> {
-    points: [ProofPoint; M],
+    pub points: [ProofPoint; M],
 }
 
 /// Create random commitment
