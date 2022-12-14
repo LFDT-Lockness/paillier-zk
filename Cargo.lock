@@ -233,7 +233,7 @@ dependencies = [
 [[package]]
 name = "generic-ec"
 version = "0.0.0"
-source = "git+ssh://git@github.com/dfns-labs/generic-ec?rev=ed8aad5e4818542880af05276be86c27647ed069#ed8aad5e4818542880af05276be86c27647ed069"
+source = "git+ssh://git@github.com/dfns-labs/generic-ec?branch=d#0eaee76851b51464818586abcd241242ac562742"
 dependencies = [
  "generic-array",
  "generic-ec-core",
@@ -249,7 +249,7 @@ dependencies = [
 [[package]]
 name = "generic-ec-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/dfns-labs/generic-ec?rev=ed8aad5e4818542880af05276be86c27647ed069#ed8aad5e4818542880af05276be86c27647ed069"
+source = "git+ssh://git@github.com/dfns-labs/generic-ec?branch=d#0eaee76851b51464818586abcd241242ac562742"
 dependencies = [
  "generic-array",
  "rand_core",
@@ -261,7 +261,7 @@ dependencies = [
 [[package]]
 name = "generic-ec-curves"
 version = "0.1.0"
-source = "git+ssh://git@github.com/dfns-labs/generic-ec?rev=ed8aad5e4818542880af05276be86c27647ed069#ed8aad5e4818542880af05276be86c27647ed069"
+source = "git+ssh://git@github.com/dfns-labs/generic-ec?branch=d#0eaee76851b51464818586abcd241242ac562742"
 dependencies = [
  "elliptic-curve",
  "generic-ec-core",
