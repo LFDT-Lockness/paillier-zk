@@ -215,15 +215,7 @@ pub struct Proof {
     w_y: BigNumber,
 }
 
-/// Auxiliary data known to both prover and verifier
-pub struct Aux {
-    /// ring-pedersen parameter
-    pub s: BigNumber,
-    /// ring-pedersen parameter
-    pub t: BigNumber,
-    /// N^ in paper
-    pub rsa_modulo: BigNumber,
-}
+pub use crate::common::Aux;
 
 /// Create random commitment
 pub fn commit<C: Curve, R: RngCore>(
