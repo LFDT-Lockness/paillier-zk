@@ -313,8 +313,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -359,8 +366,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
@@ -405,8 +419,15 @@ mod test {
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
 
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),

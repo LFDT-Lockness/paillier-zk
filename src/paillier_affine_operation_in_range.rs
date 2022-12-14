@@ -132,7 +132,10 @@
 //! If the verification succeeded, verifier can continue communication with prover
 
 use crate::unknown_order::BigNumber;
-use generic_ec::{hash_to_curve::{Tag, FromHash}, Curve, Point, Scalar};
+use generic_ec::{
+    hash_to_curve::{FromHash, Tag},
+    Curve, Point, Scalar,
+};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 use rand_core::RngCore;
 
@@ -398,8 +401,8 @@ pub fn challenge<C: Curve>(
     data: &Data<C>,
     commitment: &Commitment<C>,
 ) -> Result<Challenge, ProtocolError>
-    where
-        Scalar<C>: FromHash,
+where
+    Scalar<C>: FromHash,
 {
     let scalar = Scalar::<C>::hash_concat(
         tag,
@@ -450,7 +453,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use generic_ec::{Curve, hash_to_curve::FromHash, Scalar};
+    use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
 
     use crate::unknown_order::BigNumber;
 
@@ -513,8 +516,15 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -575,8 +585,15 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default()).unwrap();
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        )
+        .unwrap();
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),

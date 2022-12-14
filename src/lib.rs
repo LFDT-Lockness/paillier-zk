@@ -6,7 +6,6 @@ pub mod paillier_blum_modulus;
 pub mod paillier_decryption_modulo_q;
 pub mod paillier_encryption_in_range;
 
-
 /// Underlying paillier library for which the proofs are made. Use this to get
 /// the correct version of the library
 pub use libpaillier;

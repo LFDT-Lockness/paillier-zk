@@ -1,13 +1,13 @@
 //! Hashing to field with a prng
-use generic_ec::hash_to_curve::Tag;
 use crate::unknown_order::BigNumber;
+use generic_ec::hash_to_curve::Tag;
 
 /// Hash the given messages and domain tag, and produce a number modulo `q`. The
 /// bytes generated are guaranteed to be uniform, and the number is guaranteed
 /// to be statistically close to uniform if `q` is prime
 pub fn hash_to_field(dst: Tag, q: &BigNumber, messages: &[&[u8]]) -> BigNumber {
-    use sha2::Digest;
     use rand_core::SeedableRng;
+    use sha2::Digest;
 
     let mut digest = sha2::Sha256::new();
     digest.update(dst.as_bytes());

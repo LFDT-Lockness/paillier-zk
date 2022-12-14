@@ -182,7 +182,11 @@ fn prove(
         );
     let _1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
     let _3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
-    Proof { z1: _1, z2: _2, z3: _3 }
+    Proof {
+        z1: _1,
+        z2: _2,
+        z3: _3,
+    }
 }
 
 /// Verify the proof
@@ -230,7 +234,13 @@ pub fn verify(
 }
 
 /// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment, security: &SecurityParams) -> Challenge {
+pub fn challenge(
+    tag: Tag,
+    aux: &Aux,
+    data: &Data,
+    commitment: &Commitment,
+    security: &SecurityParams,
+) -> Challenge {
     crate::common::hash2field::hash_to_field(
         tag,
         &security.q,
@@ -293,8 +303,14 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default());
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        );
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => (),
@@ -327,8 +343,14 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof(tag, &aux, &data, &pdata, &security, rand_core::OsRng::default());
+        let (commitment, challenge, proof) = super::compute_proof(
+            tag,
+            &aux,
+            &data,
+            &pdata,
+            &security,
+            rand_core::OsRng::default(),
+        );
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
         match r {
             Ok(()) => panic!("proof should not pass"),
