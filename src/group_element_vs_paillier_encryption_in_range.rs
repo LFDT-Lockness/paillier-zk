@@ -73,8 +73,8 @@
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
-//! let challenge = p::challenge(TAG, &aux, &data, &commitment).expect("challenge failed");
 //! let (data, commitment, proof) = recv::<C>();
+//! let challenge = p::challenge(TAG, &aux, &data, &commitment).expect("challenge failed");
 //! p::verify(&aux, &data, &commitment, &security, &challenge, &proof);
 //! ```
 //!
