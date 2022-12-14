@@ -128,9 +128,9 @@ pub type Challenge = BigNumber;
 // As described in cggmp21 at page 33
 /// The ZK proof. Computed by `prove`
 pub struct Proof {
-    pub _1: BigNumber,
-    pub _2: BigNumber,
-    pub _3: BigNumber,
+    pub z1: BigNumber,
+    pub z2: BigNumber,
+    pub z3: BigNumber,
 }
 
 pub use crate::common::Aux;
@@ -182,7 +182,7 @@ fn prove(
         );
     let _1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
     let _3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
-    Proof { _1, _2, _3 }
+    Proof { z1: _1, z2: _2, z3: _3 }
 }
 
 /// Verify the proof
@@ -195,8 +195,8 @@ pub fn verify(
     proof: &Proof,
 ) -> Result<(), InvalidProof> {
     // check 1
-    let pt = &proof._1 % data.key.n();
-    match data.key.encrypt(pt.to_bytes(), Some(proof._2.clone())) {
+    let pt = &proof.z1 % data.key.n();
+    match data.key.encrypt(pt.to_bytes(), Some(proof.z2.clone())) {
         Some((cipher, _nonce)) => {
             if cipher
                 != commitment.a.modmul(
@@ -210,7 +210,7 @@ pub fn verify(
         None => return Err(InvalidProof::EncryptionFailed),
     }
 
-    let check2 = combine(&aux.s, &proof._1, &aux.t, &proof._3, &aux.rsa_modulo)
+    let check2 = combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
         == combine(
             &commitment.c,
             &1.into(),
@@ -222,7 +222,7 @@ pub fn verify(
         return Err(InvalidProof::EqualityCheckFailed(2));
     }
 
-    if proof._1 > (BigNumber::one() << (security.l + security.epsilon)) {
+    if proof.z1 > (BigNumber::one() << (security.l + security.epsilon)) {
         return Err(InvalidProof::RangeCheckFailed(3));
     }
 
