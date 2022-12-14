@@ -43,14 +43,14 @@ mod test {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]);
-        let message = "11";
+        let message = "2";
         let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
         let r = super::hash_to_field(tag, &q, &[message.as_bytes()]);
         assert!(r < q, "result too big");
         let lower_bound = q / 2;
         assert!(r > lower_bound, "result too small");
 
-        // small results very well can happen, but at least for "11" the result
+        // small results very well can happen, but at least for "2" the result
         // is big, which means big results happen as well
     }
 }
