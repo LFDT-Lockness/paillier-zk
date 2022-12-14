@@ -8,7 +8,7 @@
 //!
 //! Given:
 //! - `key0`, `pkey0` - pair of public and private keys in paillier cryptosystem
-//! - `G` - a group of order `q` with generator `q`
+//! - `G` - a group of order `q` with generator `g`
 //! - `X = g ^ x` and `C = key0.encrypt(x)` - data to obtain proof about
 //!
 //! Prove:
@@ -45,7 +45,7 @@
 //! // 2. Setup: prover has some plaintext, encrypts it and computes X
 //!
 //! type C = generic_ec_curves::Secp256r1;
-//! let g = generic_ec::Point::<C>::generator();
+//! let g = generic_ec::Point::<C>::generator().into();
 //!
 //! let plaintext: BigNumber = 228.into();
 //! let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
@@ -59,7 +59,7 @@
 //! };
 //!
 //! let rng = rand_core::OsRng::default();
-//! let data = p::Data { key0, c: ciphertext, x: power };
+//! let data = p::Data { key0, c: ciphertext, x: power, g };
 //! let pdata = p::PrivateData { x: plaintext, nonce };
 //! let (commitment, challenge, proof) =
 //!     p::compute_proof(TAG, &aux, &data, &pdata, &security, rng).expect("proof failed");
@@ -101,6 +101,8 @@ pub struct Data<C: Curve> {
     pub key0: EncryptionKey,
     pub c: Ciphertext,
     pub x: Point<C>,
+    /// A generator in group
+    pub g: Point<C>,
 }
 
 pub struct PrivateData {
@@ -158,7 +160,7 @@ pub fn commit<C: Curve, R: RngCore>(
     let commitment = Commitment {
         s: combine(&aux.s, &pdata.x, &aux.t, &mu, &aux.rsa_modulo),
         a,
-        y: Point::<C>::generator() * convert_scalar(&alpha),
+        y: data.g * convert_scalar(&alpha),
         d: combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
     };
     let private_commitment = PrivateCommitment {
@@ -244,7 +246,7 @@ pub fn verify<C: Curve>(
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
     }
     {
-        let lhs = Point::<C>::generator() * convert_scalar(&proof.z1);
+        let lhs = data.g * convert_scalar(&proof.z1);
         let rhs = commitment.y + data.x * convert_scalar(challenge);
         fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
     }
@@ -303,12 +305,14 @@ mod test {
 
         let plaintext = BigNumber::from(228);
         let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
-        let x = generic_ec::Point::<C>::generator() * convert_scalar(&plaintext);
+        let g = generic_ec::Point::<C>::generator() * generic_ec::Scalar::<C>::from(1337);
+        let x = g * convert_scalar(&plaintext);
 
         let data = super::Data {
             key0,
             c: ciphertext,
             x,
+            g,
         };
         let pdata = super::PrivateData {
             x: plaintext,
@@ -345,12 +349,14 @@ mod test {
 
         let plaintext = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
-        let x = generic_ec::Point::<C>::generator() * convert_scalar(&plaintext);
+        let g = generic_ec::Point::<C>::generator() * generic_ec::Scalar::<C>::from(1337);
+        let x = g * convert_scalar(&plaintext);
 
         let data = super::Data {
             key0,
             c: ciphertext,
             x,
+            g,
         };
         let pdata = super::PrivateData {
             x: plaintext,
