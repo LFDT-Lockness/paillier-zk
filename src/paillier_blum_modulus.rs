@@ -247,9 +247,8 @@ mod test {
         let (commitment, challenge, proof) =
             super::compute_proof::<65, _>(tag, &data, &pdata, &mut rng);
         let r = super::verify(&data, &commitment, &challenge, &proof);
-        match r {
-            Ok(()) => panic!("should have failed"),
-            Err(_) => (),
+        if let Ok(()) = r {
+            panic!("should have failed");
         }
     }
 

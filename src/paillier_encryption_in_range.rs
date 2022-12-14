@@ -352,9 +352,8 @@ mod test {
             rand_core::OsRng::default(),
         );
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(_) => (),
+        if let Ok(()) = r {
+            panic!("proof should not pass");
         }
     }
 }

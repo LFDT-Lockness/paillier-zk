@@ -376,9 +376,8 @@ mod test {
         )
         .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(_) => (),
+        if let Ok(()) = r {
+            panic!("proof should not pass");
         }
     }
 
@@ -429,9 +428,8 @@ mod test {
         )
         .unwrap();
         let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(_) => (),
+        if let Ok(()) = r {
+            panic!("proof should not pass");
         }
     }
 }
