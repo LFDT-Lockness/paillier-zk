@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-generic-ec = { git = "ssh://git@github.com/dfnsco/generic-ec", rev = "ed8aad5e4818542880af05276be86c27647ed069" }
-generic-ec-core = { git = "ssh://git@github.com/dfnsco/generic-ec", rev = "ed8aad5e4818542880af05276be86c27647ed069" }
+generic-ec = { git = "ssh://git@github.com/dfns-labs/generic-ec", branch = "d" }
+generic-ec-core = { git = "ssh://git@github.com/dfns-labs/generic-ec", branch = "d" }
 rand_core = { version = "0.6", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 libpaillier = { version = "0.5", features = ["rust"], default-features = false }
@@ -18,4 +18,4 @@ zeroize = { version = "1.5", default-features = false }
 
 [dev-dependencies]
 rand_core = { version = "0.6", default-features = false, features = ["getrandom"] }
-generic-ec-curves = { git = "ssh://git@github.com/dfnsco/generic-ec", rev = "ed8aad5e4818542880af05276be86c27647ed069", features = ["secp256r1"] }
+generic-ec-curves = { git = "ssh://git@github.com/dfns-labs/generic-ec", branch = "d", features = ["secp256r1"] }

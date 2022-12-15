@@ -547,8 +547,8 @@ mod test {
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
         let g = generic_ec::Point::<C>::generator();
         let plaintext_orig = BigNumber::from(1337);
-        let plaintext_mult = BigNumber::one() << (1024 + 128) + 1;
-        let plaintext_add: BigNumber = BigNumber::one() << (1024 + 128) + 2;
+        let plaintext_mult = (BigNumber::one() << (1024 + 128)) + 1;
+        let plaintext_add: BigNumber = (BigNumber::one() << (1024 + 128)) + 2;
         let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
         let ciphertext_mult = g * super::convert_scalar(&plaintext_mult);
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
@@ -595,9 +595,8 @@ mod test {
         )
         .unwrap();
         let r = super::verify(&aux, &data, &commitment, &security, &challenge, &proof);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(_) => (),
+        if let Ok(()) = r {
+            panic!("proof should not pass");
         }
     }
 
