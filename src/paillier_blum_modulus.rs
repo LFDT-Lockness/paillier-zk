@@ -29,6 +29,7 @@
 //!     use paillier_zk::paillier_blum_modulus as p;
 //!     # use generic_ec::hash_to_curve::Tag;
 //!     # let (n, p, q) = todo!();
+//!     # let shared_state = sha2::Sha256::default();
 //!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
 //!     const SECURITY: usize = 33;
 //!
@@ -36,9 +37,9 @@
 //!     let pdata = p::PrivateData { p, q };
 //!     let mut rng = rand_core::OsRng::default();
 //!
-//!     let (commitment, challenge, proof) =
-//!         p::compute_proof::<{SECURITY}, _>(
-//!             TAG,
+//!     let (commitment, _challenge, proof) =
+//!         p::non_interactive::prove::<{SECURITY}, _, _>(
+//!             shared_state,
 //!             &data,
 //!             &pdata,
 //!             &mut rng,
@@ -51,22 +52,17 @@
 //!     # use paillier_zk::paillier_blum_modulus as p;
 //!     # let (data, commitment, proof) = todo!();
 //!     # const SECURITY: usize = 33;
-//!     # const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
-//!     let challenge = p::challenge::<{SECURITY}>(TAG, &data, &commitment);
-//!     p::verify::<{SECURITY}>(
+//!     # let shared_state = sha2::Sha256::default();
+//!     p::non_interactive::verify::<{SECURITY}, _>(
+//!         shared_state,
 //!         &data,
 //!         &commitment,
-//!         &challenge,
 //!         &proof,
 //!     );
 //!     ```
 //! 4. If the verification succeeded, V can continue communication with P
 
 use crate::unknown_order::BigNumber;
-use generic_ec::hash_to_curve::Tag;
-use rand_core::RngCore;
-
-use crate::common::sqrt::{blum_sqrt, find_residue, non_residue_in};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InvalidProof {
@@ -113,98 +109,146 @@ pub struct Proof<const M: usize> {
     pub points: [ProofPoint; M],
 }
 
-/// Create random commitment
-pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
-    Commitment {
-        w: non_residue_in(n, rng),
-    }
-}
+pub mod interactive {
+    use crate::unknown_order::BigNumber;
+    use rand_core::RngCore;
 
-/// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge<const M: usize>(tag: Tag, data: &Data, commitment: &Commitment) -> Challenge<M> {
-    // since we can't use Default and BigNumber isn't copy, we initialize
-    // like this
-    let mut ys = [(); M].map(|()| BigNumber::zero());
-    for (i, y_ref) in ys.iter_mut().enumerate() {
-        *y_ref = crate::common::hash2field::hash_to_field(
-            tag,
-            &data.n,
-            &[
-                &data.n.to_bytes(),
-                &commitment.w.to_bytes(),
-                &(i as u64 + 1).to_le_bytes(),
-            ],
-        );
-    }
-    Challenge { ys }
-}
+    use crate::common::sqrt::{blum_sqrt, find_residue, non_residue_in};
 
-/// Compute proof for given data and prior protocol values
-pub fn prove<const M: usize>(
-    Data { ref n }: &Data,
-    PrivateData { ref p, ref q }: &PrivateData,
-    Commitment { ref w }: &Commitment,
-    challenge: &Challenge<M>,
-) -> Proof<M> {
-    let sqrt = |x| blum_sqrt(&x, p, q, n);
-    let phi = (p - 1) * (q - 1);
-    let n_inverse = n.extended_gcd(&phi).x;
-    assert_eq!(n_inverse.modmul(&(n % &phi), &phi), BigNumber::one());
-    let points = challenge.ys.clone().map(|y| {
-        let z = y.modpow(&n_inverse, n);
-        let (a, b, y_) = find_residue(&y, w, p, q, n);
-        let x = sqrt(sqrt(y_));
-        ProofPoint { x, a, b, z }
-    });
-    Proof { points }
-}
+    use super::{Challenge, Commitment, Data, InvalidProof, PrivateData, Proof, ProofPoint};
 
-/// Verify the proof. If this succeeds, the relation Rmod holds with chance
-/// `1/2^M`
-pub fn verify<const M: usize>(
-    data: &Data,
-    commitment: &Commitment,
-    challenge: &Challenge<M>,
-    proof: &Proof<M>,
-) -> Result<(), InvalidProof> {
-    if data.n.is_prime() {
-        return Err(InvalidProof::ModulusIsPrime);
-    }
-    if &data.n % BigNumber::from(2) == BigNumber::zero() {
-        return Err(InvalidProof::ModulusIsEven);
-    }
-    for (point, y) in proof.points.iter().zip(challenge.ys.iter()) {
-        if point.z.modpow(&data.n, &data.n) != *y {
-            return Err(InvalidProof::IncorrectNthRoot);
-        }
-        let y = y.clone();
-        let y = if point.a { &data.n - y } else { y };
-        let y = if point.b {
-            y.modmul(&commitment.w, &data.n)
-        } else {
-            y
-        };
-        if point.x.modpow(&4.into(), &data.n) != y {
-            return Err(InvalidProof::IncorrectFourthRoot);
+    /// Create random commitment
+    pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
+        Commitment {
+            w: non_residue_in(n, rng),
         }
     }
-    Ok(())
+
+    /// Compute proof for given data and prior protocol values
+    pub fn prove<const M: usize>(
+        Data { ref n }: &Data,
+        PrivateData { ref p, ref q }: &PrivateData,
+        Commitment { ref w }: &Commitment,
+        challenge: &Challenge<M>,
+    ) -> Proof<M> {
+        let sqrt = |x| blum_sqrt(&x, p, q, n);
+        let phi = (p - 1) * (q - 1);
+        let n_inverse = n.extended_gcd(&phi).x;
+        assert_eq!(n_inverse.modmul(&(n % &phi), &phi), BigNumber::one());
+        let points = challenge.ys.clone().map(|y| {
+            let z = y.modpow(&n_inverse, n);
+            let (a, b, y_) = find_residue(&y, w, p, q, n);
+            let x = sqrt(sqrt(y_));
+            ProofPoint { x, a, b, z }
+        });
+        Proof { points }
+    }
+
+    /// Verify the proof. If this succeeds, the relation Rmod holds with chance
+    /// `1/2^M`
+    pub fn verify<const M: usize>(
+        data: &Data,
+        commitment: &Commitment,
+        challenge: &Challenge<M>,
+        proof: &Proof<M>,
+    ) -> Result<(), InvalidProof> {
+        if data.n.is_prime() {
+            return Err(InvalidProof::ModulusIsPrime);
+        }
+        if &data.n % BigNumber::from(2) == BigNumber::zero() {
+            return Err(InvalidProof::ModulusIsEven);
+        }
+        for (point, y) in proof.points.iter().zip(challenge.ys.iter()) {
+            if point.z.modpow(&data.n, &data.n) != *y {
+                return Err(InvalidProof::IncorrectNthRoot);
+            }
+            let y = y.clone();
+            let y = if point.a { &data.n - y } else { y };
+            let y = if point.b {
+                y.modmul(&commitment.w, &data.n)
+            } else {
+                y
+            };
+            if point.x.modpow(&4.into(), &data.n) != y {
+                return Err(InvalidProof::IncorrectFourthRoot);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn challenge<const M: usize, R: RngCore>(
+        Data { ref n }: &Data,
+        rng: &mut R,
+    ) -> Challenge<M> {
+        let ys = [(); M].map(|()| BigNumber::from_rng(n, rng));
+        Challenge { ys }
+    }
 }
 
-/// Compute proof for the given data, producing random commitment and
-/// deriving determenistic challenge.
-///
-/// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-pub fn compute_proof<const M: usize, R: RngCore>(
-    tag: Tag,
-    data: &Data,
-    pdata: &PrivateData,
-    rng: R,
-) -> (Commitment, Challenge<M>, Proof<M>) {
-    let commitment = commit(data, rng);
-    let challenge = challenge(tag, data, &commitment);
-    let proof = prove(data, pdata, &commitment, &challenge);
-    (commitment, challenge, proof)
+pub mod non_interactive {
+    use crate::unknown_order::BigNumber;
+    use rand_core::RngCore;
+    use sha2::{digest::typenum::U32, Digest};
+
+    use super::{Challenge, Commitment, Data, InvalidProof, PrivateData, Proof};
+
+    /// Compute proof for the given data, producing random commitment and
+    /// deriving determenistic challenge.
+    ///
+    /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
+    pub fn prove<const M: usize, R: RngCore, D>(
+        shared_state: D,
+        data: &Data,
+        pdata: &PrivateData,
+        rng: R,
+    ) -> (Commitment, Challenge<M>, Proof<M>)
+    where
+        D: Digest<OutputSize = U32> + Clone,
+    {
+        let commitment = super::interactive::commit(data, rng);
+        let challenge = challenge(shared_state, data, &commitment);
+        let proof = super::interactive::prove(data, pdata, &commitment, &challenge);
+        (commitment, challenge, proof)
+    }
+
+    pub fn verify<const M: usize, D>(
+        shared_state: D,
+        data: &Data,
+        commitment: &Commitment,
+        proof: &Proof<M>,
+    ) -> Result<(), InvalidProof>
+    where
+        D: Digest<OutputSize = U32> + Clone,
+    {
+        let challenge = challenge(shared_state, data, commitment);
+        super::interactive::verify(data, commitment, &challenge, proof)
+    }
+
+    /// Deterministically compute challenge based on prior known values in protocol
+    pub fn challenge<const M: usize, D>(
+        shared_state: D,
+        Data { ref n }: &Data,
+        commitment: &Commitment,
+    ) -> Challenge<M>
+    where
+        D: Digest<OutputSize = U32> + Clone,
+    {
+        use rand_core::SeedableRng;
+        // since we can't use Default and BigNumber isn't copy, we initialize
+        // like this
+        let mut ys = [(); M].map(|()| BigNumber::zero());
+        for (i, y_ref) in ys.iter_mut().enumerate() {
+            let seed = shared_state
+                .clone()
+                .chain_update(&n.to_bytes())
+                .chain_update(&commitment.w.to_bytes())
+                .chain_update(&(i as u64).to_le_bytes())
+                .finalize();
+            let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
+            *y_ref = BigNumber::from_rng(n, &mut rng);
+        }
+        Challenge { ys }
+    }
 }
 
 #[cfg(test)]
@@ -219,10 +263,14 @@ mod test {
         let n = &p * &q;
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
-        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof::<65, _>(tag, &data, &pdata, &mut rng);
-        let r = super::verify(&data, &commitment, &challenge, &proof);
+        let shared_state = sha2::Sha256::default();
+        let (commitment, _challenge, proof) = super::non_interactive::prove::<65, _, _>(
+            shared_state.clone(),
+            &data,
+            &pdata,
+            &mut rng,
+        );
+        let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{:?}", e),
@@ -243,12 +291,16 @@ mod test {
         let n = &p * &q;
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
-        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
-        let (commitment, challenge, proof) =
-            super::compute_proof::<65, _>(tag, &data, &pdata, &mut rng);
-        let r = super::verify(&data, &commitment, &challenge, &proof);
-        if let Ok(()) = r {
-            panic!("should have failed");
+        let shared_state = sha2::Sha256::default();
+        let (commitment, _challenge, proof) = super::non_interactive::prove::<65, _, _>(
+            shared_state.clone(),
+            &data,
+            &pdata,
+            &mut rng,
+        );
+        let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
+        if r.is_ok() {
+            panic!("proof should not pass");
         }
     }
 
