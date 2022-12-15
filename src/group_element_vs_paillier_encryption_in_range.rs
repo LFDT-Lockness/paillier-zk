@@ -477,9 +477,6 @@ mod test {
             Err(InvalidProof::RangeCheckFailed(_)) => (),
             Err(e) => panic!("proof should not fail with: {:?}", e),
         }
-        if let Ok(()) = r {
-            panic!("proof should not pass");
-        }
     }
 
     #[test]
