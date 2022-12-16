@@ -115,7 +115,7 @@
 //!     nonce,
 //!     nonce_y,
 //! };
-//! let (commitment, _, proof) =
+//! let (commitment, proof) =
 //!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng).expect("proof failed");
 //!
 //! // 6. Prover sends this data to verifier
@@ -434,7 +434,7 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Result<(Commitment<C>, Challenge, Proof), ProtocolError>
+    ) -> Result<(Commitment<C>, Proof), ProtocolError>
     where
         Scalar<C>: FromHash,
         D: Digest<OutputSize = U32>,
@@ -442,7 +442,7 @@ pub mod non_interactive {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &comm, security);
         let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
-        Ok((comm, challenge, proof))
+        Ok((comm, proof))
     }
 
     /// Verify the proof, deriving challenge independently from same data
@@ -569,7 +569,7 @@ mod test {
 
         let shared_state = sha2::Sha256::default();
 
-        let (commitment, _challenge, proof) = super::non_interactive::prove(
+        let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             &data,
@@ -646,7 +646,7 @@ mod test {
 
         let shared_state = sha2::Sha256::default();
 
-        let (commitment, _challenge, proof) = super::non_interactive::prove(
+        let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             &data,

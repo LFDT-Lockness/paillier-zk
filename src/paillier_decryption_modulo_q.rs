@@ -52,7 +52,7 @@
 //!
 //! let data = p::Data { key, c: ciphertext, q, x };
 //! let pdata = p::PrivateData { y: plaintext, nonce };
-//! let (commitment, _, proof) =
+//! let (commitment, proof) =
 //!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, &mut rng)
 //!         .expect("could not compute proof");
 //!
@@ -266,14 +266,14 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Result<(Commitment, Challenge, Proof), ProtocolError>
+    ) -> Result<(Commitment, Proof), ProtocolError>
     where
         D: Digest<OutputSize = U32>,
     {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &comm);
         let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
-        Ok((comm, challenge, proof))
+        Ok((comm, proof))
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
@@ -360,7 +360,7 @@ mod test {
 
         let shared_state = sha2::Sha256::default();
 
-        let (commitment, _challenge, proof) = super::non_interactive::prove(
+        let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             &data,
@@ -413,7 +413,7 @@ mod test {
 
         let shared_state = sha2::Sha256::default();
 
-        let (commitment, _challenge, proof) = super::non_interactive::prove(
+        let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             &data,
@@ -465,7 +465,7 @@ mod test {
 
         let shared_state = sha2::Sha256::default();
 
-        let (commitment, _challenge, proof) = super::non_interactive::prove(
+        let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             &data,

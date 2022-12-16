@@ -37,7 +37,7 @@
 //!     let pdata = p::PrivateData { p, q };
 //!     let mut rng = rand_core::OsRng::default();
 //!
-//!     let (commitment, _challenge, proof) =
+//!     let (commitment, proof) =
 //!         p::non_interactive::prove::<{SECURITY}, _, _>(
 //!             shared_state,
 //!             &data,
@@ -201,14 +201,14 @@ pub mod non_interactive {
         data: &Data,
         pdata: &PrivateData,
         rng: R,
-    ) -> (Commitment, Challenge<M>, Proof<M>)
+    ) -> (Commitment, Proof<M>)
     where
         D: Digest<OutputSize = U32> + Clone,
     {
         let commitment = super::interactive::commit(data, rng);
         let challenge = challenge(shared_state, data, &commitment);
         let proof = super::interactive::prove(data, pdata, &commitment, &challenge);
-        (commitment, challenge, proof)
+        (commitment, proof)
     }
 
     pub fn verify<const M: usize, D>(
@@ -264,7 +264,7 @@ mod test {
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
         let shared_state = sha2::Sha256::default();
-        let (commitment, _challenge, proof) = super::non_interactive::prove::<65, _, _>(
+        let (commitment, proof) = super::non_interactive::prove::<65, _, _>(
             shared_state.clone(),
             &data,
             &pdata,
@@ -292,7 +292,7 @@ mod test {
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
         let shared_state = sha2::Sha256::default();
-        let (commitment, _challenge, proof) = super::non_interactive::prove::<65, _, _>(
+        let (commitment, proof) = super::non_interactive::prove::<65, _, _>(
             shared_state.clone(),
             &data,
             &pdata,

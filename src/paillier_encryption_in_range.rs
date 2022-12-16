@@ -53,7 +53,7 @@
 //! let rng = rand_core::OsRng::default();
 //! let data = p::Data { key, ciphertext };
 //! let pdata = p::PrivateData { plaintext, nonce };
-//! let (commitment, challenge, proof) =
+//! let (commitment, proof) =
 //!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng);
 //!
 //! // 4. Prover sends this data to verifier
@@ -260,14 +260,14 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> (Commitment, Challenge, Proof)
+    ) -> (Commitment, Proof)
     where
         D: Digest<OutputSize = U32>,
     {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng);
         let challenge = challenge(shared_state, aux, data, &comm, security);
         let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
-        (comm, challenge, proof)
+        (comm, proof)
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
@@ -341,7 +341,7 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let shared_state = sha2::Sha256::default();
-        let (commitment, _challenge, proof) = super::non_interactive::prove(
+        let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             &data,
@@ -388,7 +388,7 @@ mod test {
         let aux = super::Aux { s, t, rsa_modulo };
 
         let shared_state = sha2::Sha256::default();
-        let (commitment, _challenge, proof) = super::non_interactive::prove(
+        let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             &data,
