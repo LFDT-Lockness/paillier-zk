@@ -13,7 +13,8 @@
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_decryption_modulo_q as p;
 //! use generic_ec::hash_to_curve::Tag;
-//! const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
+//! let shared_state = sha2::Sha256::default();
+//! let shared_state_prover = shared_state.clone();
 //! let mut rng = rand_core::OsRng::default();
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
@@ -51,8 +52,8 @@
 //!
 //! let data = p::Data { key, c: ciphertext, q, x };
 //! let pdata = p::PrivateData { y: plaintext, nonce };
-//! let (commitment, challenge, proof) =
-//!     p::compute_proof(TAG, &aux, &data, &pdata, &security, &mut rng)
+//! let (commitment, _, proof) =
+//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, &mut rng)
 //!         .expect("could not compute proof");
 //!
 //! // 4. Prover sends this data to verifier
@@ -64,19 +65,15 @@
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
 //! let (data, commitment, proof) = recv();
-//! let challenge = p::challenge(TAG, &aux, &data, &commitment);
-//! p::verify(&aux, &data, &commitment, &challenge, &proof);
+//! p::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
 //!
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 use crate::unknown_order::BigNumber;
-use generic_ec::hash_to_curve::Tag;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
-use rand_core::RngCore;
 
 pub use crate::common::InvalidProof;
-use crate::common::{combine, ProtocolError};
 
 pub struct SecurityParams {
     /// l in paper, bit size of plaintext
@@ -135,141 +132,193 @@ pub struct Proof {
 
 pub use crate::common::Aux;
 
-/// Create random commitment
-pub fn commit<R: RngCore>(
-    aux: &Aux,
-    data: &Data,
-    pdata: &PrivateData,
-    security: &SecurityParams,
-    mut rng: R,
-) -> Result<(Commitment, PrivateCommitment), ProtocolError> {
-    let two_to_l_e = BigNumber::one() << (security.l + security.epsilon);
-    let modulo_l = (BigNumber::one() << security.l) * &aux.rsa_modulo;
-    let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
+pub mod interactive {
+    use crate::unknown_order::BigNumber;
+    use rand_core::RngCore;
 
-    let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-    let mu = BigNumber::from_rng(&modulo_l, &mut rng);
-    let nu = BigNumber::from_rng(&modulo_l_e, &mut rng);
+    pub use crate::common::InvalidProof;
+    use crate::common::{combine, ProtocolError};
 
-    let (a, r) = data
-        .key
-        .encrypt(alpha.to_bytes(), None)
-        .ok_or(ProtocolError::EncryptionFailed)?;
-
-    let commitment = Commitment {
-        s: combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
-        t: combine(&aux.s, &alpha, &aux.t, &nu, &aux.rsa_modulo),
-        a,
-        gamma: &alpha % &data.q,
+    use super::{
+        Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
     };
-    let private_commitment = PrivateCommitment { alpha, mu, nu, r };
-    Ok((commitment, private_commitment))
-}
 
-/// Deterministically compute challenge based on prior known values in protocol
-pub fn challenge(tag: Tag, aux: &Aux, data: &Data, commitment: &Commitment) -> Challenge {
-    crate::common::hash2field::hash_to_field(
-        tag,
-        &data.q,
-        &[
-            &aux.s.to_bytes(),
-            &aux.t.to_bytes(),
-            &aux.rsa_modulo.to_bytes(),
-            &data.q.to_bytes(),
-            &data.key.to_bytes(),
-            &data.c.to_bytes(),
-            &data.x.to_bytes(),
-            &commitment.s.to_bytes(),
-            &commitment.t.to_bytes(),
-            &commitment.a.to_bytes(),
-            &commitment.gamma.to_bytes(),
-        ],
-    )
-}
+    /// Create random commitment
+    pub fn commit<R: RngCore>(
+        aux: &Aux,
+        data: &Data,
+        pdata: &PrivateData,
+        security: &SecurityParams,
+        mut rng: R,
+    ) -> Result<(Commitment, PrivateCommitment), ProtocolError> {
+        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon);
+        let modulo_l = (BigNumber::one() << security.l) * &aux.rsa_modulo;
+        let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
-/// Compute proof for given data and prior protocol values
-pub fn prove(
-    data: &Data,
-    pdata: &PrivateData,
-    pcomm: &PrivateCommitment,
-    challenge: &Challenge,
-) -> Proof {
-    Proof {
-        z1: &pcomm.alpha + challenge * &pdata.y,
-        z2: &pcomm.nu + challenge * &pcomm.mu,
-        w: combine(
-            &pcomm.r,
-            &BigNumber::one(),
-            &pdata.nonce,
-            challenge,
-            data.key.n(),
-        ),
+        let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
+        let mu = BigNumber::from_rng(&modulo_l, &mut rng);
+        let nu = BigNumber::from_rng(&modulo_l_e, &mut rng);
+
+        let (a, r) = data
+            .key
+            .encrypt(alpha.to_bytes(), None)
+            .ok_or(ProtocolError::EncryptionFailed)?;
+
+        let commitment = Commitment {
+            s: combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
+            t: combine(&aux.s, &alpha, &aux.t, &nu, &aux.rsa_modulo),
+            a,
+            gamma: &alpha % &data.q,
+        };
+        let private_commitment = PrivateCommitment { alpha, mu, nu, r };
+        Ok((commitment, private_commitment))
     }
-}
 
-/// Verify the proof
-pub fn verify(
-    aux: &Aux,
-    data: &Data,
-    commitment: &Commitment,
-    challenge: &Challenge,
-    proof: &Proof,
-) -> Result<(), InvalidProof> {
-    let one = BigNumber::one();
-    fn fail_if(b: bool, msg: InvalidProof) -> Result<(), InvalidProof> {
-        if b {
-            Ok(())
-        } else {
-            Err(msg)
+    /// Generate random challenge
+    pub fn challenge<R: RngCore>(data: &Data, rng: &mut R) -> Challenge {
+        BigNumber::from_rng(&data.q, rng)
+    }
+
+    /// Compute proof for given data and prior protocol values
+    pub fn prove(
+        data: &Data,
+        pdata: &PrivateData,
+        pcomm: &PrivateCommitment,
+        challenge: &Challenge,
+    ) -> Proof {
+        Proof {
+            z1: &pcomm.alpha + challenge * &pdata.y,
+            z2: &pcomm.nu + challenge * &pcomm.mu,
+            w: combine(
+                &pcomm.r,
+                &BigNumber::one(),
+                &pdata.nonce,
+                challenge,
+                data.key.n(),
+            ),
         }
     }
-    // Three equality checks
-    {
-        let (lhs, _) = data
-            .key
-            .encrypt(proof.z1.to_bytes(), Some(proof.w.clone()))
-            .ok_or(InvalidProof::EncryptionFailed)?;
-        let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key.nn());
-        fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
-    }
-    {
-        let lhs = &proof.z1 % &data.q;
-        let rhs = commitment
-            .gamma
-            .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
-        fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
-    }
-    {
-        let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo);
-        let rhs = combine(
-            &commitment.t,
-            &one,
-            &commitment.s,
-            challenge,
-            &aux.rsa_modulo,
-        );
-        fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
-    }
 
-    Ok(())
+    /// Verify the proof
+    pub fn verify(
+        aux: &Aux,
+        data: &Data,
+        commitment: &Commitment,
+        challenge: &Challenge,
+        proof: &Proof,
+    ) -> Result<(), InvalidProof> {
+        let one = BigNumber::one();
+        fn fail_if(b: bool, msg: InvalidProof) -> Result<(), InvalidProof> {
+            if b {
+                Ok(())
+            } else {
+                Err(msg)
+            }
+        }
+        // Three equality checks
+        {
+            let (lhs, _) = data
+                .key
+                .encrypt(proof.z1.to_bytes(), Some(proof.w.clone()))
+                .ok_or(InvalidProof::EncryptionFailed)?;
+            let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key.nn());
+            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
+        }
+        {
+            let lhs = &proof.z1 % &data.q;
+            let rhs = commitment
+                .gamma
+                .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
+            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
+        }
+        {
+            let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo);
+            let rhs = combine(
+                &commitment.t,
+                &one,
+                &commitment.s,
+                challenge,
+                &aux.rsa_modulo,
+            );
+            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
+        }
+
+        Ok(())
+    }
 }
 
-/// Compute proof for the given data, producing random commitment and
-/// deriving determenistic challenge.
-///
-/// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-pub fn compute_proof<R: RngCore>(
-    tag: Tag,
-    aux: &Aux,
-    data: &Data,
-    pdata: &PrivateData,
-    security: &SecurityParams,
-    rng: R,
-) -> Result<(Commitment, Challenge, Proof), ProtocolError> {
-    let (comm, pcomm) = commit(aux, data, pdata, security, rng)?;
-    let challenge = challenge(tag, aux, data, &comm);
-    let proof = prove(data, pdata, &pcomm, &challenge);
-    Ok((comm, challenge, proof))
+pub mod non_interactive {
+    use crate::unknown_order::BigNumber;
+    use rand_core::RngCore;
+    use sha2::{digest::typenum::U32, Digest};
+
+    pub use crate::common::InvalidProof;
+    use crate::common::ProtocolError;
+
+    use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
+
+    /// Compute proof for the given data, producing random commitment and
+    /// deriving determenistic challenge.
+    ///
+    /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
+    pub fn prove<R: RngCore, D>(
+        shared_state: D,
+        aux: &Aux,
+        data: &Data,
+        pdata: &PrivateData,
+        security: &SecurityParams,
+        rng: R,
+    ) -> Result<(Commitment, Challenge, Proof), ProtocolError>
+    where
+        D: Digest<OutputSize = U32>,
+    {
+        let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
+        let challenge = challenge(shared_state, aux, data, &comm);
+        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
+        Ok((comm, challenge, proof))
+    }
+
+    /// Deterministically compute challenge based on prior known values in protocol
+    pub fn challenge<D>(
+        shared_state: D,
+        aux: &Aux,
+        data: &Data,
+        commitment: &Commitment,
+    ) -> Challenge
+    where
+        D: Digest<OutputSize = U32>,
+    {
+        use rand_core::SeedableRng;
+        let seed = shared_state
+            .chain_update(&aux.s.to_bytes())
+            .chain_update(&aux.t.to_bytes())
+            .chain_update(&aux.rsa_modulo.to_bytes())
+            .chain_update(&data.q.to_bytes())
+            .chain_update(&data.key.to_bytes())
+            .chain_update(&data.c.to_bytes())
+            .chain_update(&data.x.to_bytes())
+            .chain_update(&commitment.s.to_bytes())
+            .chain_update(&commitment.t.to_bytes())
+            .chain_update(&commitment.a.to_bytes())
+            .chain_update(&commitment.gamma.to_bytes())
+            .finalize();
+        let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
+        BigNumber::from_rng(&data.q, &mut rng)
+    }
+
+    pub fn verify<D>(
+        shared_state: D,
+        aux: &Aux,
+        data: &Data,
+        commitment: &Commitment,
+        proof: &Proof,
+    ) -> Result<(), InvalidProof>
+    where
+        D: Digest<OutputSize = U32>,
+    {
+        let challenge = challenge(shared_state, aux, data, commitment);
+        super::interactive::verify(aux, data, commitment, &challenge, proof)
+    }
 }
 
 #[cfg(test)]
@@ -311,10 +360,10 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
-        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
+        let shared_state = sha2::Sha256::default();
 
-        let (commitment, challenge, proof) = super::compute_proof(
-            tag,
+        let (commitment, _challenge, proof) = super::non_interactive::prove(
+            shared_state.clone(),
             &aux,
             &data,
             &pdata,
@@ -322,7 +371,7 @@ mod test {
             rand_core::OsRng::default(),
         )
         .unwrap();
-        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
+        let r = super::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{:?}", e),
@@ -364,10 +413,10 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
-        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
+        let shared_state = sha2::Sha256::default();
 
-        let (commitment, challenge, proof) = super::compute_proof(
-            tag,
+        let (commitment, _challenge, proof) = super::non_interactive::prove(
+            shared_state.clone(),
             &aux,
             &data,
             &pdata,
@@ -375,8 +424,8 @@ mod test {
             rand_core::OsRng::default(),
         )
         .unwrap();
-        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
-        if let Ok(()) = r {
+        let r = super::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
+        if r.is_ok() {
             panic!("proof should not pass");
         }
     }
@@ -416,10 +465,10 @@ mod test {
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         let aux = super::Aux { s, t, rsa_modulo };
 
-        let tag = generic_ec::hash_to_curve::Tag::new_unwrap("test".as_bytes());
+        let shared_state = sha2::Sha256::default();
 
-        let (commitment, challenge, proof) = super::compute_proof(
-            tag,
+        let (commitment, _challenge, proof) = super::non_interactive::prove(
+            shared_state.clone(),
             &aux,
             &data,
             &pdata,
@@ -427,8 +476,8 @@ mod test {
             rand_core::OsRng::default(),
         )
         .unwrap();
-        let r = super::verify(&aux, &data, &commitment, &challenge, &proof);
-        if let Ok(()) = r {
+        let r = super::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
+        if r.is_ok() {
             panic!("proof should not pass");
         }
     }
