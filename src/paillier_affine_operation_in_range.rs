@@ -496,7 +496,6 @@ pub mod non_interactive {
             .chain_update((security.l_y as u64).to_le_bytes())
             .chain_update((security.epsilon as u64).to_le_bytes())
             .finalize();
-
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
         let scalar = Scalar::<C>::random(&mut rng);
         BigNumber::from_slice(scalar.to_be_bytes().as_bytes())
