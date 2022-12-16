@@ -51,7 +51,7 @@
 //!
 //! let plaintext: BigNumber = 228.into();
 //! let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
-//! let power = g * p::convert_scalar(&plaintext);
+//! let power = g * paillier_zk::convert_scalar(&plaintext);
 //!
 //! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
 //!

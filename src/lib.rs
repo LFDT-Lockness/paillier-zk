@@ -14,3 +14,5 @@ pub use libpaillier;
 /// Underlying big number implementation. Use this to get
 /// the correct version of the library
 pub use libpaillier::unknown_order;
+
+pub use common::convert_scalar;

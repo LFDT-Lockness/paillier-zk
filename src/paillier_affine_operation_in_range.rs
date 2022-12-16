@@ -77,7 +77,7 @@
 //! // C in paper
 //! let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
 //! // X in paper
-//! let ciphertext_mult = g * p::convert_scalar(&plaintext_mult);
+//! let ciphertext_mult = g * paillier_zk::convert_scalar(&plaintext_mult);
 //! // Y' in further docs, and ρy in paper
 //! let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
 //! // Y and ρ in paper
