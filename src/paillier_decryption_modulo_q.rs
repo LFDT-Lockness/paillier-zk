@@ -136,8 +136,7 @@ pub mod interactive {
     use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    pub use crate::common::InvalidProof;
-    use crate::common::{combine, ProtocolError};
+    use crate::common::{combine, InvalidProof, ProtocolError};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -252,8 +251,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    pub use crate::common::InvalidProof;
-    use crate::common::ProtocolError;
+    use crate::common::{InvalidProof, ProtocolError};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 

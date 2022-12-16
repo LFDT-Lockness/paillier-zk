@@ -242,7 +242,7 @@ pub mod non_interactive {
                 .clone()
                 .chain_update(&n.to_bytes())
                 .chain_update(&commitment.w.to_bytes())
-                .chain_update(&(i as u64).to_le_bytes())
+                .chain_update((i as u64).to_le_bytes())
                 .finalize();
             let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
             *y_ref = BigNumber::from_rng(n, &mut rng);

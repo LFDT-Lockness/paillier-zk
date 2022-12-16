@@ -136,8 +136,7 @@ pub mod interactive {
     use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    pub use crate::common::InvalidProof;
-    use crate::common::{combine, gen_inversible};
+    use crate::common::{combine, gen_inversible, InvalidProof};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -182,18 +181,14 @@ pub mod interactive {
         let m = crate::unknown_order::Group {
             modulus: data.key.n().clone(),
         };
-        let _2 = &m
+        let z2 = &m
             * (
                 &private_commitment.r,
                 &pdata.nonce.modpow(challenge, data.key.n()),
             );
-        let _1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
-        let _3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
-        Proof {
-            z1: _1,
-            z2: _2,
-            z3: _3,
-        }
+        let z1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
+        let z3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
+        Proof { z1, z2, z3 }
     }
 
     /// Verify the proof
@@ -250,7 +245,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    pub use crate::common::InvalidProof;
+    use crate::common::InvalidProof;
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 

@@ -1,4 +1,3 @@
-pub(crate) mod hash2field;
 pub mod sqrt;
 
 use crate::unknown_order::BigNumber;

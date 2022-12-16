@@ -136,7 +136,7 @@ use crate::unknown_order::BigNumber;
 use generic_ec::{Curve, Point};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 
-pub use crate::common::{convert_scalar, InvalidProof, ProtocolError};
+pub use crate::common::InvalidProof;
 
 pub struct SecurityParams {
     /// l in paper, bit size of x
@@ -222,8 +222,7 @@ pub mod interactive {
     use generic_ec::{Curve, Point, Scalar};
     use rand_core::RngCore;
 
-    use crate::common::{combine, gen_inversible};
-    pub use crate::common::{convert_scalar, InvalidProof, ProtocolError};
+    use crate::common::{combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError};
 
     use super::*;
 
@@ -419,7 +418,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    pub use crate::common::{convert_scalar, InvalidProof, ProtocolError};
+    use crate::common::{InvalidProof, ProtocolError};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 
@@ -506,6 +505,7 @@ pub mod non_interactive {
 mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
 
+    use crate::common::convert_scalar;
     use crate::unknown_order::BigNumber;
 
     fn passing_test<C: Curve>()
@@ -528,7 +528,7 @@ mod test {
         let plaintext_add = BigNumber::from(28);
         let (ciphertext, _) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
         let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
-        let ciphertext_mult = g * super::convert_scalar(&plaintext_mult);
+        let ciphertext_mult = g * convert_scalar(&plaintext_mult);
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
         let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), None).unwrap();
         // verify that D is obtained from affine transformation of C
@@ -609,7 +609,7 @@ mod test {
         let plaintext_mult = (BigNumber::one() << (1024 + 128)) + 1;
         let plaintext_add: BigNumber = (BigNumber::one() << (1024 + 128)) + 2;
         let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
-        let ciphertext_mult = g * super::convert_scalar(&plaintext_mult);
+        let ciphertext_mult = g * convert_scalar(&plaintext_mult);
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
         let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), None).unwrap();
         // verify that D is obtained from affine transformation of C

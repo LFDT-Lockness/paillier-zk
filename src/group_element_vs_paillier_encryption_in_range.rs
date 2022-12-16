@@ -81,11 +81,9 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use crate::{common::ProtocolError, unknown_order::BigNumber};
+use crate::unknown_order::BigNumber;
 use generic_ec::{Curve, Point};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
-
-pub use crate::common::convert_scalar;
 
 pub struct SecurityParams {
     /// l in paper, bit size of plaintext
@@ -136,11 +134,10 @@ pub mod interactive {
     use libpaillier::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    use crate::common::{combine, gen_inversible, InvalidProof};
+    use crate::common::{combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError};
 
     use super::{
-        convert_scalar, Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof,
-        ProtocolError, SecurityParams,
+        Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
     };
 
     /// Create random commitment
@@ -268,11 +265,9 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::common::InvalidProof;
+    use crate::common::{InvalidProof, ProtocolError};
 
-    use super::{
-        Aux, Challenge, Commitment, Data, PrivateData, Proof, ProtocolError, SecurityParams,
-    };
+    use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 
     /// Compute proof for the given data, producing random commitment and
     /// deriving determenistic challenge.
