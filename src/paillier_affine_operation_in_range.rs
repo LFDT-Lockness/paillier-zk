@@ -35,7 +35,8 @@
 //! use generic_ec::hash_to_curve::Tag;
 //!
 //! // Prover and verifier have a shared protocol state
-//! let shared_state = sha2::Sha256::default();
+//! let shared_state_prover = sha2::Sha256::default();
+//! let shared_state_verifier = sha2::Sha256::default();
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
@@ -115,7 +116,7 @@
 //!     nonce_y,
 //! };
 //! let (commitment, _, proof) =
-//!     p::non_interactive::prove(shared_state.clone(), &aux, &data, &pdata, &security, rng).expect("proof failed");
+//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng).expect("proof failed");
 //!
 //! // 6. Prover sends this data to verifier
 //!
@@ -127,7 +128,7 @@
 //! // 7. Verifier receives the data and the proof and verifies it
 //!
 //! let (data, commitment, proof) = recv::<C>();
-//! let r = p::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof);
+//! let r = p::non_interactive::verify(shared_state_verifier, &aux, &data, &commitment, &security, &proof);
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover

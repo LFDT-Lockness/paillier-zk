@@ -13,8 +13,8 @@
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_decryption_modulo_q as p;
 //! use generic_ec::hash_to_curve::Tag;
-//! let shared_state = sha2::Sha256::default();
-//! let shared_state_prover = shared_state.clone();
+//! let shared_state_prover = sha2::Sha256::default();
+//! let shared_state_verifier = sha2::Sha256::default();
 //! let mut rng = rand_core::OsRng::default();
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
@@ -65,7 +65,7 @@
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
 //! let (data, commitment, proof) = recv();
-//! p::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
+//! p::non_interactive::verify(shared_state_verifier, &aux, &data, &commitment, &proof);
 //!
 //! ```
 //!
