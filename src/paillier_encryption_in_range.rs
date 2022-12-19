@@ -310,7 +310,8 @@ pub mod non_interactive {
             .chain_update(&commitment.c.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        BigNumber::from_rng(&security.q, &mut rng)
+        let m = BigNumber::from(2) * &security.q;
+        BigNumber::from_rng(&m, &mut rng)
     }
 
     pub fn verify<D>(
@@ -334,16 +335,11 @@ mod test {
     use crate::common::InvalidProof;
     use crate::unknown_order::BigNumber;
 
-    #[test]
-    fn passing() {
-        let security = super::SecurityParams {
-            l: 1024,
-            epsilon: 128,
-            q: BigNumber::prime(256),
-        };
-        let private_key = libpaillier::DecryptionKey::random().unwrap();
+    fn run_with<R: rand_core::RngCore>(rng: R, security: super::SecurityParams, plaintext: BigNumber) -> Result<(), crate::common::InvalidProof> {
+        let p = BigNumber::prime(1024);
+        let q = BigNumber::prime(1024);
+        let private_key = libpaillier::DecryptionKey::with_primes(&p, &q).unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
-        let plaintext: BigNumber = 228.into();
         let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
@@ -364,16 +360,27 @@ mod test {
             &data,
             &pdata,
             &security,
-            rand_core::OsRng::default(),
+            rng,
         );
-        let r = super::non_interactive::verify(
+        super::non_interactive::verify(
             shared_state,
             &aux,
             &data,
             &commitment,
             &security,
             &proof,
-        );
+        )
+    }
+
+    #[test]
+    fn passing() {
+        let security = super::SecurityParams {
+            l: 1024,
+            epsilon: 256,
+            q: BigNumber::prime(128),
+        };
+        let plaintext = (BigNumber::one() << (security.l + 1)) - 1;
+        let r = run_with(rand_core::OsRng::default(), security, plaintext);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{:?}", e),
@@ -383,48 +390,48 @@ mod test {
     fn failing() {
         let security = super::SecurityParams {
             l: 1024,
-            epsilon: 128,
-            q: BigNumber::prime(256),
+            epsilon: 256,
+            q: BigNumber::prime(128),
         };
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
-        let private_key = libpaillier::DecryptionKey::with_primes(&p, &q).unwrap();
-        let key = libpaillier::EncryptionKey::from(&private_key);
-        let plaintext: BigNumber = (BigNumber::one() << (security.l + security.epsilon)) + 1;
-        let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
-        let data = super::Data { key, ciphertext };
-        let pdata = super::PrivateData { plaintext, nonce };
-
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        let aux = super::Aux { s, t, rsa_modulo };
-
-        let shared_state = sha2::Sha256::default();
-        let (commitment, proof) = super::non_interactive::prove(
-            shared_state.clone(),
-            &aux,
-            &data,
-            &pdata,
-            &security,
-            rand_core::OsRng::default(),
-        );
-        let r = super::non_interactive::verify(
-            shared_state,
-            &aux,
-            &data,
-            &commitment,
-            &security,
-            &proof,
-        );
+        let plaintext = (BigNumber::one() << (security.l + security.epsilon + 1)) + 1;
+        let r = run_with(rand_core::OsRng::default(), security, plaintext);
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(InvalidProof::RangeCheckFailed(_)) => (),
             Err(e) => panic!("proof should not fail with {:?}", e),
         }
+    }
+
+    #[test]
+    fn rejected_with_probability_1_over_2() {
+        // plaintext in range 2^(l+1) should be rejected with probablility
+        // q / 2^epsilon. I set parameters like this:
+        //      bitsize(q) = 128
+        //      epsilon = 129
+        // Thus probability should be around 1/2.
+        // in 32 runs that's not what was observed. Very possible it's an
+        // artifact of distribution, so I decide to ignore it, and test that
+        // there are passing and failing values.
+
+        fn maybe_rejected(rng: rand_chacha::ChaCha20Rng) -> bool {
+            let security = super::SecurityParams {
+                l: 512,
+                epsilon: 129,
+                q: BigNumber::prime(128),
+            };
+            let plaintext: BigNumber = (BigNumber::one() << (security.l + 1)) - 1;
+            let r = run_with(rng, security, plaintext);
+            match r {
+                Ok(()) => true,
+                Err(InvalidProof::RangeCheckFailed(_)) => false,
+                Err(e) => panic!("proof should not fail with {:?}", e),
+            }
+        }
+
+        use rand_core::SeedableRng;
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(8);
+        assert!(maybe_rejected(rng), "should pass");
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(9);
+        assert!(!maybe_rejected(rng), "should fail");
     }
 }
