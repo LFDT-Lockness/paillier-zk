@@ -86,6 +86,7 @@ use crate::unknown_order::BigNumber;
 use generic_ec::{Curve, Point};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 
+#[derive(Debug, Clone)]
 pub struct SecurityParams {
     /// l in paper, bit size of plaintext
     pub l: usize,
@@ -93,6 +94,7 @@ pub struct SecurityParams {
     pub epsilon: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct Data<C: Curve> {
     pub key0: EncryptionKey,
     pub c: Ciphertext,
@@ -101,11 +103,13 @@ pub struct Data<C: Curve> {
     pub g: Point<C>,
 }
 
+#[derive(Clone)]
 pub struct PrivateData {
     pub x: BigNumber,
     pub nonce: Nonce,
 }
 
+#[derive(Debug, Clone)]
 pub struct Commitment<C: Curve> {
     pub s: BigNumber,
     pub a: Ciphertext,
@@ -113,6 +117,7 @@ pub struct Commitment<C: Curve> {
     pub d: BigNumber,
 }
 
+#[derive(Clone)]
 pub struct PrivateCommitment {
     pub alpha: BigNumber,
     pub mu: BigNumber,
@@ -122,6 +127,7 @@ pub struct PrivateCommitment {
 
 pub type Challenge = BigNumber;
 
+#[derive(Debug, Clone)]
 pub struct Proof {
     pub z1: BigNumber,
     pub z2: BigNumber,

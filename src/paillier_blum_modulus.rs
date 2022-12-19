@@ -73,17 +73,20 @@ pub enum InvalidProof {
 }
 
 /// Public data that both parties know: the Paillier-Blum modulus
+#[derive(Debug, Clone)]
 pub struct Data {
     pub n: BigNumber,
 }
 
 /// Private data of prover
+#[derive(Clone)]
 pub struct PrivateData {
     pub p: BigNumber,
     pub q: BigNumber,
 }
 
 /// Prover's first message, obtained by `commit`
+#[derive(Debug, Clone)]
 pub struct Commitment {
     pub w: BigNumber,
 }
@@ -92,11 +95,12 @@ pub struct Commitment {
 /// `challenge`
 ///
 /// Consists of `M` singular challenges
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Challenge<const M: usize> {
     pub ys: [BigNumber; M],
 }
 
+#[derive(Debug, Clone)]
 pub struct ProofPoint {
     pub x: BigNumber,
     pub a: bool,
@@ -105,6 +109,7 @@ pub struct ProofPoint {
 }
 
 /// The ZK proof. Computed by `prove`. Consists of M proofs for each challenge
+#[derive(Debug, Clone)]
 pub struct Proof<const M: usize> {
     pub points: [ProofPoint; M],
 }

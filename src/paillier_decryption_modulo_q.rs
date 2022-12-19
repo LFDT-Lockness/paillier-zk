@@ -75,6 +75,7 @@ use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 
 pub use crate::common::InvalidProof;
 
+#[derive(Debug, Clone)]
 pub struct SecurityParams {
     /// l in paper, bit size of plaintext
     pub l: usize,
@@ -83,6 +84,7 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
+#[derive(Debug, Clone)]
 pub struct Data {
     /// q in paper, modulo value such that `x = y mod q`
     pub q: BigNumber,
@@ -95,6 +97,7 @@ pub struct Data {
 }
 
 /// Private data of prover
+#[derive(Clone)]
 pub struct PrivateData {
     /// y in paper, plaintext value of C
     pub y: BigNumber,
@@ -102,6 +105,7 @@ pub struct PrivateData {
     pub nonce: Nonce,
 }
 
+#[derive(Debug, Clone)]
 /// Prover's first message, obtained by `commit`
 pub struct Commitment {
     pub s: BigNumber,
@@ -112,6 +116,7 @@ pub struct Commitment {
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
 /// the interactive protocol.
+#[derive(Clone)]
 pub struct PrivateCommitment {
     pub alpha: BigNumber,
     pub mu: BigNumber,
@@ -124,6 +129,7 @@ pub struct PrivateCommitment {
 pub type Challenge = BigNumber;
 
 /// The ZK proof. Computed by `prove`
+#[derive(Debug, Clone)]
 pub struct Proof {
     pub z1: BigNumber,
     pub z2: BigNumber,
