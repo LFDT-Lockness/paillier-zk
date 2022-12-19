@@ -7,7 +7,7 @@
 //! cryptosystem. P also has `plaintext`, `nonce`, and
 //! `ciphertext = key.encrypt(plaintext, nonce)`.
 //!
-//! P wants to prove that `plaintext` is at most `L` bits, without disclosing
+//! P wants to prove that `plaintext` is at most `L + 1` bits, without disclosing
 //! it, the `pkey`, and `nonce`
 
 //! ## Example
@@ -82,9 +82,10 @@ use crate::unknown_order::BigNumber;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
-    /// l in paper, bit size of plaintext
+    /// l in paper, security parameter for bit size of plaintext: it needs to
+    /// be in range [-2^l; 2^l] or equivalently 2^(l+1)
     pub l: usize,
-    /// Epsilon in paper, range extension and security parameter for x
+    /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
     pub q: BigNumber,
@@ -163,8 +164,9 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> (Commitment, PrivateCommitment) {
-        let two_to_l = BigNumber::from(1) << security.l;
-        let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon);
+        // add 1 to exponents to account for +-
+        let two_to_l = BigNumber::from(1) << (security.l + 1);
+        let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
         let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
         let r = gen_inversible(data.key.n(), &mut rng);
@@ -241,7 +243,7 @@ pub mod interactive {
             return Err(InvalidProof::EqualityCheckFailed(2));
         }
 
-        if proof.z1 > (BigNumber::one() << (security.l + security.epsilon)) {
+        if proof.z1 > (BigNumber::one() << (security.l + security.epsilon + 1)) {
             return Err(InvalidProof::RangeCheckFailed(3));
         }
 
@@ -249,7 +251,9 @@ pub mod interactive {
     }
 
     pub fn challenge<R: RngCore>(security: &SecurityParams, rng: &mut R) -> Challenge {
-        BigNumber::from_rng(&security.q, rng)
+        // double the range to account for +-
+        let m = BigNumber::from(2) * &security.q;
+        BigNumber::from_rng(&m, rng)
     }
 }
 
