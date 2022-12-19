@@ -15,4 +15,4 @@ pub use libpaillier;
 /// the correct version of the library
 pub use libpaillier::unknown_order;
 
-pub use common::convert_scalar;
+pub use common::{convert_scalar, InvalidProof, ProtocolError};
