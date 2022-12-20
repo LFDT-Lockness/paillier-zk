@@ -5,7 +5,7 @@
 //!
 //! A party P performs a paillier affine operation with C, Y, and X
 //! obtaining `D = C*X + Y`. `X` and `Y` are encrypted values of `x` and `y`. P
-//! then wants to prove that `y` and `x` are at most `L` and `L'` bits,
+//! then wants to prove that `y` and `x` are at most `L+1` and `L'+1` bits,
 //! correspondingly, and P doesn't want to disclose none of the plaintexts
 //!
 //! Given:
@@ -145,12 +145,14 @@ use crate::unknown_order::BigNumber;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
-    /// l in paper, bit size of x
+    /// l in paper, bit size of +-x
     pub l_x: usize,
-    /// l' in paper, bit size of y
+    /// l' in paper, bit size of +-y
     pub l_y: usize,
-    /// Epsilon in paper, range extension and security parameter for x and y
+    /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
+    /// q in paper. Security parameter for challenge
+    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -233,7 +235,7 @@ pub use crate::common::Aux;
 pub mod interactive {
 
     use crate::unknown_order::BigNumber;
-    use generic_ec::{Curve, Point, Scalar};
+    use generic_ec::{Curve, Point};
     use rand_core::RngCore;
 
     use crate::common::{combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError};
@@ -248,13 +250,13 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment<C>, PrivateCommitment), ProtocolError> {
-        let two_to_l = BigNumber::one() << security.l_x;
-        let two_to_l_e = BigNumber::one() << (security.l_x + security.epsilon);
+        let two_to_l = BigNumber::one() << (security.l_x + 1);
+        let two_to_l_e = BigNumber::one() << (security.l_x + security.epsilon + 1);
         let modulo_l = two_to_l * &aux.rsa_modulo;
         let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
         let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-        let beta = BigNumber::from_rng(&(BigNumber::one() << security.l_y), &mut rng);
+        let beta = BigNumber::from_rng(&(BigNumber::one() << (security.l_y + security.epsilon + 1)), &mut rng);
         let r = gen_inversible(data.key0.n(), &mut rng);
         let r_y = gen_inversible(data.key1.n(), &mut rng);
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
@@ -405,23 +407,23 @@ pub mod interactive {
         )?;
         fail_if(
             InvalidProof::RangeCheckFailed(6),
-            proof.z1 <= &one << (security.l_x + security.epsilon),
+            proof.z1 <= &one << (security.l_x + security.epsilon + 1),
         )?;
         fail_if(
             InvalidProof::RangeCheckFailed(7),
-            proof.z2 <= &one << (security.l_y + security.epsilon),
+            proof.z2 <= &one << (security.l_y + security.epsilon + 1),
         )?;
         Ok(())
     }
 
     /// Generate random challenge
-    pub fn challenge<C, R>(rng: &mut R) -> BigNumber
+    pub fn challenge<R>(rng: &mut R, security: &SecurityParams) -> BigNumber
     where
-        C: Curve,
         R: RngCore,
     {
-        let x = Scalar::<C>::random(rng);
-        BigNumber::from_slice(x.to_be_bytes().as_bytes())
+        // double the range to account for +-
+        let m = BigNumber::from(2) * &security.q;
+        BigNumber::from_rng(&m, rng)
     }
 }
 
@@ -484,7 +486,6 @@ pub mod non_interactive {
         security: &SecurityParams,
     ) -> Challenge
     where
-        Scalar<C>: FromHash,
         D: Digest<OutputSize = U32>,
     {
         use rand_core::SeedableRng;
@@ -510,8 +511,8 @@ pub mod non_interactive {
             .chain_update((security.epsilon as u64).to_le_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        let scalar = Scalar::<C>::random(&mut rng);
-        BigNumber::from_slice(scalar.to_be_bytes().as_bytes())
+        let m = BigNumber::from(2) * &security.q;
+        BigNumber::from_rng(&m, &mut rng)
     }
 }
 
@@ -522,25 +523,18 @@ mod test {
     use crate::common::convert_scalar;
     use crate::unknown_order::BigNumber;
 
-    fn passing_test<C: Curve>()
+    fn run<R: rand_core::RngCore, C: Curve>(rng: R, security: super::SecurityParams, plaintext_orig: BigNumber, plaintext_mult: BigNumber, plaintext_add: BigNumber) -> Result<(), crate::common::InvalidProof>
     where
         Scalar<C>: FromHash,
     {
-        let security = super::SecurityParams {
-            l_x: 1024,
-            l_y: 1024,
-            epsilon: 128,
-        };
+        let affined = &plaintext_mult * &plaintext_orig + &plaintext_add;
+
         let private_key0 = libpaillier::DecryptionKey::random().unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
         let private_key1 = libpaillier::DecryptionKey::random().unwrap();
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
         let g = generic_ec::Point::<C>::generator();
-        let plaintext: BigNumber = 228.into();
-        let plaintext_orig = BigNumber::from(100);
-        let plaintext_mult = BigNumber::from(2);
-        let plaintext_add = BigNumber::from(28);
-        let (ciphertext, _) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
+        let (ciphertext, _) = key0.encrypt(affined.to_bytes(), None).unwrap();
         let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
         let ciphertext_mult = g * convert_scalar(&plaintext_mult);
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
@@ -588,97 +582,76 @@ mod test {
             &data,
             &pdata,
             &security,
-            rand_core::OsRng::default(),
+            rng,
         )
         .unwrap();
-        let r = super::non_interactive::verify(
+        super::non_interactive::verify(
             shared_state,
             &aux,
             &data,
             &commitment,
             &security,
             &proof,
-        );
-        match r {
-            Ok(()) => (),
-            Err(e) => panic!("{:?}", e),
-        }
+        )
     }
-
-    fn failing_test<C: Curve>()
+    fn passing_test<C: Curve>()
     where
         Scalar<C>: FromHash,
     {
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
-            epsilon: 128,
+            epsilon: 256,
+            q: BigNumber::prime(128),
         };
-        let private_key0 = libpaillier::DecryptionKey::random().unwrap();
-        let key0 = libpaillier::EncryptionKey::from(&private_key0);
-        let private_key1 = libpaillier::DecryptionKey::random().unwrap();
-        let key1 = libpaillier::EncryptionKey::from(&private_key1);
-        let g = generic_ec::Point::<C>::generator();
-        let plaintext_orig = BigNumber::from(1337);
-        let plaintext_mult = (BigNumber::one() << (1024 + 128)) + 1;
-        let plaintext_add: BigNumber = (BigNumber::one() << (1024 + 128)) + 2;
-        let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
-        let ciphertext_mult = g * convert_scalar(&plaintext_mult);
-        let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
-        let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), None).unwrap();
-        // verify that D is obtained from affine transformation of C
-        let transformed = key0
-            .add(
-                &key0.mul(&ciphertext_orig, &plaintext_mult).unwrap(),
-                &ciphertext_add_action,
-            )
-            .unwrap();
-        let data = super::Data {
-            key0,
-            key1,
-            c: ciphertext_orig,
-            d: transformed,
-            y: ciphertext_add,
-            x: ciphertext_mult,
+        let plaintext_orig = BigNumber::from(100);
+        let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
+        let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
+        let r = run(rand_core::OsRng::default(), security, plaintext_orig, plaintext_mult, plaintext_add);
+        match r {
+            Ok(()) => (),
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+
+    fn failing_on_additive<C: Curve>()
+    where
+        Scalar<C>: FromHash,
+    {
+        let security = super::SecurityParams {
+            l_x: 1024,
+            l_y: 1024,
+            epsilon: 256,
+            q: BigNumber::prime(128),
         };
-        let pdata = super::PrivateData {
-            x: plaintext_mult,
-            y: plaintext_add,
-            nonce,
-            nonce_y,
-        };
-
-        let p = BigNumber::prime(1024 + 128 + 1);
-        let q = BigNumber::prime(1024 + 128 + 1);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        let aux = super::Aux { s, t, rsa_modulo };
-
-        let shared_state = sha2::Sha256::default();
-
-        let (commitment, proof) = super::non_interactive::prove(
-            shared_state.clone(),
-            &aux,
-            &data,
-            &pdata,
-            &security,
-            rand_core::OsRng::default(),
-        )
-        .unwrap();
-        let r = super::non_interactive::verify(
-            shared_state,
-            &aux,
-            &data,
-            &commitment,
-            &security,
-            &proof,
-        );
+        let plaintext_orig = BigNumber::from(100);
+        let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
+        let plaintext_add = (BigNumber::from(1) << (security.l_y + security.epsilon + 1)) + 1;
+        let r = run(rand_core::OsRng::default(), security, plaintext_orig, plaintext_mult, plaintext_add);
         match r {
             Ok(()) => panic!("proof should not pass"),
-            Err(crate::common::InvalidProof::RangeCheckFailed(_)) => (),
+            Err(crate::common::InvalidProof::RangeCheckFailed(7)) => (),
+            Err(e) => panic!("proof should not fail with: {:?}", e),
+        }
+    }
+
+    fn failing_on_multiplicative<C: Curve>()
+    where
+        Scalar<C>: FromHash,
+    {
+        let security = super::SecurityParams {
+            l_x: 1024,
+            l_y: 1024,
+            epsilon: 256,
+            q: BigNumber::prime(128),
+        };
+        let plaintext_orig = BigNumber::from(100);
+        let plaintext_mult = (BigNumber::from(1) << (security.l_x + security.epsilon + 1)) + 1;
+        let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
+        let r = run(rand_core::OsRng::default(), security, plaintext_orig, plaintext_mult, plaintext_add);
+        match r {
+            Ok(()) => panic!("proof should not pass"),
+            Err(crate::common::InvalidProof::RangeCheckFailed(6)) => (),
             Err(e) => panic!("proof should not fail with: {:?}", e),
         }
     }
@@ -688,8 +661,12 @@ mod test {
         passing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
     }
     #[test]
-    fn failing_p256() {
-        failing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
+    fn failing_p256_add() {
+        failing_on_additive::<generic_ec_curves::rust_crypto::Secp256r1>()
+    }
+    #[test]
+    fn failing_p256_mul() {
+        failing_on_multiplicative::<generic_ec_curves::rust_crypto::Secp256r1>()
     }
 
     #[test]
@@ -697,7 +674,11 @@ mod test {
         passing_test::<crate::curve::C>()
     }
     #[test]
-    fn failing_million() {
-        failing_test::<crate::curve::C>()
+    fn failing_million_add() {
+        failing_on_additive::<crate::curve::C>()
+    }
+    #[test]
+    fn failing_million_mul() {
+        failing_on_multiplicative::<crate::curve::C>()
     }
 }
