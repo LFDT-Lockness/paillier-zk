@@ -189,7 +189,7 @@ impl generic_ec_core::One for Scalar {
 
 impl generic_ec_core::Samplable for Scalar {
     fn random<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        Scalar(rng.next_u64())
+        rng.next_u64().into()
     }
 }
 
