@@ -523,22 +523,34 @@ mod test {
     use crate::common::convert_scalar;
     use crate::unknown_order::BigNumber;
 
-    fn run<R: rand_core::RngCore, C: Curve>(rng: R, security: super::SecurityParams, plaintext_orig: BigNumber, plaintext_mult: BigNumber, plaintext_add: BigNumber) -> Result<(), crate::common::InvalidProof>
+    fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
+        let p = BigNumber::prime_from_rng(1024, rng);
+        let q = BigNumber::prime_from_rng(1024, rng);
+        libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
+    }
+
+    fn nonce<R: rand_core::RngCore>(rng: &mut R, n: &BigNumber) -> Option<BigNumber> {
+        Some(BigNumber::from_rng(n, rng))
+    }
+
+    fn run<R: rand_core::RngCore, C: Curve>(mut rng: R, security: super::SecurityParams, plaintext_orig: BigNumber, plaintext_mult: BigNumber, plaintext_add: BigNumber) -> Result<(), crate::common::InvalidProof>
     where
         Scalar<C>: FromHash,
     {
         let affined = &plaintext_mult * &plaintext_orig + &plaintext_add;
 
-        let private_key0 = libpaillier::DecryptionKey::random().unwrap();
+        let private_key0 = random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
-        let private_key1 = libpaillier::DecryptionKey::random().unwrap();
+        let private_key1 = random_key(&mut rng).unwrap();
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
         let g = generic_ec::Point::<C>::generator();
-        let (ciphertext, _) = key0.encrypt(affined.to_bytes(), None).unwrap();
-        let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
+        let (ciphertext, _) = key0.encrypt(affined.to_bytes(), nonce(&mut rng, key0.n())).unwrap();
+        let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), nonce(&mut rng, key0.n())).unwrap();
         let ciphertext_mult = g * convert_scalar(&plaintext_mult);
-        let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
-        let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), None).unwrap();
+        let nonce_y = nonce(&mut rng, key1.n());
+        let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), nonce_y).unwrap();
+        let nonce = nonce(&mut rng, key0.n());
+        let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), nonce).unwrap();
         // verify that D is obtained from affine transformation of C
         let transformed = key0
             .add(
@@ -565,8 +577,8 @@ mod test {
             nonce_y,
         };
 
-        let p = BigNumber::prime(1024 + 128 + 1);
-        let q = BigNumber::prime(1024 + 128 + 1);
+        let p = BigNumber::prime_from_rng(1024, &mut rng);
+        let q = BigNumber::prime_from_rng(1024, &mut rng);
         let rsa_modulo = p * q;
         let s: BigNumber = 123.into();
         let t: BigNumber = 321.into();
@@ -598,16 +610,17 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
+        let mut rng = rand_core::OsRng::default();
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
             epsilon: 256,
-            q: BigNumber::prime(128),
+            q: BigNumber::prime_from_rng(128, &mut rng),
         };
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
         let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
-        let r = run(rand_core::OsRng::default(), security, plaintext_orig, plaintext_mult, plaintext_add);
+        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{:?}", e),
@@ -618,16 +631,17 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
+        let mut rng = rand_core::OsRng::default();
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
             epsilon: 256,
-            q: BigNumber::prime(128),
+            q: BigNumber::prime_from_rng(128, &mut rng),
         };
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
         let plaintext_add = (BigNumber::from(1) << (security.l_y + security.epsilon + 1)) + 1;
-        let r = run(rand_core::OsRng::default(), security, plaintext_orig, plaintext_mult, plaintext_add);
+        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(crate::common::InvalidProof::RangeCheckFailed(7)) => (),
@@ -639,16 +653,17 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
+        let mut rng = rand_core::OsRng::default();
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
             epsilon: 256,
-            q: BigNumber::prime(128),
+            q: BigNumber::prime_from_rng(128, &mut rng),
         };
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = (BigNumber::from(1) << (security.l_x + security.epsilon + 1)) + 1;
         let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
-        let r = run(rand_core::OsRng::default(), security, plaintext_orig, plaintext_mult, plaintext_add);
+        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(crate::common::InvalidProof::RangeCheckFailed(6)) => (),
