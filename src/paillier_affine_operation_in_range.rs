@@ -94,13 +94,15 @@
 //! // 5. Prover computes a non-interactive proof that plaintext_add and
 //! //    plaintext_mult are at most L and L' bits
 //!
+//! let mut rng = rand_core::OsRng::default();
+//!
 //! let security = p::SecurityParams {
 //!     l_x: 1024,
 //!     l_y: 1024,
 //!     epsilon: 128,
+//!     q: BigNumber::prime_from_rng(128, &mut rng),
 //! };
 //!
-//! let rng = rand_core::OsRng::default();
 //! let data = p::Data {
 //!     key0,
 //!     key1,
@@ -695,5 +697,63 @@ mod test {
     #[test]
     fn failing_million_mul() {
         failing_on_multiplicative::<crate::curve::C>()
+    }
+
+    // see notes in
+    // [crate::paillier_encryption_in_range::test::rejected_with_probability_1_over_2]
+    // for motivation and design of the following two tests
+
+    #[test]
+    fn mul_rejected_with_probability_1_over_2() {
+        use rand_core::SeedableRng;
+        fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
+            let security = super::SecurityParams {
+                l_x: 1024,
+                l_y: 1024,
+                epsilon: 130,
+                q: BigNumber::prime_from_rng(128, &mut rng),
+            };
+            let plaintext_orig = BigNumber::from(100);
+            let plaintext_mult = (BigNumber::from(1) << (security.l_x + 1)) - 1;
+            let plaintext_add = BigNumber::from(1) << (security.l_y / 2);
+            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
+            match r {
+                Ok(()) => true,
+                Err(crate::common::InvalidProof::RangeCheckFailed(6)) => false,
+                Err(e) => panic!("proof should not fail with: {:?}", e),
+            }
+        }
+
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        assert!(!maybe_rejected(rng), "should fail");
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
+        assert!(maybe_rejected(rng), "should pass");
+    }
+
+    #[test]
+    fn add_rejected_with_probability_1_over_2() {
+        use rand_core::SeedableRng;
+        fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
+            let security = super::SecurityParams {
+                l_x: 1024,
+                l_y: 1024,
+                epsilon: 130,
+                q: BigNumber::prime_from_rng(128, &mut rng),
+            };
+            let plaintext_orig = BigNumber::from(100);
+            let plaintext_mult = BigNumber::from(1) << (security.l_x / 2);
+            let plaintext_add = (BigNumber::from(1) << (security.l_y + 1)) + 1;
+            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
+            match r {
+                Ok(()) => true,
+                Err(crate::common::InvalidProof::RangeCheckFailed(7)) => false,
+                Err(e) => panic!("proof should not fail with: {:?}", e),
+            }
+        }
+
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        assert!(maybe_rejected(rng), "should pass");
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
+        assert!(!maybe_rejected(rng), "should fail");
     }
 }
