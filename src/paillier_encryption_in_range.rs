@@ -76,6 +76,7 @@ use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 
 pub use crate::common::InvalidProof;
 
+#[derive(Debug, Clone)]
 pub struct SecurityParams {
     /// l in paper, bit size of plaintext
     pub l: usize,
@@ -86,6 +87,7 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
+#[derive(Debug, Clone)]
 pub struct Data {
     /// N0 in paper, public key that k -> K was encrypted on
     pub key: EncryptionKey,
@@ -94,6 +96,7 @@ pub struct Data {
 }
 
 /// Private data of prover
+#[derive(Clone)]
 pub struct PrivateData {
     /// k in paper, plaintext of K
     pub plaintext: BigNumber,
@@ -103,6 +106,7 @@ pub struct PrivateData {
 
 // As described in cggmp21 at page 33
 /// Prover's first message, obtained by `commit`
+#[derive(Debug, Clone)]
 pub struct Commitment {
     pub s: BigNumber,
     pub a: BigNumber,
@@ -111,6 +115,7 @@ pub struct Commitment {
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
 /// the interactive protocol.
+#[derive(Clone)]
 pub struct PrivateCommitment {
     pub alpha: BigNumber,
     pub mu: BigNumber,
@@ -124,6 +129,7 @@ pub type Challenge = BigNumber;
 
 // As described in cggmp21 at page 33
 /// The ZK proof. Computed by `prove`
+#[derive(Debug, Clone)]
 pub struct Proof {
     pub z1: BigNumber,
     pub z2: BigNumber,
