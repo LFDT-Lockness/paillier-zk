@@ -21,4 +21,7 @@ rand_core = { version = "0.6", default-features = false, features = ["getrandom"
 generic-ec-curves = { git = "https://github.com/dfns-labs/generic-ec", branch = "d", features = ["secp256r1"] }
 
 [features]
-default = ["libpaillier/rust"]
+default = ["rust"]
+gmp = ["libpaillier/gmp"]
+openssl = ["libpaillier/openssl"]
+rust = ["libpaillier/rust"]
