@@ -133,13 +133,17 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use crate::unknown_order::BigNumber;
 use generic_ec::{Curve, Point};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 pub use crate::common::InvalidProof;
+use crate::unknown_order::BigNumber;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
     /// l in paper, bit size of x
     pub l_x: usize,
@@ -151,6 +155,7 @@ pub struct SecurityParams {
 
 /// Public data that both parties know
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Data<C: Curve> {
     /// N0 in paper, public key that C was encrypted on
     pub key0: EncryptionKey,
@@ -182,6 +187,7 @@ pub struct PrivateData {
 // As described in cggmp21 at page 35
 /// Prover's first message, obtained by `commit`
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Commitment<C: Curve> {
     pub a: BigNumber,
     pub b_x: Point<C>,
@@ -212,6 +218,7 @@ pub type Challenge = BigNumber;
 
 /// The ZK proof. Computed by `prove`
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
     pub z1: BigNumber,
     pub z2: BigNumber,

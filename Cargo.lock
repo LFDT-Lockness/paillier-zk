@@ -500,6 +500,7 @@ dependencies = [
  "libpaillier",
  "rand_chacha",
  "rand_core",
+ "serde",
  "sha2",
  "subtle",
  "zeroize",

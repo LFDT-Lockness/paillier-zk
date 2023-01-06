@@ -71,12 +71,16 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use crate::unknown_order::BigNumber;
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 pub use crate::common::InvalidProof;
+use crate::unknown_order::BigNumber;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
     /// l in paper, bit size of plaintext
     pub l: usize,
@@ -88,6 +92,7 @@ pub struct SecurityParams {
 
 /// Public data that both parties know
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Data {
     /// N0 in paper, public key that k -> K was encrypted on
     pub key: EncryptionKey,
@@ -107,6 +112,7 @@ pub struct PrivateData {
 // As described in cggmp21 at page 33
 /// Prover's first message, obtained by `commit`
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
     pub s: BigNumber,
     pub a: BigNumber,
@@ -130,6 +136,7 @@ pub type Challenge = BigNumber;
 // As described in cggmp21 at page 33
 /// The ZK proof. Computed by `prove`
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
     pub z1: BigNumber,
     pub z2: BigNumber,

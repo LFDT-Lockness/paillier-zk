@@ -82,11 +82,16 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use crate::unknown_order::BigNumber;
 use generic_ec::{Curve, Point};
 use libpaillier::{Ciphertext, EncryptionKey, Nonce};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+use crate::unknown_order::BigNumber;
+
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
     /// l in paper, bit size of plaintext
     pub l: usize,
@@ -95,6 +100,7 @@ pub struct SecurityParams {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Data<C: Curve> {
     pub key0: EncryptionKey,
     pub c: Ciphertext,
@@ -110,6 +116,7 @@ pub struct PrivateData {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Commitment<C: Curve> {
     pub s: BigNumber,
     pub a: Ciphertext,
@@ -128,6 +135,7 @@ pub struct PrivateCommitment {
 pub type Challenge = BigNumber;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
     pub z1: BigNumber,
     pub z2: BigNumber,
