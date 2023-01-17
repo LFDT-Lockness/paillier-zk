@@ -19,6 +19,8 @@ jobs:
     - uses: webfactory/ssh-agent@v0.7.0
       with:
         ssh-private-key: ${{ secrets.GENERIC_EC_KEY }}
+    - name: Build with serde support
+      run: cargo build --release --features serde
     - name: Build
       run: cargo build --release
     - name: Run tests

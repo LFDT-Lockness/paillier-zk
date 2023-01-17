@@ -62,6 +62,9 @@
 //!     ```
 //! 4. If the verification succeeded, V can continue communication with P
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use crate::unknown_order::BigNumber;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -74,6 +77,7 @@ pub enum InvalidProof {
 
 /// Public data that both parties know: the Paillier-Blum modulus
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Data {
     pub n: BigNumber,
 }
@@ -87,6 +91,7 @@ pub struct PrivateData {
 
 /// Prover's first message, obtained by `commit`
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
     pub w: BigNumber,
 }
@@ -101,6 +106,7 @@ pub struct Challenge<const M: usize> {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProofPoint {
     pub x: BigNumber,
     pub a: bool,
