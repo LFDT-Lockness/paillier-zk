@@ -163,8 +163,8 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment, PrivateCommitment), ProtocolError> {
-        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon);
-        let modulo_l = (BigNumber::one() << security.l) * &aux.rsa_modulo;
+        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon + 1);
+        let modulo_l = (BigNumber::one() << security.l + 1) * &aux.rsa_modulo;
         let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
         let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
@@ -188,7 +188,9 @@ pub mod interactive {
 
     /// Generate random challenge
     pub fn challenge<R: RngCore>(data: &Data, rng: &mut R) -> Challenge {
-        BigNumber::from_rng(&data.q, rng)
+        // double the range to account for +-
+        let m = BigNumber::from(2) * &data.q;
+        BigNumber::from_rng(&m, rng)
     }
 
     /// Compute proof for given data and prior protocol values
@@ -314,7 +316,8 @@ pub mod non_interactive {
             .chain_update(&commitment.gamma.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        BigNumber::from_rng(&data.q, &mut rng)
+        let m = BigNumber::from(2) * &data.q;
+        BigNumber::from_rng(&m, &mut rng)
     }
 
     pub fn verify<D>(
@@ -492,4 +495,10 @@ mod test {
             panic!("proof should not pass");
         }
     }
+
+    // Following motivation outlined in
+    // [crate::paillier_encryption_in_range::test::rejected_with_probability_1_over_2],
+    // I would like to make a similar borderline test, but no security estimate
+    // was given in the paper and this proof differs significantly from others
+    // in this library, so I have to omit the test.
 }
