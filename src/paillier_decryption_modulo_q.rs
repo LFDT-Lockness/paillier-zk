@@ -164,7 +164,7 @@ pub mod interactive {
         mut rng: R,
     ) -> Result<(Commitment, PrivateCommitment), ProtocolError> {
         let two_to_l_e = BigNumber::one() << (security.l + security.epsilon + 1);
-        let modulo_l = (BigNumber::one() << security.l + 1) * &aux.rsa_modulo;
+        let modulo_l = (BigNumber::one() << (security.l + 1)) * &aux.rsa_modulo;
         let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
         let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
@@ -303,17 +303,17 @@ pub mod non_interactive {
     {
         use rand_core::SeedableRng;
         let seed = shared_state
-            .chain_update(&aux.s.to_bytes())
-            .chain_update(&aux.t.to_bytes())
-            .chain_update(&aux.rsa_modulo.to_bytes())
-            .chain_update(&data.q.to_bytes())
-            .chain_update(&data.key.to_bytes())
-            .chain_update(&data.c.to_bytes())
-            .chain_update(&data.x.to_bytes())
-            .chain_update(&commitment.s.to_bytes())
-            .chain_update(&commitment.t.to_bytes())
-            .chain_update(&commitment.a.to_bytes())
-            .chain_update(&commitment.gamma.to_bytes())
+            .chain_update(aux.s.to_bytes())
+            .chain_update(aux.t.to_bytes())
+            .chain_update(aux.rsa_modulo.to_bytes())
+            .chain_update(data.q.to_bytes())
+            .chain_update(data.key.to_bytes())
+            .chain_update(data.c.to_bytes())
+            .chain_update(data.x.to_bytes())
+            .chain_update(commitment.s.to_bytes())
+            .chain_update(commitment.t.to_bytes())
+            .chain_update(commitment.a.to_bytes())
+            .chain_update(commitment.gamma.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
         let m = BigNumber::from(2) * &data.q;

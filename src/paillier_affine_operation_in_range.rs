@@ -258,7 +258,10 @@ pub mod interactive {
         let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
         let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-        let beta = BigNumber::from_rng(&(BigNumber::one() << (security.l_y + security.epsilon + 1)), &mut rng);
+        let beta = BigNumber::from_rng(
+            &(BigNumber::one() << (security.l_y + security.epsilon + 1)),
+            &mut rng,
+        );
         let r = gen_inversible(data.key0.n(), &mut rng);
         let r_y = gen_inversible(data.key1.n(), &mut rng);
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
@@ -493,21 +496,21 @@ pub mod non_interactive {
         use rand_core::SeedableRng;
         let seed = shared_state
             .chain_update(aux.s.to_bytes())
-            .chain_update(&aux.t.to_bytes())
-            .chain_update(&aux.rsa_modulo.to_bytes())
-            .chain_update(&data.key0.to_bytes())
-            .chain_update(&data.key1.to_bytes())
-            .chain_update(&data.c.to_bytes())
-            .chain_update(&data.d.to_bytes())
-            .chain_update(&data.y.to_bytes())
-            .chain_update(&data.x.to_bytes(true))
-            .chain_update(&commitment.a.to_bytes())
-            .chain_update(&commitment.b_x.to_bytes(true))
-            .chain_update(&commitment.b_y.to_bytes())
-            .chain_update(&commitment.e.to_bytes())
-            .chain_update(&commitment.s.to_bytes())
-            .chain_update(&commitment.f.to_bytes())
-            .chain_update(&commitment.t.to_bytes())
+            .chain_update(aux.t.to_bytes())
+            .chain_update(aux.rsa_modulo.to_bytes())
+            .chain_update(data.key0.to_bytes())
+            .chain_update(data.key1.to_bytes())
+            .chain_update(data.c.to_bytes())
+            .chain_update(data.d.to_bytes())
+            .chain_update(data.y.to_bytes())
+            .chain_update(data.x.to_bytes(true))
+            .chain_update(commitment.a.to_bytes())
+            .chain_update(commitment.b_x.to_bytes(true))
+            .chain_update(commitment.b_y.to_bytes())
+            .chain_update(commitment.e.to_bytes())
+            .chain_update(commitment.s.to_bytes())
+            .chain_update(commitment.f.to_bytes())
+            .chain_update(commitment.t.to_bytes())
             .chain_update((security.l_x as u64).to_le_bytes())
             .chain_update((security.l_y as u64).to_le_bytes())
             .chain_update((security.epsilon as u64).to_le_bytes())
@@ -535,7 +538,13 @@ mod test {
         Some(BigNumber::from_rng(n, rng))
     }
 
-    fn run<R: rand_core::RngCore, C: Curve>(mut rng: R, security: super::SecurityParams, plaintext_orig: BigNumber, plaintext_mult: BigNumber, plaintext_add: BigNumber) -> Result<(), crate::common::InvalidProof>
+    fn run<R: rand_core::RngCore, C: Curve>(
+        mut rng: R,
+        security: super::SecurityParams,
+        plaintext_orig: BigNumber,
+        plaintext_mult: BigNumber,
+        plaintext_add: BigNumber,
+    ) -> Result<(), crate::common::InvalidProof>
     where
         Scalar<C>: FromHash,
     {
@@ -546,8 +555,12 @@ mod test {
         let private_key1 = random_key(&mut rng).unwrap();
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
         let g = generic_ec::Point::<C>::generator();
-        let (ciphertext, _) = key0.encrypt(affined.to_bytes(), nonce(&mut rng, key0.n())).unwrap();
-        let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), nonce(&mut rng, key0.n())).unwrap();
+        let (ciphertext, _) = key0
+            .encrypt(affined.to_bytes(), nonce(&mut rng, key0.n()))
+            .unwrap();
+        let (ciphertext_orig, _) = key0
+            .encrypt(plaintext_orig.to_bytes(), nonce(&mut rng, key0.n()))
+            .unwrap();
         let ciphertext_mult = g * convert_scalar(&plaintext_mult);
         let nonce_y = nonce(&mut rng, key1.n());
         let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), nonce_y).unwrap();
@@ -599,14 +612,7 @@ mod test {
             rng,
         )
         .unwrap();
-        super::non_interactive::verify(
-            shared_state,
-            &aux,
-            &data,
-            &commitment,
-            &security,
-            &proof,
-        )
+        super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
     }
     fn passing_test<C: Curve>()
     where
@@ -716,7 +722,13 @@ mod test {
             let plaintext_orig = BigNumber::from(100);
             let plaintext_mult = (BigNumber::from(1) << (security.l_x + 1)) - 1;
             let plaintext_add = BigNumber::from(1) << (security.l_y / 2);
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
+            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(
+                rng,
+                security,
+                plaintext_orig,
+                plaintext_mult,
+                plaintext_add,
+            );
             match r {
                 Ok(()) => true,
                 Err(crate::common::InvalidProof::RangeCheckFailed(6)) => false,
@@ -743,7 +755,13 @@ mod test {
             let plaintext_orig = BigNumber::from(100);
             let plaintext_mult = BigNumber::from(1) << (security.l_x / 2);
             let plaintext_add = (BigNumber::from(1) << (security.l_y + 1)) + 1;
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
+            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(
+                rng,
+                security,
+                plaintext_orig,
+                plaintext_mult,
+                plaintext_add,
+            );
             match r {
                 Ok(()) => true,
                 Err(crate::common::InvalidProof::RangeCheckFailed(7)) => false,

@@ -300,14 +300,14 @@ pub mod non_interactive {
     {
         use rand_core::SeedableRng;
         let seed = shared_state
-            .chain_update(&aux.s.to_bytes())
-            .chain_update(&aux.t.to_bytes())
-            .chain_update(&aux.rsa_modulo.to_bytes())
-            .chain_update(&data.key.to_bytes())
-            .chain_update(&data.ciphertext.to_bytes())
-            .chain_update(&commitment.s.to_bytes())
-            .chain_update(&commitment.a.to_bytes())
-            .chain_update(&commitment.c.to_bytes())
+            .chain_update(aux.s.to_bytes())
+            .chain_update(aux.t.to_bytes())
+            .chain_update(aux.rsa_modulo.to_bytes())
+            .chain_update(data.key.to_bytes())
+            .chain_update(data.ciphertext.to_bytes())
+            .chain_update(commitment.s.to_bytes())
+            .chain_update(commitment.a.to_bytes())
+            .chain_update(commitment.c.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
         let m = BigNumber::from(2) * &security.q;
@@ -335,7 +335,11 @@ mod test {
     use crate::common::InvalidProof;
     use crate::unknown_order::BigNumber;
 
-    fn run_with<R: rand_core::RngCore>(rng: R, security: super::SecurityParams, plaintext: BigNumber) -> Result<(), crate::common::InvalidProof> {
+    fn run_with<R: rand_core::RngCore>(
+        rng: R,
+        security: super::SecurityParams,
+        plaintext: BigNumber,
+    ) -> Result<(), crate::common::InvalidProof> {
         let p = BigNumber::prime(1024);
         let q = BigNumber::prime(1024);
         let private_key = libpaillier::DecryptionKey::with_primes(&p, &q).unwrap();
@@ -362,14 +366,7 @@ mod test {
             &security,
             rng,
         );
-        super::non_interactive::verify(
-            shared_state,
-            &aux,
-            &data,
-            &commitment,
-            &security,
-            &proof,
-        )
+        super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
     }
 
     #[test]
