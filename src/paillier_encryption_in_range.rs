@@ -348,20 +348,19 @@ mod test {
     use crate::unknown_order::BigNumber;
 
     fn run_with<R: rand_core::RngCore>(
-        rng: R,
+        mut rng: R,
         security: super::SecurityParams,
         plaintext: BigNumber,
     ) -> Result<(), crate::common::InvalidProof> {
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
-        let private_key = libpaillier::DecryptionKey::with_primes(&p, &q).unwrap();
+        let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
-        let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
+        let nonce = crate::common::test::nonce(&mut rng, key.n());
+        let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), nonce).unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
+        let p = BigNumber::prime_from_rng(1024, &mut rng);
+        let q = BigNumber::prime_from_rng(1024, &mut rng);
         let rsa_modulo = p * q;
         let s: BigNumber = 123.into();
         let t: BigNumber = 321.into();
@@ -383,13 +382,14 @@ mod test {
 
     #[test]
     fn passing() {
+        let mut rng = rand_core::OsRng::default();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
-            q: BigNumber::prime(128),
+            q: BigNumber::prime_from_rng(128, &mut rng),
         };
         let plaintext = (BigNumber::one() << (security.l + 1)) - 1;
-        let r = run_with(rand_core::OsRng::default(), security, plaintext);
+        let r = run_with(rng, security, plaintext);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{:?}", e),
@@ -397,13 +397,14 @@ mod test {
     }
     #[test]
     fn failing() {
+        let mut rng = rand_core::OsRng::default();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
-            q: BigNumber::prime(128),
+            q: BigNumber::prime_from_rng(128, &mut rng),
         };
         let plaintext = (BigNumber::one() << (security.l + security.epsilon + 1)) + 1;
-        let r = run_with(rand_core::OsRng::default(), security, plaintext);
+        let r = run_with(rng, security, plaintext);
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(InvalidProof::RangeCheckFailed(_)) => (),
@@ -422,11 +423,11 @@ mod test {
         // artifact of distribution, so I decide to ignore it, and test that
         // there are passing and failing values.
 
-        fn maybe_rejected(rng: rand_chacha::ChaCha20Rng) -> bool {
+        fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
             let security = super::SecurityParams {
                 l: 512,
                 epsilon: 129,
-                q: BigNumber::prime(128),
+                q: BigNumber::prime_from_rng(128, &mut rng),
             };
             let plaintext: BigNumber = (BigNumber::one() << (security.l + 1)) - 1;
             let r = run_with(rng, security, plaintext);
@@ -438,9 +439,9 @@ mod test {
         }
 
         use rand_core::SeedableRng;
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(8);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
         assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(9);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
         assert!(!maybe_rejected(rng), "should fail");
     }
 }

@@ -391,17 +391,8 @@ mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
     use libpaillier::unknown_order::BigNumber;
 
+    use crate::common::test::{nonce, random_key};
     use crate::common::{convert_scalar, InvalidProof};
-
-    fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
-        let p = BigNumber::prime_from_rng(1024, rng);
-        let q = BigNumber::prime_from_rng(1024, rng);
-        libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
-    }
-
-    fn nonce<R: rand_core::RngCore>(rng: &mut R, n: &BigNumber) -> Option<BigNumber> {
-        Some(BigNumber::from_rng(n, rng))
-    }
 
     fn run<R: rand_core::RngCore, C: Curve>(
         mut rng: R,

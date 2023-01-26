@@ -61,7 +61,7 @@ pub enum ProtocolError {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use libpaillier::unknown_order::BigNumber;
 
     #[test]
@@ -74,5 +74,15 @@ mod test {
         let scalar1 = Scalar::from(number);
         let scalar2 = super::convert_scalar(&bignumber);
         assert_eq!(scalar1, scalar2);
+    }
+
+    pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
+        let p = BigNumber::prime_from_rng(1024, rng);
+        let q = BigNumber::prime_from_rng(1024, rng);
+        libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
+    }
+
+    pub fn nonce<R: rand_core::RngCore>(rng: &mut R, n: &BigNumber) -> Option<BigNumber> {
+        Some(BigNumber::from_rng(n, rng))
     }
 }
