@@ -276,9 +276,8 @@ pub mod interactive {
     /// Generate random challenge
     ///
     /// `data` parameter is used to generate challenge in correct range
-    pub fn challenge<C, R>(rng: &mut R, security: &SecurityParams) -> BigNumber
+    pub fn challenge<R>(rng: &mut R, security: &SecurityParams) -> BigNumber
     where
-        C: Curve,
         R: RngCore,
     {
         // double the range to account for +-
