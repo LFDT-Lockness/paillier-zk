@@ -30,3 +30,8 @@ gmp = ["libpaillier/gmp"]
 rust = ["libpaillier/rust"]
 
 serde = ["dep:serde", "generic-ec/serde"]
+
+[profile.dev.package.num-bigint]
+opt-level = 3
+[profile.dev.package.glass_pumpkin]
+opt-level = 3
