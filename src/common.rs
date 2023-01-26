@@ -49,6 +49,8 @@ pub enum InvalidProof {
     EncryptionFailed,
 }
 
+/// Unexpeted error that can happen in a protocol. You should probably panic if
+/// you see this.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     /// Encryption of supplied data failed when computing proof
