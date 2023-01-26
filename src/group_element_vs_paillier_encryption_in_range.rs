@@ -93,6 +93,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::unknown_order::BigNumber;
 
+/// Security parameters for proof. Choosing the values is a tradeoff between
+/// speed and chance of rejecting a valid proof or accepting an invalid proof
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
@@ -104,6 +106,7 @@ pub struct SecurityParams {
     pub q: BigNumber,
 }
 
+/// Public data that both parties know
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Data<C: Curve> {
@@ -117,6 +120,7 @@ pub struct Data<C: Curve> {
     pub g: Point<C>,
 }
 
+/// Private data of prover
 #[derive(Clone)]
 pub struct PrivateData {
     /// x in paper, logarithm of X and plaintext of C
@@ -125,6 +129,7 @@ pub struct PrivateData {
     pub nonce: Nonce,
 }
 
+/// Prover's first message, obtained by [`interactive::commit`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Commitment<C: Curve> {
@@ -134,6 +139,8 @@ pub struct Commitment<C: Curve> {
     pub d: BigNumber,
 }
 
+/// Prover's data accompanying the commitment. Kept as state between rounds in
+/// the interactive protocol.
 #[derive(Clone)]
 pub struct PrivateCommitment {
     pub alpha: BigNumber,
@@ -142,8 +149,12 @@ pub struct PrivateCommitment {
     pub gamma: BigNumber,
 }
 
+/// Verifier's challenge to prover. Can be obtained deterministically by
+/// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
 pub type Challenge = BigNumber;
 
+/// The ZK proof. Computed by [`interactive::prove`] or
+/// [`non_interactive::prove`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
@@ -154,6 +165,9 @@ pub struct Proof {
 
 pub use crate::common::Aux;
 
+/// The interactive version of the ZK proof. Should be completed in 3 rounds:
+/// prover commits to data, verifier responds with a random challenge, and
+/// prover gives proof with commitment and challenge.
 pub mod interactive {
     use generic_ec::Curve;
     use libpaillier::unknown_order::BigNumber;
@@ -286,6 +300,8 @@ pub mod interactive {
     }
 }
 
+/// The non-interactive version of proof. Completed in one round, for example
+/// see the documentation of parent module.
 pub mod non_interactive {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
     use libpaillier::unknown_order::BigNumber;

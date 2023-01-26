@@ -67,11 +67,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::unknown_order::BigNumber;
 
+/// Reason for failure. If the proof failes, you should only be interested in a
+/// reason for debugging purposes
 #[derive(Debug, PartialEq, Eq)]
 pub enum InvalidProof {
+    /// Paillier-Blum modulus is prime
     ModulusIsPrime,
+    /// Paillier-Blum modulus
     ModulusIsEven,
+    /// Proof's z value in n-th power does not equal commitment value
     IncorrectNthRoot,
+    /// Proof's x value in 4-th power does not equal commitment value
     IncorrectFourthRoot,
 }
 
@@ -89,7 +95,7 @@ pub struct PrivateData {
     pub q: BigNumber,
 }
 
-/// Prover's first message, obtained by `commit`
+/// Prover's first message, obtained by [`interactive::commit`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
@@ -97,7 +103,7 @@ pub struct Commitment {
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
-/// `challenge`
+/// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
 ///
 /// Consists of `M` singular challenges
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -105,6 +111,7 @@ pub struct Challenge<const M: usize> {
     pub ys: [BigNumber; M],
 }
 
+/// A part of proof. Having enough of those guarantees security
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProofPoint {
@@ -114,12 +121,16 @@ pub struct ProofPoint {
     pub z: BigNumber,
 }
 
-/// The ZK proof. Computed by `prove`. Consists of M proofs for each challenge
+/// The ZK proof. Computed by [`interactive::prove`] or
+/// [`non_interactive::prove`]. Consists of M proofs for each challenge
 #[derive(Debug, Clone)]
 pub struct Proof<const M: usize> {
     pub points: [ProofPoint; M],
 }
 
+/// The interactive version of the ZK proof. Should be completed in 3 rounds:
+/// prover commits to data, verifier responds with a random challenge, and
+/// prover gives proof with commitment and challenge.
 pub mod interactive {
     use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
@@ -187,6 +198,9 @@ pub mod interactive {
         Ok(())
     }
 
+    /// Generate random challenge
+    ///
+    /// `data` parameter is used to generate challenge in correct range
     pub fn challenge<const M: usize, R: RngCore>(
         Data { ref n }: &Data,
         rng: &mut R,
@@ -196,6 +210,8 @@ pub mod interactive {
     }
 }
 
+/// The non-interactive version of proof. Completed in one round, for example
+/// see the documentation of parent module.
 pub mod non_interactive {
     use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
@@ -222,6 +238,7 @@ pub mod non_interactive {
         (commitment, proof)
     }
 
+    /// Verify the proof, deriving challenge independently from same data
     pub fn verify<const M: usize, D>(
         shared_state: D,
         data: &Data,

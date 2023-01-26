@@ -144,6 +144,8 @@ use serde::{Deserialize, Serialize};
 pub use crate::common::InvalidProof;
 use crate::unknown_order::BigNumber;
 
+/// Security parameters for proof. Choosing the values is a tradeoff between
+/// speed and chance of rejecting a valid proof or accepting an invalid proof
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
@@ -189,7 +191,7 @@ pub struct PrivateData {
 }
 
 // As described in cggmp21 at page 35
-/// Prover's first message, obtained by `commit`
+/// Prover's first message, obtained by [`interactive::commit`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Commitment<C: Curve> {
@@ -217,10 +219,11 @@ pub struct PrivateCommitment {
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
-/// `challenge`
+/// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
 pub type Challenge = BigNumber;
 
-/// The ZK proof. Computed by `prove`
+/// The ZK proof. Computed by [`interactive::prove`] or
+/// [`non_interactive::prove`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
@@ -234,6 +237,9 @@ pub struct Proof {
 
 pub use crate::common::Aux;
 
+/// The interactive version of the ZK proof. Should be completed in 3 rounds:
+/// prover commits to data, verifier responds with a random challenge, and
+/// prover gives proof with commitment and challenge.
 pub mod interactive {
 
     use crate::unknown_order::BigNumber;
@@ -432,6 +438,8 @@ pub mod interactive {
     }
 }
 
+/// The non-interactive version of proof. Completed in one round, for example
+/// see the documentation of parent module.
 pub mod non_interactive {
 
     use crate::unknown_order::BigNumber;

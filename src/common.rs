@@ -38,7 +38,8 @@ pub fn convert_scalar<C: generic_ec::Curve>(x: &BigNumber) -> generic_ec::Scalar
     generic_ec::Scalar::<C>::from_be_bytes_mod_order(x.to_bytes())
 }
 
-/// Reason for failure. Mainly interesting for debugging purposes
+/// Reason for failure. If the proof failes, you should only be interested in a
+/// reason for debugging purposes
 #[derive(Debug, PartialEq, Eq)]
 pub enum InvalidProof {
     /// One equality doesn't hold. Parameterized by equality index
