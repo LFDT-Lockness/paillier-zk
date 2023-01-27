@@ -25,7 +25,13 @@ generic-ec-curves = { git = "https://github.com/dfns-labs/generic-ec", branch = 
 [features]
 default = ["rust"]
 gmp = ["libpaillier/gmp"]
-openssl = ["libpaillier/openssl"]
+# openssl random generation doesn't respect the rng supplied from rust, and so shouldn't be used
+#openssl = ["libpaillier/openssl"]
 rust = ["libpaillier/rust"]
 
 serde = ["dep:serde", "generic-ec/serde"]
+
+[profile.dev.package.num-bigint]
+opt-level = 3
+[profile.dev.package.glass_pumpkin]
+opt-level = 3

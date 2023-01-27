@@ -78,6 +78,8 @@ use serde::{Deserialize, Serialize};
 pub use crate::common::InvalidProof;
 use crate::unknown_order::BigNumber;
 
+/// Security parameters for proof. Choosing the values is a tradeoff between
+/// speed and chance of rejecting a valid proof or accepting an invalid proof
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
@@ -112,7 +114,7 @@ pub struct PrivateData {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-/// Prover's first message, obtained by `commit`
+/// Prover's first message, obtained by [`interactive::commit`]
 pub struct Commitment {
     pub s: BigNumber,
     pub t: BigNumber,
@@ -131,10 +133,11 @@ pub struct PrivateCommitment {
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
-/// `challenge`
+/// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
 pub type Challenge = BigNumber;
 
-/// The ZK proof. Computed by `prove`
+/// The ZK proof. Computed by [`interactive::prove`] or
+/// [`non_interactive::prove`]. Consists of M proofs for each challenge
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
@@ -145,6 +148,9 @@ pub struct Proof {
 
 pub use crate::common::Aux;
 
+/// The interactive version of the ZK proof. Should be completed in 3 rounds:
+/// prover commits to data, verifier responds with a random challenge, and
+/// prover gives proof with commitment and challenge.
 pub mod interactive {
     use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
@@ -163,8 +169,8 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment, PrivateCommitment), ProtocolError> {
-        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon);
-        let modulo_l = (BigNumber::one() << security.l) * &aux.rsa_modulo;
+        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon + 1);
+        let modulo_l = (BigNumber::one() << (security.l + 1)) * &aux.rsa_modulo;
         let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
         let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
@@ -188,7 +194,9 @@ pub mod interactive {
 
     /// Generate random challenge
     pub fn challenge<R: RngCore>(data: &Data, rng: &mut R) -> Challenge {
-        BigNumber::from_rng(&data.q, rng)
+        // double the range to account for +-
+        let m = BigNumber::from(2) * &data.q;
+        BigNumber::from_rng(&m, rng)
     }
 
     /// Compute proof for given data and prior protocol values
@@ -259,6 +267,8 @@ pub mod interactive {
     }
 }
 
+/// The non-interactive version of proof. Completed in one round, for example
+/// see the documentation of parent module.
 pub mod non_interactive {
     use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
@@ -301,22 +311,24 @@ pub mod non_interactive {
     {
         use rand_core::SeedableRng;
         let seed = shared_state
-            .chain_update(&aux.s.to_bytes())
-            .chain_update(&aux.t.to_bytes())
-            .chain_update(&aux.rsa_modulo.to_bytes())
-            .chain_update(&data.q.to_bytes())
-            .chain_update(&data.key.to_bytes())
-            .chain_update(&data.c.to_bytes())
-            .chain_update(&data.x.to_bytes())
-            .chain_update(&commitment.s.to_bytes())
-            .chain_update(&commitment.t.to_bytes())
-            .chain_update(&commitment.a.to_bytes())
-            .chain_update(&commitment.gamma.to_bytes())
+            .chain_update(aux.s.to_bytes())
+            .chain_update(aux.t.to_bytes())
+            .chain_update(aux.rsa_modulo.to_bytes())
+            .chain_update(data.q.to_bytes())
+            .chain_update(data.key.to_bytes())
+            .chain_update(data.c.to_bytes())
+            .chain_update(data.x.to_bytes())
+            .chain_update(commitment.s.to_bytes())
+            .chain_update(commitment.t.to_bytes())
+            .chain_update(commitment.a.to_bytes())
+            .chain_update(commitment.gamma.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        BigNumber::from_rng(&data.q, &mut rng)
+        let m = BigNumber::from(2) * &data.q;
+        BigNumber::from_rng(&m, &mut rng)
     }
 
+    /// Verify the proof, deriving challenge independently from same data
     pub fn verify<D>(
         shared_state: D,
         aux: &Aux,
@@ -492,4 +504,10 @@ mod test {
             panic!("proof should not pass");
         }
     }
+
+    // Following motivation outlined in
+    // [crate::paillier_encryption_in_range::test::rejected_with_probability_1_over_2],
+    // I would like to make a similar borderline test, but no security estimate
+    // was given in the paper and this proof differs significantly from others
+    // in this library, so I have to omit the test.
 }

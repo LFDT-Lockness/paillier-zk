@@ -38,7 +38,8 @@ pub fn convert_scalar<C: generic_ec::Curve>(x: &BigNumber) -> generic_ec::Scalar
     generic_ec::Scalar::<C>::from_be_bytes_mod_order(x.to_bytes())
 }
 
-/// Reason for failure. Mainly interesting for debugging purposes
+/// Reason for failure. If the proof failes, you should only be interested in a
+/// reason for debugging purposes
 #[derive(Debug, PartialEq, Eq)]
 pub enum InvalidProof {
     /// One equality doesn't hold. Parameterized by equality index
@@ -49,6 +50,8 @@ pub enum InvalidProof {
     EncryptionFailed,
 }
 
+/// Unexpeted error that can happen in a protocol. You should probably panic if
+/// you see this.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     /// Encryption of supplied data failed when computing proof
@@ -58,7 +61,7 @@ pub enum ProtocolError {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use libpaillier::unknown_order::BigNumber;
 
     #[test]
@@ -71,5 +74,15 @@ mod test {
         let scalar1 = Scalar::from(number);
         let scalar2 = super::convert_scalar(&bignumber);
         assert_eq!(scalar1, scalar2);
+    }
+
+    pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
+        let p = BigNumber::prime_from_rng(1024, rng);
+        let q = BigNumber::prime_from_rng(1024, rng);
+        libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
+    }
+
+    pub fn nonce<R: rand_core::RngCore>(rng: &mut R, n: &BigNumber) -> Option<BigNumber> {
+        Some(BigNumber::from_rng(n, rng))
     }
 }
