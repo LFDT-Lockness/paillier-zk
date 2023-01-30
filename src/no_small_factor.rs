@@ -289,7 +289,7 @@ mod test {
             epsilon: 128,
             q: BigNumber::prime_from_rng(128, &mut rng),
         };
-        let aux = aux();
+        let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
         let (comm, proof) = super::non_interactive::prove(
             shared_state.clone(),
@@ -319,7 +319,7 @@ mod test {
             epsilon: 128,
             q: BigNumber::prime_from_rng(128, &mut rng),
         };
-        let aux = aux();
+        let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
         let (comm, proof) = super::non_interactive::prove(
             shared_state.clone(),
@@ -371,16 +371,5 @@ mod test {
             assert_ne!(count, 0);
         }
         low
-    }
-
-    fn aux() -> super::Aux {
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        super::Aux { s, t, rsa_modulo }
     }
 }

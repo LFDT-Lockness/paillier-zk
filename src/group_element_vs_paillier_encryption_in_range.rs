@@ -421,14 +421,7 @@ mod test {
             nonce,
         };
 
-        let p = BigNumber::prime_from_rng(1024, &mut rng);
-        let q = BigNumber::prime_from_rng(1024, &mut rng);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        let aux = super::Aux { s, t, rsa_modulo };
+        let aux = crate::common::test::aux(&mut rng);
 
         let shared_state = sha2::Sha256::default();
 

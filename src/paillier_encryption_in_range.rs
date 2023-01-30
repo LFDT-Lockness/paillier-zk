@@ -352,21 +352,13 @@ mod test {
         security: super::SecurityParams,
         plaintext: BigNumber,
     ) -> Result<(), crate::common::InvalidProof> {
+        let aux = crate::common::test::aux(&mut rng);
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
         let nonce = crate::common::test::nonce(&mut rng, key.n());
         let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), nonce).unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
-
-        let p = BigNumber::prime_from_rng(1024, &mut rng);
-        let q = BigNumber::prime_from_rng(1024, &mut rng);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        let aux = super::Aux { s, t, rsa_modulo };
 
         let shared_state = sha2::Sha256::default();
         let (commitment, proof) = super::non_interactive::prove(

@@ -350,6 +350,10 @@ mod test {
 
     #[test]
     fn passing_test() {
+        let mut rng = rand_core::OsRng::default();
+
+        let aux = crate::common::test::aux(&mut rng);
+
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
@@ -374,15 +378,6 @@ mod test {
             nonce,
         };
 
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        let aux = super::Aux { s, t, rsa_modulo };
-
         let shared_state = sha2::Sha256::default();
 
         let (commitment, proof) = super::non_interactive::prove(
@@ -391,7 +386,7 @@ mod test {
             &data,
             &pdata,
             &security,
-            rand_core::OsRng::default(),
+            rng,
         )
         .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
@@ -403,6 +398,10 @@ mod test {
 
     #[test]
     fn failing_wrong_hidden() {
+        let mut rng = rand_core::OsRng::default();
+
+        let aux = crate::common::test::aux(&mut rng);
+
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
@@ -427,15 +426,6 @@ mod test {
             nonce,
         };
 
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        let aux = super::Aux { s, t, rsa_modulo };
-
         let shared_state = sha2::Sha256::default();
 
         let (commitment, proof) = super::non_interactive::prove(
@@ -444,7 +434,7 @@ mod test {
             &data,
             &pdata,
             &security,
-            rand_core::OsRng::default(),
+            rng,
         )
         .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
@@ -455,6 +445,10 @@ mod test {
 
     #[test]
     fn failing_wrong_plain() {
+        let mut rng = rand_core::OsRng::default();
+
+        let aux = crate::common::test::aux(&mut rng);
+
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
@@ -479,15 +473,6 @@ mod test {
             nonce,
         };
 
-        let p = BigNumber::prime(1024);
-        let q = BigNumber::prime(1024);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        let aux = super::Aux { s, t, rsa_modulo };
-
         let shared_state = sha2::Sha256::default();
 
         let (commitment, proof) = super::non_interactive::prove(
@@ -496,7 +481,7 @@ mod test {
             &data,
             &pdata,
             &security,
-            rand_core::OsRng::default(),
+            rng,
         )
         .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, &data, &commitment, &proof);
