@@ -144,8 +144,7 @@ pub struct Commitment {
 /// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
 pub type Challenge = BigNumber;
 
-/// The ZK proof. Computed by [`interactive::prove`] or
-/// [`non_interactive::prove`]. Consists of M proofs for each challenge
+/// The ZK proof, computed by [`interactive::prove`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
@@ -315,6 +314,7 @@ pub mod non_interactive {
 
     pub use super::{Aux, Challenge, Data, PrivateData, SecurityParams};
 
+    /// The ZK proof, computed by [`prove`]
     #[derive(Debug, Clone)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct Proof {
@@ -402,7 +402,7 @@ mod test {
     use crate::unknown_order::BigNumber;
 
     // If q > 2^epsilon, the proof will never pass. We can make l however small
-    // we wish though, provided the statement we want to proof holds
+    // we wish though, provided the statement we want to prove holds
 
     #[test]
     fn passing() {
