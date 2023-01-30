@@ -1,4 +1,82 @@
-/// Пfac
+//! ZK-proof for factoring of a RSA modulus. Called Пfac or Rfac in the CGGMP23
+//! paper.
+//!
+//! ## Description
+//!
+//! A party P has a modulus `N = pq`. P wants to prove to a verifier V that p
+//! and q are sufficiently large, each no smaller than `sqrt(N) * 2^l`, without
+//! disclosing p or q.
+//!
+//! ## Example
+//!
+//! ```no_run
+//! # use paillier_zk::unknown_order::BigNumber;
+//! # fn sqrt(x: &BigNumber) -> BigNumber { todo!() }
+//! use paillier_zk::no_small_factor::non_interactive as p;
+//! let shared_state_prover = sha2::Sha256::default();
+//! let shared_state_verifier = sha2::Sha256::default();
+//! let mut rng = rand_core::OsRng::default();
+//!
+//! // 0. Setup: prover and verifier share common Ring-Pedersen parameters, and
+//! // agree on the level of security
+//!
+//! let p = BigNumber::prime(1024);
+//! let q = BigNumber::prime(1024);
+//! let rsa_modulo = p * q;
+//! let s: BigNumber = 123.into();
+//! let t: BigNumber = 321.into();
+//! assert_eq!(s.gcd(&rsa_modulo), 1.into());
+//! assert_eq!(t.gcd(&rsa_modulo), 1.into());
+//!
+//! let aux = p::Aux { s, t, rsa_modulo };
+//!
+//! let security = p::SecurityParams {
+//!     l: 4,
+//!     epsilon: 128,
+//!     q: BigNumber::prime_from_rng(128, &mut rng),
+//! };
+//!
+//! // 1. Prover prepares the data to obtain proof about
+//!
+//! let p = BigNumber::prime_from_rng(256, &mut rng);
+//! let q = BigNumber::prime_from_rng(256, &mut rng);
+//! let n = &p * &q;
+//! let n_root = sqrt(&n);
+//! let data = p::Data {
+//!     n: &n,
+//!     n_root: &n_root,
+//! };
+//!
+//! // 2. Prover computes a non-interactive proof that both factors are small
+//!
+//! let proof = p::prove(
+//!     shared_state_prover,
+//!     &aux,
+//!     data,
+//!     p::PrivateData { p: &p, q: &q },
+//!     &security,
+//!     rng,
+//! );
+//!
+//! // 4. Prover sends this data to verifier
+//!
+//! # fn send(_: &BigNumber, _: &p::Proof) { todo!() }
+//! # fn recv() -> (BigNumber, p::Proof) { todo!() }
+//! send(data.n, &proof);
+//!
+//! // 5. Verifier receives the data and the proof and verifies it
+//!
+//! let (n, proof) = recv();
+//! let n_root = sqrt(&n);
+//! let data = p::Data {
+//!     n: &n,
+//!     n_root: &n_root,
+//! };
+//! p::verify(shared_state_verifier, &aux, data, &security, &proof);
+//! ```
+//!
+//! If the verification succeeded, verifier can continue communication with prover
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +98,7 @@ pub struct SecurityParams {
     pub q: BigNumber,
 }
 
+/// Public data that both parties know
 #[derive(Debug, Clone, Copy)]
 pub struct Data<'a> {
     /// N0 - rsa modulus
@@ -28,12 +107,15 @@ pub struct Data<'a> {
     pub n_root: &'a BigNumber,
 }
 
+/// Private data of prover
 #[derive(Debug, Clone, Copy)]
 pub struct PrivateData<'a> {
     pub p: &'a BigNumber,
     pub q: &'a BigNumber,
 }
 
+/// Prover's data accompanying the commitment. Kept as state between rounds in
+/// the interactive protocol.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PrivateCommitment {
@@ -46,6 +128,7 @@ pub struct PrivateCommitment {
     pub y: BigNumber,
 }
 
+/// Prover's first message, obtained by [`interactive::commit`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
@@ -57,8 +140,12 @@ pub struct Commitment {
     pub sigma: BigNumber,
 }
 
+/// Verifier's challenge to prover. Can be obtained deterministically by
+/// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
 pub type Challenge = BigNumber;
 
+/// The ZK proof. Computed by [`interactive::prove`] or
+/// [`non_interactive::prove`]. Consists of M proofs for each challenge
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
@@ -224,9 +311,16 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::common::{InvalidProof, ProtocolError};
+    pub use crate::common::{InvalidProof, ProtocolError};
 
-    use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
+    pub use super::{Aux, Challenge, Data, PrivateData, SecurityParams};
+
+    #[derive(Debug, Clone)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub struct Proof {
+        commitment: super::Commitment,
+        proof: super::Proof,
+    }
 
     /// Compute proof for the given data, producing random commitment and
     /// deriving determenistic challenge.
@@ -239,14 +333,14 @@ pub mod non_interactive {
         pdata: PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Result<(Commitment, Proof), ProtocolError>
+    ) -> Proof
     where
         D: Digest<OutputSize = U32>,
     {
-        let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng);
-        let challenge = challenge(shared_state, aux, data, &comm, security);
-        let proof = super::interactive::prove(pdata, &comm, &pcomm, &challenge);
-        Ok((comm, proof))
+        let (commitment, pcomm) = super::interactive::commit(aux, data, pdata, security, rng);
+        let challenge = challenge(shared_state, aux, data, &commitment, security);
+        let proof = super::interactive::prove(pdata, &commitment, &pcomm, &challenge);
+        Proof { commitment, proof }
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
@@ -254,7 +348,7 @@ pub mod non_interactive {
         shared_state: D,
         aux: &Aux,
         data: Data,
-        commitment: &Commitment,
+        commitment: &super::Commitment,
         security: &SecurityParams,
     ) -> Challenge
     where
@@ -284,15 +378,21 @@ pub mod non_interactive {
         shared_state: D,
         aux: &Aux,
         data: Data,
-        commitment: &Commitment,
         security: &SecurityParams,
         proof: &Proof,
     ) -> Result<(), InvalidProof>
     where
         D: Digest<OutputSize = U32>,
     {
-        let challenge = challenge(shared_state, aux, data, commitment, security);
-        super::interactive::verify(aux, data, commitment, security, &challenge, proof)
+        let challenge = challenge(shared_state, aux, data, &proof.commitment, security);
+        super::interactive::verify(
+            aux,
+            data,
+            &proof.commitment,
+            security,
+            &challenge,
+            &proof.proof,
+        )
     }
 }
 
@@ -322,16 +422,15 @@ mod test {
         };
         let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
-        let (comm, proof) = super::non_interactive::prove(
+        let proof = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             data,
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        )
-        .unwrap();
-        let r = super::non_interactive::verify(shared_state, &aux, data, &comm, &security, &proof);
+        );
+        let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
         match r {
             Ok(()) => (),
             Err(e) => panic!("Proof should not fail with {:?}", e),
@@ -356,16 +455,15 @@ mod test {
         };
         let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
-        let (comm, proof) = super::non_interactive::prove(
+        let proof = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
             data,
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        )
-        .unwrap();
-        let r = super::non_interactive::verify(shared_state, &aux, data, &comm, &security, &proof);
+        );
+        let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
         match r {
             Ok(()) => panic!("Proof should not pass"),
             Err(InvalidProof::RangeCheckFailed(2)) => (),

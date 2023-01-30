@@ -12,7 +12,6 @@
 //! ```no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_decryption_modulo_q as p;
-//! use generic_ec::hash_to_curve::Tag;
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
 //! let mut rng = rand_core::OsRng::default();
@@ -26,7 +25,6 @@
 //! let t: BigNumber = 321.into();
 //! assert_eq!(s.gcd(&rsa_modulo), 1.into());
 //! assert_eq!(t.gcd(&rsa_modulo), 1.into());
-//! let security_prime = BigNumber::prime(256);
 //!
 //! let aux = p::Aux { s, t, rsa_modulo };
 //!
