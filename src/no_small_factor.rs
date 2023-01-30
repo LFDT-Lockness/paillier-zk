@@ -72,11 +72,12 @@ pub struct Proof {
 pub use crate::common::Aux;
 
 pub mod interactive {
-    use crate::{unknown_order::BigNumber, common::combine};
+    use crate::{common::combine, unknown_order::BigNumber};
     use rand_core::RngCore;
 
     use super::{
-        Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams, InvalidProof,
+        Aux, Challenge, Commitment, Data, InvalidProof, PrivateCommitment, PrivateData, Proof,
+        SecurityParams,
     };
 
     /// Create random commitment
@@ -99,8 +100,8 @@ pub mod interactive {
         let beta = BigNumber::from_rng(&n_root_modulo, &mut rng);
         let mu = BigNumber::from_rng(&l_n_circ_modulo, &mut rng);
         let nu = BigNumber::from_rng(&l_n_circ_modulo, &mut rng);
-        let sigma = BigNumber::from_rng(&( &two_to_l * &n_n_circ ), &mut rng);
-        let r = BigNumber::from_rng(&( &two_to_l_plus_e * &n_n_circ ), &mut rng);
+        let sigma = BigNumber::from_rng(&(&two_to_l * &n_n_circ), &mut rng);
+        let r = BigNumber::from_rng(&(&two_to_l_plus_e * &n_n_circ), &mut rng);
         let x = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
         let y = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
 
@@ -110,8 +111,23 @@ pub mod interactive {
         let b = combine(&aux.s, &beta, &aux.t, &y, &aux.rsa_modulo);
         let t = combine(&q, &alpha, &aux.t, &r, &aux.rsa_modulo);
 
-        let commitment = Commitment { p, q, a, b, t, sigma };
-        let private_commitment = PrivateCommitment { alpha, beta, mu, nu, r, x, y };
+        let commitment = Commitment {
+            p,
+            q,
+            a,
+            b,
+            t,
+            sigma,
+        };
+        let private_commitment = PrivateCommitment {
+            alpha,
+            beta,
+            mu,
+            nu,
+            r,
+            x,
+            y,
+        };
         (commitment, private_commitment)
     }
 
@@ -155,7 +171,13 @@ pub mod interactive {
         // check 1
         {
             let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.w1, &aux.rsa_modulo);
-            let rhs = combine(&commitment.a, &one, &commitment.p, challenge, &aux.rsa_modulo);
+            let rhs = combine(
+                &commitment.a,
+                &one,
+                &commitment.p,
+                challenge,
+                &aux.rsa_modulo,
+            );
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(1));
             }
@@ -163,7 +185,13 @@ pub mod interactive {
         // check 2
         {
             let lhs = combine(&aux.s, &proof.z2, &aux.t, &proof.w2, &aux.rsa_modulo);
-            let rhs = combine(&commitment.b, &one, &commitment.q, challenge, &aux.rsa_modulo);
+            let rhs = combine(
+                &commitment.b,
+                &one,
+                &commitment.q,
+                challenge,
+                &aux.rsa_modulo,
+            );
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(2));
             }
@@ -283,7 +311,10 @@ mod test {
         let q = BigNumber::prime_from_rng(256, &mut rng);
         let n = &p * &q;
         let n_root = sqrt(&n);
-        let data = super::Data { n: &n, n_root: &n_root };
+        let data = super::Data {
+            n: &n,
+            n_root: &n_root,
+        };
         let security = super::SecurityParams {
             l: 4,
             epsilon: 128,
@@ -298,7 +329,8 @@ mod test {
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        ).unwrap();
+        )
+        .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, data, &comm, &security, &proof);
         match r {
             Ok(()) => (),
@@ -313,7 +345,10 @@ mod test {
         let q = BigNumber::prime_from_rng(384, &mut rng);
         let n = &p * &q;
         let n_root = sqrt(&n);
-        let data = super::Data { n: &n, n_root: &n_root };
+        let data = super::Data {
+            n: &n,
+            n_root: &n_root,
+        };
         let security = super::SecurityParams {
             l: 4,
             epsilon: 128,
@@ -328,7 +363,8 @@ mod test {
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        ).unwrap();
+        )
+        .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, data, &comm, &security, &proof);
         match r {
             Ok(()) => panic!("Proof should not pass"),
