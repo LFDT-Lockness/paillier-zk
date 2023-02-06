@@ -1,11 +1,12 @@
-//! ZK-proof for factoring of a RSA modulus. Called Пfac or Rfac in the CGGMP23
+//! ZK-proof for factoring of a RSA modulus. Called Пfac or Rfac in the CGGMP21
 //! paper.
 //!
 //! ## Description
 //!
 //! A party P has a modulus `N = pq`. P wants to prove to a verifier V that p
-//! and q are sufficiently large, each no smaller than `sqrt(N) * 2^l`, without
-//! disclosing p or q.
+//! and q are sufficiently large without disclosing p or q, with p and q each no
+//! larger than `sqrt(N) * 2^(l+1)`, or equivalently no smaller than `sqrt(N) /
+//! 2^(l+1)`
 //!
 //! ## Example
 //!
