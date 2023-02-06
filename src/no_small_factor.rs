@@ -434,7 +434,7 @@ mod test {
         let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
         match r {
             Ok(()) => (),
-            Err(e) => panic!("Proof should not fail with {:?}", e),
+            Err(e) => panic!("Proof should not fail with {e:?}"),
         }
     }
 
@@ -468,7 +468,7 @@ mod test {
         match r {
             Ok(()) => panic!("Proof should not pass"),
             Err(InvalidProof::RangeCheckFailed(2)) => (),
-            Err(e) => panic!("Proof should not fail with {:?}", e),
+            Err(e) => panic!("Proof should not fail with {e:?}"),
         }
     }
 

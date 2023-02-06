@@ -384,7 +384,7 @@ mod test {
         let r = run_with(rng, security, plaintext);
         match r {
             Ok(()) => (),
-            Err(e) => panic!("{:?}", e),
+            Err(e) => panic!("{e:?}"),
         }
     }
     #[test]
@@ -400,7 +400,7 @@ mod test {
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(InvalidProof::RangeCheckFailed(_)) => (),
-            Err(e) => panic!("proof should not fail with {:?}", e),
+            Err(e) => panic!("proof should not fail with {e:?}"),
         }
     }
 
@@ -426,7 +426,7 @@ mod test {
             match r {
                 Ok(()) => true,
                 Err(InvalidProof::RangeCheckFailed(_)) => false,
-                Err(e) => panic!("proof should not fail with {:?}", e),
+                Err(e) => panic!("proof should not fail with {e:?}"),
             }
         }
 

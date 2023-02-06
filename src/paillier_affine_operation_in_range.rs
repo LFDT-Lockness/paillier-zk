@@ -623,7 +623,7 @@ mod test {
         let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
         match r {
             Ok(()) => (),
-            Err(e) => panic!("{:?}", e),
+            Err(e) => panic!("{e:?}"),
         }
     }
 
@@ -645,7 +645,7 @@ mod test {
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(crate::common::InvalidProof::RangeCheckFailed(7)) => (),
-            Err(e) => panic!("proof should not fail with: {:?}", e),
+            Err(e) => panic!("proof should not fail with: {e:?}"),
         }
     }
 
@@ -667,7 +667,7 @@ mod test {
         match r {
             Ok(()) => panic!("proof should not pass"),
             Err(crate::common::InvalidProof::RangeCheckFailed(6)) => (),
-            Err(e) => panic!("proof should not fail with: {:?}", e),
+            Err(e) => panic!("proof should not fail with: {e:?}"),
         }
     }
 
@@ -724,7 +724,7 @@ mod test {
             match r {
                 Ok(()) => true,
                 Err(crate::common::InvalidProof::RangeCheckFailed(6)) => false,
-                Err(e) => panic!("proof should not fail with: {:?}", e),
+                Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }
 
@@ -757,7 +757,7 @@ mod test {
             match r {
                 Ok(()) => true,
                 Err(crate::common::InvalidProof::RangeCheckFailed(7)) => false,
-                Err(e) => panic!("proof should not fail with: {:?}", e),
+                Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }
 

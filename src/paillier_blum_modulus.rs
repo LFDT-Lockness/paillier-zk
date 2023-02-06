@@ -301,7 +301,7 @@ mod test {
         let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
         match r {
             Ok(()) => (),
-            Err(e) => panic!("{:?}", e),
+            Err(e) => panic!("{e:?}"),
         }
     }
 
