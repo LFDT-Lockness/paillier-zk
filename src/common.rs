@@ -85,4 +85,15 @@ pub mod test {
     pub fn nonce<R: rand_core::RngCore>(rng: &mut R, n: &BigNumber) -> Option<BigNumber> {
         Some(BigNumber::from_rng(n, rng))
     }
+
+    pub fn aux<R: rand_core::RngCore>(rng: &mut R) -> super::Aux {
+        let p = BigNumber::prime_from_rng(1024, rng);
+        let q = BigNumber::prime_from_rng(1024, rng);
+        let rsa_modulo = p * q;
+        let s: BigNumber = 123.into();
+        let t: BigNumber = 321.into();
+        assert_eq!(s.gcd(&rsa_modulo), 1.into());
+        assert_eq!(t.gcd(&rsa_modulo), 1.into());
+        super::Aux { s, t, rsa_modulo }
+    }
 }

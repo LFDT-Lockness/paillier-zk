@@ -286,8 +286,8 @@ mod test {
     #[test]
     fn passing() {
         let mut rng = rand_core::OsRng::default();
-        let p = blum_prime(256);
-        let q = blum_prime(256);
+        let p = blum_prime(256, &mut rng);
+        let q = blum_prime(256, &mut rng);
         let n = &p * &q;
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
@@ -301,17 +301,17 @@ mod test {
         let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
         match r {
             Ok(()) => (),
-            Err(e) => panic!("{:?}", e),
+            Err(e) => panic!("{e:?}"),
         }
     }
 
     #[test]
     fn failing() {
         let mut rng = rand_core::OsRng::default();
-        let p = BigNumber::prime(256);
+        let p = BigNumber::prime_from_rng(256, &mut rng);
         let q = loop {
             // non blum prime
-            let q = BigNumber::prime(256);
+            let q = BigNumber::prime_from_rng(256, &mut rng);
             if &q % 4 == BigNumber::one() {
                 break q;
             }
@@ -332,10 +332,10 @@ mod test {
         }
     }
 
-    fn blum_prime(s: usize) -> BigNumber {
+    fn blum_prime<R: rand_core::RngCore>(s: usize, rng: &mut R) -> BigNumber {
         let three = BigNumber::from(3);
         loop {
-            let p = BigNumber::prime(s);
+            let p = BigNumber::prime_from_rng(s, rng);
             if &p % 4 == three {
                 break p;
             }
