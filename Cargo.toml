@@ -19,7 +19,6 @@ zeroize = { version = "1.5", default-features = false }
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
-rand_core = { version = "0.6", default-features = false }
 generic-ec-curves = { git = "https://github.com/dfns-labs/generic-ec", branch = "d", features = ["secp256r1"] }
 rand_dev = { version = "0.1.0", default-features = false }
 
