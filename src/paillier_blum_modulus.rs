@@ -285,7 +285,7 @@ mod test {
 
     #[test]
     fn passing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let p = blum_prime(256, &mut rng);
         let q = blum_prime(256, &mut rng);
         let n = &p * &q;
@@ -307,7 +307,7 @@ mod test {
 
     #[test]
     fn failing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let p = BigNumber::prime_from_rng(256, &mut rng);
         let q = loop {
             // non blum prime

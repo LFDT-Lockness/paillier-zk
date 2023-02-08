@@ -428,6 +428,7 @@ dependencies = [
  "libpaillier",
  "rand_chacha",
  "rand_core",
+ "rand_dev",
  "serde",
  "sha2",
  "subtle",
@@ -505,6 +506,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom",
+]
+
+[[package]]
+name = "rand_dev"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5c0cba528828fd18b862d32335d9e1ad592f10555f87a97a5046ff0f3a88fd2"
+dependencies = [
+ "hex",
+ "rand_chacha",
+ "rand_core",
 ]
 
 [[package]]

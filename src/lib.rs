@@ -1,3 +1,5 @@
+#![deny(clippy::disallowed_methods)]
+
 mod common;
 pub mod group_element_vs_paillier_encryption_in_range;
 pub mod no_small_factor;

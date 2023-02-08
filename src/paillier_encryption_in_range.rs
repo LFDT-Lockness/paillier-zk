@@ -153,7 +153,7 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::unknown_order::BigNumber;
+    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
     use crate::common::{combine, gen_inversible, InvalidProof};
@@ -223,8 +223,8 @@ pub mod interactive {
     ) -> Result<(), InvalidProof> {
         // check 1
         let pt = &proof.z1 % data.key.n();
-        match data.key.encrypt(pt.to_bytes(), Some(proof.z2.clone())) {
-            Some((cipher, _nonce)) => {
+        match data.key.encrypt_with(pt.to_bytes(), proof.z2.clone()) {
+            Some(cipher) => {
                 if cipher
                     != commitment.a.modmul(
                         &data.ciphertext.modpow(challenge, data.key.nn()),
@@ -344,7 +344,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::InvalidProof;
+    use crate::common::{InvalidProof, SafePaillierExt};
     use crate::unknown_order::BigNumber;
 
     fn run_with<R: rand_core::RngCore>(
@@ -355,8 +355,9 @@ mod test {
         let aux = crate::common::test::aux(&mut rng);
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
-        let nonce = crate::common::test::nonce(&mut rng, key.n());
-        let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), nonce).unwrap();
+        let (ciphertext, nonce) = key
+            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
+            .unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 
@@ -374,7 +375,7 @@ mod test {
 
     #[test]
     fn passing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
@@ -389,7 +390,7 @@ mod test {
     }
     #[test]
     fn failing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,

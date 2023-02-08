@@ -150,7 +150,7 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::unknown_order::BigNumber;
+    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
     use crate::common::{combine, InvalidProof, ProtocolError};
@@ -177,7 +177,7 @@ pub mod interactive {
 
         let (a, r) = data
             .key
-            .encrypt(alpha.to_bytes(), None)
+            .encrypt_with_random(alpha.to_bytes(), &mut rng)
             .ok_or(ProtocolError::EncryptionFailed)?;
 
         let commitment = Commitment {
@@ -235,9 +235,9 @@ pub mod interactive {
         }
         // Three equality checks
         {
-            let (lhs, _) = data
+            let lhs = data
                 .key
-                .encrypt(proof.z1.to_bytes(), Some(proof.w.clone()))
+                .encrypt_with(proof.z1.to_bytes(), proof.w.clone())
                 .ok_or(InvalidProof::EncryptionFailed)?;
             let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key.nn());
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
@@ -346,9 +346,11 @@ pub mod non_interactive {
 mod test {
     use libpaillier::unknown_order::BigNumber;
 
+    use crate::common::SafePaillierExt;
+
     #[test]
     fn passing_test() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
 
         let aux = crate::common::test::aux(&mut rng);
 
@@ -356,14 +358,16 @@ mod test {
             l: 1024,
             epsilon: 128,
         };
-        let private_key0 = libpaillier::DecryptionKey::random().unwrap();
+        let private_key0 = crate::common::test::random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
         let plaintext = BigNumber::from(28);
         let hiddentext = BigNumber::from(228);
         let modulo = BigNumber::from(100);
         assert_eq!(&plaintext % &modulo, &hiddentext % &modulo);
-        let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
+        let (ciphertext, nonce) = key0
+            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
+            .unwrap();
 
         let data = super::Data {
             q: modulo,
@@ -396,7 +400,7 @@ mod test {
 
     #[test]
     fn failing_wrong_hidden() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
 
         let aux = crate::common::test::aux(&mut rng);
 
@@ -404,14 +408,16 @@ mod test {
             l: 1024,
             epsilon: 128,
         };
-        let private_key0 = libpaillier::DecryptionKey::random().unwrap();
+        let private_key0 = crate::common::test::random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
         let plaintext = BigNumber::from(28);
         let hiddentext = BigNumber::from(322);
         let modulo = BigNumber::from(100);
         assert_ne!(&plaintext % &modulo, &hiddentext % &modulo);
-        let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
+        let (ciphertext, nonce) = key0
+            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
+            .unwrap();
 
         let data = super::Data {
             q: modulo,
@@ -443,7 +449,7 @@ mod test {
 
     #[test]
     fn failing_wrong_plain() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
 
         let aux = crate::common::test::aux(&mut rng);
 
@@ -451,14 +457,16 @@ mod test {
             l: 1024,
             epsilon: 128,
         };
-        let private_key0 = libpaillier::DecryptionKey::random().unwrap();
+        let private_key0 = crate::common::test::random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
         let wrong_plaintext = BigNumber::from(42);
         let plaintext = BigNumber::from(28);
         let hiddentext = BigNumber::from(228);
         let modulo = BigNumber::from(100);
-        let (ciphertext, nonce) = key0.encrypt(wrong_plaintext.to_bytes(), None).unwrap();
+        let (ciphertext, nonce) = key0
+            .encrypt_with_random(wrong_plaintext.to_bytes(), &mut rng)
+            .unwrap();
 
         let data = super::Data {
             q: modulo,

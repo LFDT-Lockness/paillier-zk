@@ -1,0 +1,7 @@
+disallowed-methods = [
+    "libpaillier::unknown_order::BigNumber::random",
+    "libpaillier::unknown_order::BigNumber::prime",
+    "libpaillier::unknown_order::BigNumber::safe_prime",
+    "libpaillier::DecryptionKey::random",
+    "libpaillier::EncryptionKey::encrypt",
+]
