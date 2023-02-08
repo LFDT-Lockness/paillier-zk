@@ -60,6 +60,42 @@ pub enum ProtocolError {
     HashFailed,
 }
 
+/// Regular paillier encryption methods are easy to misuse and generate
+/// an undeterministic nonce, we replace them with those functions
+pub trait SafePaillierExt {
+    fn encrypt_with<M: AsRef<[u8]>>(
+        &self,
+        x: M,
+        nonce: libpaillier::Nonce,
+    ) -> Option<libpaillier::Ciphertext>;
+    fn encrypt_with_random<M: AsRef<[u8]>, R: rand_core::RngCore>(
+        &self,
+        x: M,
+        rng: &mut R,
+    ) -> Option<(libpaillier::Ciphertext, libpaillier::Nonce)>;
+}
+
+impl SafePaillierExt for libpaillier::EncryptionKey {
+    fn encrypt_with<M: AsRef<[u8]>>(
+        &self,
+        x: M,
+        nonce: libpaillier::Nonce,
+    ) -> Option<libpaillier::Ciphertext> {
+        #[allow(clippy::disallowed_methods)]
+        self.encrypt(x, Some(nonce)).map(|(e, _)| e)
+    }
+
+    fn encrypt_with_random<M: AsRef<[u8]>, R: rand_core::RngCore>(
+        &self,
+        x: M,
+        rng: &mut R,
+    ) -> Option<(libpaillier::Ciphertext, libpaillier::Nonce)> {
+        let nonce = libpaillier::Nonce::from_rng(self.n(), rng);
+        #[allow(clippy::disallowed_methods)]
+        self.encrypt(x, Some(nonce))
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use libpaillier::unknown_order::BigNumber;
@@ -80,10 +116,6 @@ pub mod test {
         let p = BigNumber::prime_from_rng(1024, rng);
         let q = BigNumber::prime_from_rng(1024, rng);
         libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
-    }
-
-    pub fn nonce<R: rand_core::RngCore>(rng: &mut R, n: &BigNumber) -> Option<BigNumber> {
-        Some(BigNumber::from_rng(n, rng))
     }
 
     pub fn aux<R: rand_core::RngCore>(rng: &mut R) -> super::Aux {

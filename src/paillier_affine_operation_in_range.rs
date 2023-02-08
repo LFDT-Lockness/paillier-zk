@@ -242,7 +242,7 @@ pub use crate::common::Aux;
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
 
-    use crate::unknown_order::BigNumber;
+    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use generic_ec::{Curve, Point};
     use rand_core::RngCore;
 
@@ -277,9 +277,8 @@ pub mod interactive {
 
         let a_add = data
             .key0
-            .encrypt(beta.to_bytes(), Some(r.clone()))
-            .ok_or(ProtocolError::EncryptionFailed)?
-            .0;
+            .encrypt_with(beta.to_bytes(), r.clone())
+            .ok_or(ProtocolError::EncryptionFailed)?;
         let c_to_alpha = data
             .key0
             .mul(&data.c, &alpha)
@@ -293,9 +292,8 @@ pub mod interactive {
             b_x: Point::<C>::generator() * convert_scalar(&alpha),
             b_y: data
                 .key1
-                .encrypt(beta.to_bytes(), Some(r_y.clone()))
-                .ok_or(ProtocolError::EncryptionFailed)?
-                .0,
+                .encrypt_with(beta.to_bytes(), r_y.clone())
+                .ok_or(ProtocolError::EncryptionFailed)?,
             e: combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
             s: combine(&aux.s, &pdata.x, &aux.t, &m, &aux.rsa_modulo),
             f: combine(&aux.s, &beta, &aux.t, &delta, &aux.rsa_modulo),
@@ -364,9 +362,8 @@ pub mod interactive {
         {
             let enc = data
                 .key0
-                .encrypt(proof.z2.to_bytes(), Some(proof.w.clone()))
-                .ok_or(InvalidProof::EncryptionFailed)?
-                .0;
+                .encrypt_with(proof.z2.to_bytes(), proof.w.clone())
+                .ok_or(InvalidProof::EncryptionFailed)?;
             let lhs = data
                 .key0
                 .add(
@@ -388,9 +385,8 @@ pub mod interactive {
         {
             let lhs = data
                 .key1
-                .encrypt(proof.z2.to_bytes(), Some(proof.w_y.clone()))
-                .ok_or(InvalidProof::EncryptionFailed)?
-                .0;
+                .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
+                .ok_or(InvalidProof::EncryptionFailed)?;
             let rhs = combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
             fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
         }
@@ -533,8 +529,8 @@ pub mod non_interactive {
 mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
 
-    use crate::common::convert_scalar;
-    use crate::common::test::{nonce, random_key};
+    use crate::common::test::random_key;
+    use crate::common::{convert_scalar, SafePaillierExt};
     use crate::unknown_order::BigNumber;
 
     fn run<R: rand_core::RngCore, C: Curve>(
@@ -555,16 +551,18 @@ mod test {
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
         let g = generic_ec::Point::<C>::generator();
         let (ciphertext, _) = key0
-            .encrypt(affined.to_bytes(), nonce(&mut rng, key0.n()))
+            .encrypt_with_random(affined.to_bytes(), &mut rng)
             .unwrap();
         let (ciphertext_orig, _) = key0
-            .encrypt(plaintext_orig.to_bytes(), nonce(&mut rng, key0.n()))
+            .encrypt_with_random(plaintext_orig.to_bytes(), &mut rng)
             .unwrap();
         let ciphertext_mult = g * convert_scalar(&plaintext_mult);
-        let nonce_y = nonce(&mut rng, key1.n());
-        let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), nonce_y).unwrap();
-        let nonce = nonce(&mut rng, key0.n());
-        let (ciphertext_add_action, nonce) = key0.encrypt(plaintext_add.to_bytes(), nonce).unwrap();
+        let (ciphertext_add, nonce_y) = key1
+            .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
+            .unwrap();
+        let (ciphertext_add_action, nonce) = key0
+            .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
+            .unwrap();
         // verify that D is obtained from affine transformation of C
         let transformed = key0
             .add(

@@ -173,7 +173,9 @@ pub mod interactive {
     use libpaillier::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    use crate::common::{combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError};
+    use crate::common::{
+        combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError, SafePaillierExt,
+    };
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -197,9 +199,9 @@ pub mod interactive {
         let r = gen_inversible(data.key0.n(), &mut rng);
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
-        let (a, _) = data
+        let a = data
             .key0
-            .encrypt(alpha.to_bytes(), Some(r.clone()))
+            .encrypt_with(alpha.to_bytes(), r.clone())
             .ok_or(ProtocolError::EncryptionFailed)?;
 
         let commitment = Commitment {
@@ -256,9 +258,9 @@ pub mod interactive {
         }
         // Three equality checks and one range check
         {
-            let (lhs, _) = data
+            let lhs = data
                 .key0
-                .encrypt(proof.z1.to_bytes(), Some(proof.z2.clone()))
+                .encrypt_with(proof.z1.to_bytes(), proof.z2.clone())
                 .ok_or(InvalidProof::EncryptionFailed)?;
             let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key0.nn());
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
@@ -391,8 +393,8 @@ mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
     use libpaillier::unknown_order::BigNumber;
 
-    use crate::common::test::{nonce, random_key};
-    use crate::common::{convert_scalar, InvalidProof};
+    use crate::common::test::random_key;
+    use crate::common::{convert_scalar, InvalidProof, SafePaillierExt};
 
     fn run<R: rand_core::RngCore, C: Curve>(
         mut rng: R,
@@ -405,8 +407,9 @@ mod test {
         let private_key0 = random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
-        let nonce = nonce(&mut rng, key0.n());
-        let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), nonce).unwrap();
+        let (ciphertext, nonce) = key0
+            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
+            .unwrap();
         let g = generic_ec::Point::<C>::generator() * generic_ec::Scalar::<C>::from(1337);
         let x = g * convert_scalar(&plaintext);
 
