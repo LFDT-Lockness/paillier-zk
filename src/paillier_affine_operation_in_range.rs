@@ -608,7 +608,7 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
@@ -629,7 +629,7 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
@@ -651,7 +651,7 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,

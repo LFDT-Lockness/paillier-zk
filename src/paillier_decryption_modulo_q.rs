@@ -350,7 +350,7 @@ mod test {
 
     #[test]
     fn passing_test() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
 
         let aux = crate::common::test::aux(&mut rng);
 
@@ -400,7 +400,7 @@ mod test {
 
     #[test]
     fn failing_wrong_hidden() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
 
         let aux = crate::common::test::aux(&mut rng);
 
@@ -449,7 +449,7 @@ mod test {
 
     #[test]
     fn failing_wrong_plain() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
 
         let aux = crate::common::test::aux(&mut rng);
 

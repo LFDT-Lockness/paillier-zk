@@ -375,7 +375,7 @@ mod test {
 
     #[test]
     fn passing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
@@ -390,7 +390,7 @@ mod test {
     }
     #[test]
     fn failing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,

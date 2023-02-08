@@ -407,7 +407,7 @@ mod test {
 
     #[test]
     fn passing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let p = BigNumber::prime_from_rng(256, &mut rng);
         let q = BigNumber::prime_from_rng(256, &mut rng);
         let n = &p * &q;
@@ -440,7 +440,7 @@ mod test {
 
     #[test]
     fn failing() {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let p = BigNumber::prime_from_rng(128, &mut rng);
         let q = BigNumber::prime_from_rng(384, &mut rng);
         let n = &p * &q;

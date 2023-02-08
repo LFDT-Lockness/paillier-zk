@@ -445,7 +445,7 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
@@ -463,7 +463,7 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
-        let mut rng = rand_core::OsRng::default();
+        let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 128,
