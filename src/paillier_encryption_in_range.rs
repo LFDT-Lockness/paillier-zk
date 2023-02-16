@@ -153,7 +153,7 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
+    use crate::{common::SafePaillierExt, unknown_order::BigNumber, Error, ErrorReason};
     use rand_core::RngCore;
 
     use crate::common::{BigNumberExt, InvalidProof};
@@ -169,7 +169,7 @@ pub mod interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         mut rng: R,
-    ) -> (Commitment, PrivateCommitment) {
+    ) -> Result<(Commitment, PrivateCommitment), Error> {
         // add 1 to exponents to account for +-
         let two_to_l = BigNumber::from(1) << (security.l + 1);
         let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
@@ -178,10 +178,13 @@ pub mod interactive {
         let r = BigNumber::gen_inversible(&mut rng, data.key.n());
         let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
-        let s = BigNumber::combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
-        let a = BigNumber::combine(&(data.key.n() + 1), &alpha, &r, data.key.n(), data.key.nn());
-        let c = BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
-        (
+        let s = BigNumber::combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo)
+            .ok_or(ErrorReason::ModPow)?;
+        let a = BigNumber::combine(&(data.key.n() + 1), &alpha, &r, data.key.n(), data.key.nn())
+            .ok_or(ErrorReason::ModPow)?;
+        let c = BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo)
+            .ok_or(ErrorReason::ModPow)?;
+        Ok((
             Commitment { s, a, c },
             PrivateCommitment {
                 alpha,
@@ -189,7 +192,7 @@ pub mod interactive {
                 r,
                 gamma,
             },
-        )
+        ))
     }
 
     /// Compute proof for given data and prior protocol values
@@ -198,18 +201,21 @@ pub mod interactive {
         pdata: &PrivateData,
         private_commitment: &PrivateCommitment,
         challenge: &Challenge,
-    ) -> Proof {
+    ) -> Result<Proof, Error> {
         let m = crate::unknown_order::Group {
             modulus: data.key.n().clone(),
         };
         let z2 = &m
             * (
                 &private_commitment.r,
-                &pdata.nonce.modpow(challenge, data.key.n()),
+                &pdata
+                    .nonce
+                    .powmod(challenge, data.key.n())
+                    .ok_or(ErrorReason::ModPow)?,
             );
         let z1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
         let z3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
-        Proof { z1, z2, z3 }
+        Ok(Proof { z1, z2, z3 })
     }
 
     /// Verify the proof
@@ -227,7 +233,10 @@ pub mod interactive {
             Some(cipher) => {
                 if cipher
                     != commitment.a.modmul(
-                        &data.ciphertext.modpow(challenge, data.key.nn()),
+                        &data
+                            .ciphertext
+                            .powmod(challenge, data.key.nn())
+                            .ok_or(InvalidProof::ModPowFailed)?,
                         data.key.nn(),
                     )
                 {
@@ -238,13 +247,15 @@ pub mod interactive {
         }
 
         let check2 = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
+            .ok_or(InvalidProof::ModPowFailed)?
             == BigNumber::combine(
                 &commitment.c,
                 &1.into(),
                 &commitment.s,
                 challenge,
                 &aux.rsa_modulo,
-            );
+            )
+            .ok_or(InvalidProof::ModPowFailed)?;
         if !check2 {
             return Err(InvalidProof::EqualityCheckFailed(2));
         }
@@ -273,7 +284,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::common::InvalidProof;
+    use crate::{Error, InvalidProof};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 
@@ -288,14 +299,14 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> (Commitment, Proof)
+    ) -> Result<(Commitment, Proof), Error>
     where
         D: Digest<OutputSize = U32>,
     {
-        let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng);
+        let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &comm, security);
-        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
-        (comm, proof)
+        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge)?;
+        Ok((comm, proof))
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
@@ -369,7 +380,8 @@ mod test {
             &pdata,
             &security,
             rng,
-        );
+        )
+        .unwrap();
         super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
     }
 

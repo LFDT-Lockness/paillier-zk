@@ -243,11 +243,12 @@ pub use crate::common::Aux;
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
 
-    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use generic_ec::{Curve, Point};
     use rand_core::RngCore;
 
-    use crate::common::{BigNumberExt, InvalidProof, ProtocolError};
+    use crate::common::{BigNumberExt, InvalidProof, SafePaillierExt};
+    use crate::unknown_order::BigNumber;
+    use crate::{Error, ErrorReason};
 
     use super::*;
 
@@ -258,7 +259,7 @@ pub mod interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         mut rng: R,
-    ) -> Result<(Commitment<C>, PrivateCommitment), ProtocolError> {
+    ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
         let two_to_l = BigNumber::one() << (security.l_x + 1);
         let two_to_l_e = BigNumber::one() << (security.l_x + security.epsilon + 1);
         let modulo_l = two_to_l * &aux.rsa_modulo;
@@ -279,26 +280,30 @@ pub mod interactive {
         let a_add = data
             .key0
             .encrypt_with(beta.to_bytes(), r.clone())
-            .ok_or(ProtocolError::EncryptionFailed)?;
+            .ok_or(ErrorReason::Encryption)?;
         let c_to_alpha = data
             .key0
             .mul(&data.c, &alpha)
-            .ok_or(ProtocolError::EncryptionFailed)?;
+            .ok_or(ErrorReason::Encryption)?;
         let a = data
             .key0
             .add(&c_to_alpha, &a_add)
-            .ok_or(ProtocolError::EncryptionFailed)?;
+            .ok_or(ErrorReason::Encryption)?;
         let commitment = Commitment {
             a,
             b_x: Point::<C>::generator() * alpha.to_scalar(),
             b_y: data
                 .key1
                 .encrypt_with(beta.to_bytes(), r_y.clone())
-                .ok_or(ProtocolError::EncryptionFailed)?,
-            e: BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
-            s: BigNumber::combine(&aux.s, &pdata.x, &aux.t, &m, &aux.rsa_modulo),
-            f: BigNumber::combine(&aux.s, &beta, &aux.t, &delta, &aux.rsa_modulo),
-            t: BigNumber::combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
+                .ok_or(ErrorReason::Encryption)?,
+            e: BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo)
+                .ok_or(ErrorReason::ModPow)?,
+            s: BigNumber::combine(&aux.s, &pdata.x, &aux.t, &m, &aux.rsa_modulo)
+                .ok_or(ErrorReason::ModPow)?,
+            f: BigNumber::combine(&aux.s, &beta, &aux.t, &delta, &aux.rsa_modulo)
+                .ok_or(ErrorReason::ModPow)?,
+            t: BigNumber::combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo)
+                .ok_or(ErrorReason::ModPow)?,
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -319,8 +324,8 @@ pub mod interactive {
         pdata: &PrivateData,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
-    ) -> Proof {
-        Proof {
+    ) -> Result<Proof, Error> {
+        Ok(Proof {
             z1: &pcomm.alpha + challenge * &pdata.x,
             z2: &pcomm.beta + challenge * &pdata.y,
             z3: &pcomm.gamma + challenge * &pcomm.m,
@@ -331,15 +336,17 @@ pub mod interactive {
                 &pdata.nonce,
                 challenge,
                 data.key0.n(),
-            ),
+            )
+            .ok_or(ErrorReason::ModPow)?,
             w_y: BigNumber::combine(
                 &pcomm.r_y,
                 &BigNumber::one(),
                 &pdata.nonce_y,
                 challenge,
                 data.key1.n(),
-            ),
-        }
+            )
+            .ok_or(ErrorReason::ModPow)?,
+        })
     }
 
     /// Verify the proof
@@ -375,7 +382,8 @@ pub mod interactive {
                     &enc,
                 )
                 .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = BigNumber::combine(&commitment.a, &one, &data.d, challenge, data.key0.nn());
+            let rhs = BigNumber::combine(&commitment.a, &one, &data.d, challenge, data.key0.nn())
+                .ok_or(InvalidProof::ModPowFailed)?;
             fail_if(InvalidProof::EqualityCheckFailed(1), lhs == rhs)?;
         }
         {
@@ -388,7 +396,8 @@ pub mod interactive {
                 .key1
                 .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
                 .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = BigNumber::combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
+            let rhs = BigNumber::combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn())
+                .ok_or(InvalidProof::ModPowFailed)?;
             fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
         }
         fail_if(
@@ -439,12 +448,12 @@ pub mod interactive {
 /// see the documentation of parent module.
 pub mod non_interactive {
 
-    use crate::unknown_order::BigNumber;
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::common::{InvalidProof, ProtocolError};
+    use crate::unknown_order::BigNumber;
+    use crate::{Error, InvalidProof};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 
@@ -459,14 +468,14 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Result<(Commitment<C>, Proof), ProtocolError>
+    ) -> Result<(Commitment<C>, Proof), Error>
     where
         Scalar<C>: FromHash,
         D: Digest<OutputSize = U32>,
     {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &comm, security);
-        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
+        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge)?;
         Ok((comm, proof))
     }
 

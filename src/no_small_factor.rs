@@ -159,8 +159,9 @@ pub struct Proof {
 pub use crate::common::Aux;
 
 pub mod interactive {
-    use crate::{common::BigNumberExt, unknown_order::BigNumber};
     use rand_core::RngCore;
+
+    use crate::{common::BigNumberExt, unknown_order::BigNumber, Error, ErrorReason};
 
     use super::{
         Aux, Challenge, Commitment, Data, InvalidProof, PrivateCommitment, PrivateData, Proof,
@@ -174,7 +175,7 @@ pub mod interactive {
         pdata: PrivateData,
         security: &SecurityParams,
         mut rng: R,
-    ) -> (Commitment, PrivateCommitment) {
+    ) -> Result<(Commitment, PrivateCommitment), Error> {
         // add 1 to exponents to account for +-
         let two_to_l = BigNumber::from(1) << (security.l + 1);
         let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
@@ -192,11 +193,16 @@ pub mod interactive {
         let x = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
         let y = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
 
-        let p = BigNumber::combine(&aux.s, pdata.p, &aux.t, &mu, &aux.rsa_modulo);
-        let q = BigNumber::combine(&aux.s, pdata.q, &aux.t, &nu, &aux.rsa_modulo);
-        let a = BigNumber::combine(&aux.s, &alpha, &aux.t, &x, &aux.rsa_modulo);
-        let b = BigNumber::combine(&aux.s, &beta, &aux.t, &y, &aux.rsa_modulo);
-        let t = BigNumber::combine(&q, &alpha, &aux.t, &r, &aux.rsa_modulo);
+        let p = BigNumber::combine(&aux.s, pdata.p, &aux.t, &mu, &aux.rsa_modulo)
+            .ok_or(ErrorReason::ModPow)?;
+        let q = BigNumber::combine(&aux.s, pdata.q, &aux.t, &nu, &aux.rsa_modulo)
+            .ok_or(ErrorReason::ModPow)?;
+        let a = BigNumber::combine(&aux.s, &alpha, &aux.t, &x, &aux.rsa_modulo)
+            .ok_or(ErrorReason::ModPow)?;
+        let b = BigNumber::combine(&aux.s, &beta, &aux.t, &y, &aux.rsa_modulo)
+            .ok_or(ErrorReason::ModPow)?;
+        let t = BigNumber::combine(&q, &alpha, &aux.t, &r, &aux.rsa_modulo)
+            .ok_or(ErrorReason::ModPow)?;
 
         let commitment = Commitment {
             p,
@@ -215,7 +221,7 @@ pub mod interactive {
             x,
             y,
         };
-        (commitment, private_commitment)
+        Ok((commitment, private_commitment))
     }
 
     /// Generate random challenge
@@ -233,16 +239,16 @@ pub mod interactive {
         comm: &Commitment,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
-    ) -> Proof {
+    ) -> Result<Proof, Error> {
         let sigma_circ = &comm.sigma - &pcomm.nu * pdata.p;
 
-        Proof {
+        Ok(Proof {
             z1: &pcomm.alpha + challenge * pdata.p,
             z2: &pcomm.beta + challenge * pdata.q,
             w1: &pcomm.x + challenge * &pcomm.mu,
             w2: &pcomm.y + challenge * &pcomm.nu,
             v: &pcomm.r + challenge * sigma_circ,
-        }
+        })
     }
 
     /// Verify the proof
@@ -257,38 +263,45 @@ pub mod interactive {
         let one = BigNumber::one();
         // check 1
         {
-            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.w1, &aux.rsa_modulo);
+            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.w1, &aux.rsa_modulo)
+                .ok_or(InvalidProof::ModPowFailed)?;
             let rhs = BigNumber::combine(
                 &commitment.a,
                 &one,
                 &commitment.p,
                 challenge,
                 &aux.rsa_modulo,
-            );
+            )
+            .ok_or(InvalidProof::ModPowFailed)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(1));
             }
         }
         // check 2
         {
-            let lhs = BigNumber::combine(&aux.s, &proof.z2, &aux.t, &proof.w2, &aux.rsa_modulo);
+            let lhs = BigNumber::combine(&aux.s, &proof.z2, &aux.t, &proof.w2, &aux.rsa_modulo)
+                .ok_or(InvalidProof::ModPowFailed)?;
             let rhs = BigNumber::combine(
                 &commitment.b,
                 &one,
                 &commitment.q,
                 challenge,
                 &aux.rsa_modulo,
-            );
+            )
+            .ok_or(InvalidProof::ModPowFailed)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(2));
             }
         }
         // check 3
         {
-            let r = BigNumber::combine(&aux.s, data.n, &aux.t, &commitment.sigma, &aux.rsa_modulo);
+            let r = BigNumber::combine(&aux.s, data.n, &aux.t, &commitment.sigma, &aux.rsa_modulo)
+                .ok_or(InvalidProof::ModPowFailed)?;
             let lhs =
-                BigNumber::combine(&commitment.q, &proof.z1, &aux.t, &proof.v, &aux.rsa_modulo);
-            let rhs = BigNumber::combine(&commitment.t, &one, &r, challenge, &aux.rsa_modulo);
+                BigNumber::combine(&commitment.q, &proof.z1, &aux.t, &proof.v, &aux.rsa_modulo)
+                    .ok_or(InvalidProof::ModPowFailed)?;
+            let rhs = BigNumber::combine(&commitment.t, &one, &r, challenge, &aux.rsa_modulo)
+                .ok_or(InvalidProof::ModPowFailed)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(3));
             }
@@ -312,7 +325,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    pub use crate::common::{InvalidProof, ProtocolError};
+    pub use crate::{Error, InvalidProof};
 
     pub use super::{Aux, Challenge, Data, PrivateData, SecurityParams};
 
@@ -335,14 +348,14 @@ pub mod non_interactive {
         pdata: PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Proof
+    ) -> Result<Proof, Error>
     where
         D: Digest<OutputSize = U32>,
     {
-        let (commitment, pcomm) = super::interactive::commit(aux, data, pdata, security, rng);
+        let (commitment, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &commitment, security);
-        let proof = super::interactive::prove(pdata, &commitment, &pcomm, &challenge);
-        Proof { commitment, proof }
+        let proof = super::interactive::prove(pdata, &commitment, &pcomm, &challenge)?;
+        Ok(Proof { commitment, proof })
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
@@ -431,7 +444,8 @@ mod test {
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        );
+        )
+        .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
         match r {
             Ok(()) => (),
@@ -464,7 +478,8 @@ mod test {
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        );
+        )
+        .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
         match r {
             Ok(()) => panic!("Proof should not pass"),

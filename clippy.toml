@@ -4,4 +4,5 @@ disallowed-methods = [
     "libpaillier::unknown_order::BigNumber::safe_prime",
     "libpaillier::DecryptionKey::random",
     "libpaillier::EncryptionKey::encrypt",
+    "libpaillier::unknown_order::BigNumber::modpow",
 ]
