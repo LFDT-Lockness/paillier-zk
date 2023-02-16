@@ -14,6 +14,7 @@
 //!
 //! ``` no_run
 //! # use paillier_zk::unknown_order::BigNumber;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use paillier_zk::paillier_encryption_in_range as p;
 //! use generic_ec::hash_to_curve::Tag;
 //! let shared_state_prover = sha2::Sha256::default();
@@ -54,7 +55,7 @@
 //! let data = p::Data { key, ciphertext };
 //! let pdata = p::PrivateData { plaintext, nonce };
 //! let (commitment, proof) =
-//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng);
+//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng)?;
 //!
 //! // 4. Prover sends this data to verifier
 //!
@@ -66,7 +67,7 @@
 //!
 //! let (data, commitment, proof) = recv();
 //! p::non_interactive::verify(shared_state_verifier, &aux, &data, &commitment, &security, &proof);
-//!
+//! # Ok(()) }
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover

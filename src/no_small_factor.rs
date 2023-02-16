@@ -13,6 +13,7 @@
 //! ```no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! # fn sqrt(x: &BigNumber) -> BigNumber { todo!() }
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use paillier_zk::no_small_factor::non_interactive as p;
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
@@ -57,7 +58,7 @@
 //!     p::PrivateData { p: &p, q: &q },
 //!     &security,
 //!     rng,
-//! );
+//! )?;
 //!
 //! // 4. Prover sends this data to verifier
 //!
@@ -74,6 +75,7 @@
 //!     n_root: &n_root,
 //! };
 //! p::verify(shared_state_verifier, &aux, data, &security, &proof);
+//! Ok(()) }
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover

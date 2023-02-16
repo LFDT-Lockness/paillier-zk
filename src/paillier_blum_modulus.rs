@@ -28,6 +28,7 @@
 //!     ``` no_run
 //!     use paillier_zk::paillier_blum_modulus as p;
 //!     # use generic_ec::hash_to_curve::Tag;
+//!     # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     # let (n, p, q) = todo!();
 //!     # let shared_state = sha2::Sha256::default();
 //!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
@@ -43,7 +44,8 @@
 //!             &data,
 //!             &pdata,
 //!             &mut rng,
-//!         );
+//!         )?;
+//!     # Ok(()) }
 //!     ```
 //! 2. P sends `data, commitment, proof` to the verifier V
 //! 3. V verifies the proof:
