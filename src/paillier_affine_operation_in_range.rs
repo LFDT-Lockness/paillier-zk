@@ -32,6 +32,7 @@
 //! ``` no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_affine_operation_in_range as p;
+//! use paillier_zk::BigNumberExt;
 //! use generic_ec::hash_to_curve::Tag;
 //!
 //! // Prover and verifier have a shared protocol state
@@ -78,7 +79,7 @@
 //! // C in paper
 //! let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
 //! // X in paper
-//! let ciphertext_mult = g * paillier_zk::convert_scalar(&plaintext_mult);
+//! let ciphertext_mult = g * plaintext_mult.to_scalar();
 //! // Y' in further docs, and ρy in paper
 //! let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
 //! // Y and ρ in paper
@@ -246,7 +247,7 @@ pub mod interactive {
     use generic_ec::{Curve, Point};
     use rand_core::RngCore;
 
-    use crate::common::{combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError};
+    use crate::common::{BigNumberExt, InvalidProof, ProtocolError};
 
     use super::*;
 
@@ -268,8 +269,8 @@ pub mod interactive {
             &(BigNumber::one() << (security.l_y + security.epsilon + 1)),
             &mut rng,
         );
-        let r = gen_inversible(data.key0.n(), &mut rng);
-        let r_y = gen_inversible(data.key1.n(), &mut rng);
+        let r = BigNumber::gen_inversible(&mut rng, data.key0.n());
+        let r_y = BigNumber::gen_inversible(&mut rng, data.key1.n());
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
         let m = BigNumber::from_rng(&modulo_l, &mut rng);
         let delta = BigNumber::from_rng(&modulo_l_e, &mut rng);
@@ -289,15 +290,15 @@ pub mod interactive {
             .ok_or(ProtocolError::EncryptionFailed)?;
         let commitment = Commitment {
             a,
-            b_x: Point::<C>::generator() * convert_scalar(&alpha),
+            b_x: Point::<C>::generator() * alpha.to_scalar(),
             b_y: data
                 .key1
                 .encrypt_with(beta.to_bytes(), r_y.clone())
                 .ok_or(ProtocolError::EncryptionFailed)?,
-            e: combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
-            s: combine(&aux.s, &pdata.x, &aux.t, &m, &aux.rsa_modulo),
-            f: combine(&aux.s, &beta, &aux.t, &delta, &aux.rsa_modulo),
-            t: combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
+            e: BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
+            s: BigNumber::combine(&aux.s, &pdata.x, &aux.t, &m, &aux.rsa_modulo),
+            f: BigNumber::combine(&aux.s, &beta, &aux.t, &delta, &aux.rsa_modulo),
+            t: BigNumber::combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -324,14 +325,14 @@ pub mod interactive {
             z2: &pcomm.beta + challenge * &pdata.y,
             z3: &pcomm.gamma + challenge * &pcomm.m,
             z4: &pcomm.delta + challenge * &pcomm.mu,
-            w: combine(
+            w: BigNumber::combine(
                 &pcomm.r,
                 &BigNumber::one(),
                 &pdata.nonce,
                 challenge,
                 data.key0.n(),
             ),
-            w_y: combine(
+            w_y: BigNumber::combine(
                 &pcomm.r_y,
                 &BigNumber::one(),
                 &pdata.nonce_y,
@@ -374,12 +375,12 @@ pub mod interactive {
                     &enc,
                 )
                 .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = combine(&commitment.a, &one, &data.d, challenge, data.key0.nn());
+            let rhs = BigNumber::combine(&commitment.a, &one, &data.d, challenge, data.key0.nn());
             fail_if(InvalidProof::EqualityCheckFailed(1), lhs == rhs)?;
         }
         {
-            let lhs = Point::<C>::generator() * convert_scalar(&proof.z1);
-            let rhs = commitment.b_x + data.x * convert_scalar(challenge);
+            let lhs = Point::<C>::generator() * proof.z1.to_scalar();
+            let rhs = commitment.b_x + data.x * challenge.to_scalar();
             fail_if(InvalidProof::EqualityCheckFailed(2), lhs == rhs)?;
         }
         {
@@ -387,13 +388,13 @@ pub mod interactive {
                 .key1
                 .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
                 .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
+            let rhs = BigNumber::combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
             fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
         }
         fail_if(
             InvalidProof::EqualityCheckFailed(4),
-            combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
-                == combine(
+            BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
+                == BigNumber::combine(
                     &commitment.e,
                     &one,
                     &commitment.s,
@@ -403,8 +404,8 @@ pub mod interactive {
         )?;
         fail_if(
             InvalidProof::EqualityCheckFailed(5),
-            combine(&aux.s, &proof.z2, &aux.t, &proof.z4, &aux.rsa_modulo)
-                == combine(
+            BigNumber::combine(&aux.s, &proof.z2, &aux.t, &proof.z4, &aux.rsa_modulo)
+                == BigNumber::combine(
                     &commitment.f,
                     &one,
                     &commitment.t,
@@ -530,7 +531,7 @@ mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
 
     use crate::common::test::random_key;
-    use crate::common::{convert_scalar, SafePaillierExt};
+    use crate::common::{BigNumberExt, SafePaillierExt};
     use crate::unknown_order::BigNumber;
 
     fn run<R: rand_core::RngCore, C: Curve>(
@@ -556,7 +557,7 @@ mod test {
         let (ciphertext_orig, _) = key0
             .encrypt_with_random(plaintext_orig.to_bytes(), &mut rng)
             .unwrap();
-        let ciphertext_mult = g * convert_scalar(&plaintext_mult);
+        let ciphertext_mult = g * &plaintext_mult.to_scalar();
         let (ciphertext_add, nonce_y) = key1
             .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
             .unwrap();

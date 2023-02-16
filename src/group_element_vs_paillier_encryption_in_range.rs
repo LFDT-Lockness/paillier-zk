@@ -23,6 +23,7 @@
 //! ```no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::group_element_vs_paillier_encryption_in_range as p;
+//! use paillier_zk::BigNumberExt;
 //! use generic_ec::hash_to_curve::Tag;
 //!
 //! // Prover and verifier have a shared protocol state
@@ -53,7 +54,7 @@
 //!
 //! let plaintext: BigNumber = 228.into();
 //! let (ciphertext, nonce) = key0.encrypt(plaintext.to_bytes(), None).unwrap();
-//! let power = g * paillier_zk::convert_scalar(&plaintext);
+//! let power = g * plaintext.to_scalar();
 //!
 //! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
 //!
@@ -173,9 +174,7 @@ pub mod interactive {
     use libpaillier::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    use crate::common::{
-        combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError, SafePaillierExt,
-    };
+    use crate::common::{BigNumberExt, InvalidProof, ProtocolError, SafePaillierExt};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -196,7 +195,7 @@ pub mod interactive {
 
         let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
         let mu = BigNumber::from_rng(&modulo_l, &mut rng);
-        let r = gen_inversible(data.key0.n(), &mut rng);
+        let r = BigNumber::gen_inversible(&mut rng, data.key0.n());
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
         let a = data
@@ -205,10 +204,10 @@ pub mod interactive {
             .ok_or(ProtocolError::EncryptionFailed)?;
 
         let commitment = Commitment {
-            s: combine(&aux.s, &pdata.x, &aux.t, &mu, &aux.rsa_modulo),
+            s: BigNumber::combine(&aux.s, &pdata.x, &aux.t, &mu, &aux.rsa_modulo),
             a,
-            y: data.g * convert_scalar(&alpha),
-            d: combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
+            y: data.g * alpha.to_scalar(),
+            d: BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -228,7 +227,7 @@ pub mod interactive {
     ) -> Proof {
         Proof {
             z1: &pcomm.alpha + challenge * &pdata.x,
-            z2: combine(
+            z2: BigNumber::combine(
                 &pcomm.r,
                 &BigNumber::one(),
                 &pdata.nonce,
@@ -262,17 +261,17 @@ pub mod interactive {
                 .key0
                 .encrypt_with(proof.z1.to_bytes(), proof.z2.clone())
                 .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key0.nn());
+            let rhs = BigNumber::combine(&commitment.a, &one, &data.c, challenge, data.key0.nn());
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
         }
         {
-            let lhs = data.g * convert_scalar(&proof.z1);
-            let rhs = commitment.y + data.x * convert_scalar(challenge);
+            let lhs = data.g * proof.z1.to_scalar();
+            let rhs = commitment.y + data.x * challenge.to_scalar();
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
         }
         {
-            let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo);
-            let rhs = combine(
+            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo);
+            let rhs = BigNumber::combine(
                 &commitment.d,
                 &one,
                 &commitment.s,
@@ -394,7 +393,7 @@ mod test {
     use libpaillier::unknown_order::BigNumber;
 
     use crate::common::test::random_key;
-    use crate::common::{convert_scalar, InvalidProof, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProof, SafePaillierExt};
 
     fn run<R: rand_core::RngCore, C: Curve>(
         mut rng: R,
@@ -411,7 +410,7 @@ mod test {
             .encrypt_with_random(plaintext.to_bytes(), &mut rng)
             .unwrap();
         let g = generic_ec::Point::<C>::generator() * generic_ec::Scalar::<C>::from(1337);
-        let x = g * convert_scalar(&plaintext);
+        let x = g * &plaintext.to_scalar();
 
         let data = super::Data {
             key0,

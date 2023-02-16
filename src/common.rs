@@ -12,32 +12,6 @@ pub struct Aux {
     pub rsa_modulo: BigNumber,
 }
 
-/// Generate element in Zm*. Does so by trial.
-pub fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, mut rng: R) -> BigNumber {
-    loop {
-        let r = BigNumber::from_rng(modulo, &mut rng);
-        if r.gcd(modulo) == 1.into() {
-            break r;
-        }
-    }
-}
-
-/// Compute l^le * r^re modulo m
-pub(crate) fn combine(
-    l: &BigNumber,
-    le: &BigNumber,
-    r: &BigNumber,
-    re: &BigNumber,
-    m: &BigNumber,
-) -> BigNumber {
-    l.modpow(le, m).modmul(&r.modpow(re, m), m)
-}
-
-/// Embed BigInt into chosen scalar type
-pub fn convert_scalar<C: generic_ec::Curve>(x: &BigNumber) -> generic_ec::Scalar<C> {
-    generic_ec::Scalar::<C>::from_be_bytes_mod_order(x.to_bytes())
-}
-
 /// Reason for failure. If the proof failes, you should only be interested in a
 /// reason for debugging purposes
 #[derive(Debug, PartialEq, Eq)]
@@ -96,9 +70,49 @@ impl SafePaillierExt for libpaillier::EncryptionKey {
     }
 }
 
+pub trait BigNumberExt {
+    /// Generate element in Zm*. Does so by trial.
+    fn gen_inversible<R: rand_core::RngCore>(rng: &mut R, modulo: &BigNumber) -> Self;
+
+    /// Compute l^le * r^re modulo m
+    fn combine(l: &Self, le: &Self, r: &Self, re: &Self, m: &Self) -> Self;
+
+    /// Embed BigInt into chosen scalar type
+    fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
+
+    /// Generates a random integer in interval `[-range; range]`
+    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self;
+}
+
+impl BigNumberExt for BigNumber {
+    fn gen_inversible<R: rand_core::RngCore>(rng: &mut R, modulo: &BigNumber) -> Self {
+        loop {
+            let r = BigNumber::from_rng(modulo, rng);
+            if r.gcd(modulo) == 1.into() {
+                break r;
+            }
+        }
+    }
+
+    fn combine(l: &Self, le: &Self, r: &Self, re: &Self, m: &Self) -> Self {
+        l.modpow(le, m).modmul(&r.modpow(re, m), m)
+    }
+
+    fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C> {
+        generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
+    }
+
+    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self {
+        let n = BigNumber::from_rng(&(range * 2), rng);
+        n - range
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use libpaillier::unknown_order::BigNumber;
+
+    use super::BigNumberExt;
 
     #[test]
     fn conversion() {
@@ -108,7 +122,7 @@ pub mod test {
         let number: u64 = 0x11_22_33_44_55_66_77_88;
         let bignumber = BigNumber::from(number);
         let scalar1 = Scalar::from(number);
-        let scalar2 = super::convert_scalar(&bignumber);
+        let scalar2 = bignumber.to_scalar();
         assert_eq!(scalar1, scalar2);
     }
 

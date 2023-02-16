@@ -159,7 +159,7 @@ pub struct Proof {
 pub use crate::common::Aux;
 
 pub mod interactive {
-    use crate::{common::combine, unknown_order::BigNumber};
+    use crate::{common::BigNumberExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
     use super::{
@@ -192,11 +192,11 @@ pub mod interactive {
         let x = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
         let y = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
 
-        let p = combine(&aux.s, pdata.p, &aux.t, &mu, &aux.rsa_modulo);
-        let q = combine(&aux.s, pdata.q, &aux.t, &nu, &aux.rsa_modulo);
-        let a = combine(&aux.s, &alpha, &aux.t, &x, &aux.rsa_modulo);
-        let b = combine(&aux.s, &beta, &aux.t, &y, &aux.rsa_modulo);
-        let t = combine(&q, &alpha, &aux.t, &r, &aux.rsa_modulo);
+        let p = BigNumber::combine(&aux.s, pdata.p, &aux.t, &mu, &aux.rsa_modulo);
+        let q = BigNumber::combine(&aux.s, pdata.q, &aux.t, &nu, &aux.rsa_modulo);
+        let a = BigNumber::combine(&aux.s, &alpha, &aux.t, &x, &aux.rsa_modulo);
+        let b = BigNumber::combine(&aux.s, &beta, &aux.t, &y, &aux.rsa_modulo);
+        let t = BigNumber::combine(&q, &alpha, &aux.t, &r, &aux.rsa_modulo);
 
         let commitment = Commitment {
             p,
@@ -257,8 +257,8 @@ pub mod interactive {
         let one = BigNumber::one();
         // check 1
         {
-            let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.w1, &aux.rsa_modulo);
-            let rhs = combine(
+            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.w1, &aux.rsa_modulo);
+            let rhs = BigNumber::combine(
                 &commitment.a,
                 &one,
                 &commitment.p,
@@ -271,8 +271,8 @@ pub mod interactive {
         }
         // check 2
         {
-            let lhs = combine(&aux.s, &proof.z2, &aux.t, &proof.w2, &aux.rsa_modulo);
-            let rhs = combine(
+            let lhs = BigNumber::combine(&aux.s, &proof.z2, &aux.t, &proof.w2, &aux.rsa_modulo);
+            let rhs = BigNumber::combine(
                 &commitment.b,
                 &one,
                 &commitment.q,
@@ -285,9 +285,10 @@ pub mod interactive {
         }
         // check 3
         {
-            let r = combine(&aux.s, data.n, &aux.t, &commitment.sigma, &aux.rsa_modulo);
-            let lhs = combine(&commitment.q, &proof.z1, &aux.t, &proof.v, &aux.rsa_modulo);
-            let rhs = combine(&commitment.t, &one, &r, challenge, &aux.rsa_modulo);
+            let r = BigNumber::combine(&aux.s, data.n, &aux.t, &commitment.sigma, &aux.rsa_modulo);
+            let lhs =
+                BigNumber::combine(&commitment.q, &proof.z1, &aux.t, &proof.v, &aux.rsa_modulo);
+            let rhs = BigNumber::combine(&commitment.t, &one, &r, challenge, &aux.rsa_modulo);
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(3));
             }

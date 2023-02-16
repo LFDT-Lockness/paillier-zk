@@ -156,7 +156,7 @@ pub mod interactive {
     use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
-    use crate::common::{combine, gen_inversible, InvalidProof};
+    use crate::common::{BigNumberExt, InvalidProof};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -175,12 +175,12 @@ pub mod interactive {
         let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
         let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
-        let r = gen_inversible(data.key.n(), &mut rng);
+        let r = BigNumber::gen_inversible(&mut rng, data.key.n());
         let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
-        let s = combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
-        let a = combine(&(data.key.n() + 1), &alpha, &r, data.key.n(), data.key.nn());
-        let c = combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
+        let s = BigNumber::combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
+        let a = BigNumber::combine(&(data.key.n() + 1), &alpha, &r, data.key.n(), data.key.nn());
+        let c = BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
         (
             Commitment { s, a, c },
             PrivateCommitment {
@@ -237,8 +237,8 @@ pub mod interactive {
             None => return Err(InvalidProof::EncryptionFailed),
         }
 
-        let check2 = combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
-            == combine(
+        let check2 = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
+            == BigNumber::combine(
                 &commitment.c,
                 &1.into(),
                 &commitment.s,

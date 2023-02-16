@@ -153,7 +153,7 @@ pub mod interactive {
     use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
-    use crate::common::{combine, InvalidProof, ProtocolError};
+    use crate::common::{BigNumberExt, InvalidProof, ProtocolError};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -181,8 +181,8 @@ pub mod interactive {
             .ok_or(ProtocolError::EncryptionFailed)?;
 
         let commitment = Commitment {
-            s: combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
-            t: combine(&aux.s, &alpha, &aux.t, &nu, &aux.rsa_modulo),
+            s: BigNumber::combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
+            t: BigNumber::combine(&aux.s, &alpha, &aux.t, &nu, &aux.rsa_modulo),
             a,
             gamma: &alpha % &data.q,
         };
@@ -207,7 +207,7 @@ pub mod interactive {
         Proof {
             z1: &pcomm.alpha + challenge * &pdata.y,
             z2: &pcomm.nu + challenge * &pcomm.mu,
-            w: combine(
+            w: BigNumber::combine(
                 &pcomm.r,
                 &BigNumber::one(),
                 &pdata.nonce,
@@ -239,7 +239,7 @@ pub mod interactive {
                 .key
                 .encrypt_with(proof.z1.to_bytes(), proof.w.clone())
                 .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key.nn());
+            let rhs = BigNumber::combine(&commitment.a, &one, &data.c, challenge, data.key.nn());
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
         }
         {
@@ -250,8 +250,8 @@ pub mod interactive {
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
         }
         {
-            let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo);
-            let rhs = combine(
+            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo);
+            let rhs = BigNumber::combine(
                 &commitment.t,
                 &one,
                 &commitment.s,
