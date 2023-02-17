@@ -566,7 +566,7 @@ mod test {
         let (ciphertext_orig, _) = key0
             .encrypt_with_random(plaintext_orig.to_bytes(), &mut rng)
             .unwrap();
-        let ciphertext_mult = g * &plaintext_mult.to_scalar();
+        let ciphertext_mult = g * plaintext_mult.to_scalar();
         let (ciphertext_add, nonce_y) = key1
             .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
             .unwrap();

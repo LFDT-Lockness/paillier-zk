@@ -417,7 +417,7 @@ mod test {
             .encrypt_with_random(plaintext.to_bytes(), &mut rng)
             .unwrap();
         let g = generic_ec::Point::<C>::generator() * generic_ec::Scalar::<C>::from(1337);
-        let x = g * &plaintext.to_scalar();
+        let x = g * plaintext.to_scalar();
 
         let data = super::Data {
             key0,
