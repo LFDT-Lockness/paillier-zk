@@ -32,4 +32,6 @@ enum ErrorReason {
     ModPow,
     #[error("couldn't encrypt a message")]
     Encryption,
+    #[error("assertion failed: {0}")]
+    AssertFailed(usize),
 }
