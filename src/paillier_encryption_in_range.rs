@@ -176,7 +176,7 @@ pub mod interactive {
         let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
         let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
-        let r = BigNumber::gen_inversible(&mut rng, data.key.n());
+        let r = BigNumber::gen_inversible(data.key.n(), &mut rng);
         let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
         let s = aux

@@ -196,7 +196,7 @@ pub mod interactive {
 
         let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
         let mu = BigNumber::from_rng(&modulo_l, &mut rng);
-        let r = BigNumber::gen_inversible(&mut rng, data.key0.n());
+        let r = BigNumber::gen_inversible(data.key0.n(), &mut rng);
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
         let a = data

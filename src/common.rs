@@ -74,7 +74,7 @@ impl SafePaillierExt for libpaillier::EncryptionKey {
 
 pub trait BigNumberExt: Sized {
     /// Generate element in Zm*. Does so by trial.
-    fn gen_inversible<R: rand_core::RngCore>(rng: &mut R, modulo: &BigNumber) -> Self;
+    fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, rng: &mut R) -> Self;
 
     /// Compute l^le * r^re modulo self
     fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Option<Self>;
@@ -93,7 +93,7 @@ pub trait BigNumberExt: Sized {
 }
 
 impl BigNumberExt for BigNumber {
-    fn gen_inversible<R: rand_core::RngCore>(rng: &mut R, modulo: &BigNumber) -> Self {
+    fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, rng: &mut R) -> Self {
         loop {
             let r = BigNumber::from_rng(modulo, rng);
             if r.gcd(modulo) == 1.into() {

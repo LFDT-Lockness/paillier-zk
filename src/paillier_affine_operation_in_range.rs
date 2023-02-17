@@ -270,8 +270,8 @@ pub mod interactive {
             &(BigNumber::one() << (security.l_y + security.epsilon + 1)),
             &mut rng,
         );
-        let r = BigNumber::gen_inversible(&mut rng, data.key0.n());
-        let r_y = BigNumber::gen_inversible(&mut rng, data.key1.n());
+        let r = BigNumber::gen_inversible(data.key0.n(), &mut rng);
+        let r_y = BigNumber::gen_inversible(data.key1.n(), &mut rng);
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
         let m = BigNumber::from_rng(&modulo_l, &mut rng);
         let delta = BigNumber::from_rng(&modulo_l_e, &mut rng);
