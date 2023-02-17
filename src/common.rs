@@ -76,8 +76,8 @@ pub trait BigNumberExt: Sized {
     /// Generate element in Zm*. Does so by trial.
     fn gen_inversible<R: rand_core::RngCore>(rng: &mut R, modulo: &BigNumber) -> Self;
 
-    /// Compute l^le * r^re modulo m
-    fn combine(l: &Self, le: &Self, r: &Self, re: &Self, m: &Self) -> Option<Self>;
+    /// Compute l^le * r^re modulo self
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Option<Self>;
 
     /// Embed BigInt into chosen scalar type
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
@@ -102,8 +102,8 @@ impl BigNumberExt for BigNumber {
         }
     }
 
-    fn combine(l: &Self, le: &Self, r: &Self, re: &Self, m: &Self) -> Option<Self> {
-        Some(l.powmod(le, m)?.modmul(&r.powmod(re, m)?, m))
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Option<Self> {
+        Some(l.powmod(le, self)?.modmul(&r.powmod(re, self)?, self))
     }
 
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C> {

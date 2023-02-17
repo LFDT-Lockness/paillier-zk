@@ -195,15 +195,25 @@ pub mod interactive {
         let x = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
         let y = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
 
-        let p = BigNumber::combine(&aux.s, pdata.p, &aux.t, &mu, &aux.rsa_modulo)
+        let p = aux
+            .rsa_modulo
+            .combine(&aux.s, pdata.p, &aux.t, &mu)
             .ok_or(ErrorReason::ModPow)?;
-        let q = BigNumber::combine(&aux.s, pdata.q, &aux.t, &nu, &aux.rsa_modulo)
+        let q = aux
+            .rsa_modulo
+            .combine(&aux.s, pdata.q, &aux.t, &nu)
             .ok_or(ErrorReason::ModPow)?;
-        let a = BigNumber::combine(&aux.s, &alpha, &aux.t, &x, &aux.rsa_modulo)
+        let a = aux
+            .rsa_modulo
+            .combine(&aux.s, &alpha, &aux.t, &x)
             .ok_or(ErrorReason::ModPow)?;
-        let b = BigNumber::combine(&aux.s, &beta, &aux.t, &y, &aux.rsa_modulo)
+        let b = aux
+            .rsa_modulo
+            .combine(&aux.s, &beta, &aux.t, &y)
             .ok_or(ErrorReason::ModPow)?;
-        let t = BigNumber::combine(&q, &alpha, &aux.t, &r, &aux.rsa_modulo)
+        let t = aux
+            .rsa_modulo
+            .combine(&q, &alpha, &aux.t, &r)
             .ok_or(ErrorReason::ModPow)?;
 
         let commitment = Commitment {
@@ -265,44 +275,45 @@ pub mod interactive {
         let one = BigNumber::one();
         // check 1
         {
-            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.w1, &aux.rsa_modulo)
+            let lhs = aux
+                .rsa_modulo
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.w1)
                 .ok_or(InvalidProof::ModPowFailed)?;
-            let rhs = BigNumber::combine(
-                &commitment.a,
-                &one,
-                &commitment.p,
-                challenge,
-                &aux.rsa_modulo,
-            )
-            .ok_or(InvalidProof::ModPowFailed)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.a, &one, &commitment.p, challenge)
+                .ok_or(InvalidProof::ModPowFailed)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(1));
             }
         }
         // check 2
         {
-            let lhs = BigNumber::combine(&aux.s, &proof.z2, &aux.t, &proof.w2, &aux.rsa_modulo)
+            let lhs = aux
+                .rsa_modulo
+                .combine(&aux.s, &proof.z2, &aux.t, &proof.w2)
                 .ok_or(InvalidProof::ModPowFailed)?;
-            let rhs = BigNumber::combine(
-                &commitment.b,
-                &one,
-                &commitment.q,
-                challenge,
-                &aux.rsa_modulo,
-            )
-            .ok_or(InvalidProof::ModPowFailed)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.b, &one, &commitment.q, challenge)
+                .ok_or(InvalidProof::ModPowFailed)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(2));
             }
         }
         // check 3
         {
-            let r = BigNumber::combine(&aux.s, data.n, &aux.t, &commitment.sigma, &aux.rsa_modulo)
+            let r = aux
+                .rsa_modulo
+                .combine(&aux.s, data.n, &aux.t, &commitment.sigma)
                 .ok_or(InvalidProof::ModPowFailed)?;
-            let lhs =
-                BigNumber::combine(&commitment.q, &proof.z1, &aux.t, &proof.v, &aux.rsa_modulo)
-                    .ok_or(InvalidProof::ModPowFailed)?;
-            let rhs = BigNumber::combine(&commitment.t, &one, &r, challenge, &aux.rsa_modulo)
+            let lhs = aux
+                .rsa_modulo
+                .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)
+                .ok_or(InvalidProof::ModPowFailed)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.t, &one, &r, challenge)
                 .ok_or(InvalidProof::ModPowFailed)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(3));

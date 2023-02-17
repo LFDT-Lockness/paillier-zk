@@ -179,11 +179,18 @@ pub mod interactive {
         let r = BigNumber::gen_inversible(&mut rng, data.key.n());
         let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
-        let s = BigNumber::combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo)
+        let s = aux
+            .rsa_modulo
+            .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)
             .ok_or(ErrorReason::ModPow)?;
-        let a = BigNumber::combine(&(data.key.n() + 1), &alpha, &r, data.key.n(), data.key.nn())
+        let a = data
+            .key
+            .nn()
+            .combine(&(data.key.n() + 1), &alpha, &r, data.key.n())
             .ok_or(ErrorReason::ModPow)?;
-        let c = BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo)
+        let c = aux
+            .rsa_modulo
+            .combine(&aux.s, &alpha, &aux.t, &gamma)
             .ok_or(ErrorReason::ModPow)?;
         Ok((
             Commitment { s, a, c },
@@ -247,16 +254,14 @@ pub mod interactive {
             None => return Err(InvalidProof::EncryptionFailed),
         }
 
-        let check2 = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
+        let check2 = aux
+            .rsa_modulo
+            .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)
             .ok_or(InvalidProof::ModPowFailed)?
-            == BigNumber::combine(
-                &commitment.c,
-                &1.into(),
-                &commitment.s,
-                challenge,
-                &aux.rsa_modulo,
-            )
-            .ok_or(InvalidProof::ModPowFailed)?;
+            == aux
+                .rsa_modulo
+                .combine(&commitment.c, &1.into(), &commitment.s, challenge)
+                .ok_or(InvalidProof::ModPowFailed)?;
         if !check2 {
             return Err(InvalidProof::EqualityCheckFailed(2));
         }

@@ -205,11 +205,15 @@ pub mod interactive {
             .ok_or(ErrorReason::Encryption)?;
 
         let commitment = Commitment {
-            s: BigNumber::combine(&aux.s, &pdata.x, &aux.t, &mu, &aux.rsa_modulo)
+            s: aux
+                .rsa_modulo
+                .combine(&aux.s, &pdata.x, &aux.t, &mu)
                 .ok_or(ErrorReason::ModPow)?,
             a,
             y: data.g * alpha.to_scalar(),
-            d: BigNumber::combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo)
+            d: aux
+                .rsa_modulo
+                .combine(&aux.s, &alpha, &aux.t, &gamma)
                 .ok_or(ErrorReason::ModPow)?,
         };
         let private_commitment = PrivateCommitment {
@@ -230,14 +234,11 @@ pub mod interactive {
     ) -> Result<Proof, Error> {
         Ok(Proof {
             z1: &pcomm.alpha + challenge * &pdata.x,
-            z2: BigNumber::combine(
-                &pcomm.r,
-                &BigNumber::one(),
-                &pdata.nonce,
-                challenge,
-                data.key0.n(),
-            )
-            .ok_or(ErrorReason::ModPow)?,
+            z2: data
+                .key0
+                .n()
+                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)
+                .ok_or(ErrorReason::ModPow)?,
             z3: &pcomm.gamma + challenge * &pcomm.mu,
         })
     }
@@ -265,7 +266,10 @@ pub mod interactive {
                 .key0
                 .encrypt_with(proof.z1.to_bytes(), proof.z2.clone())
                 .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = BigNumber::combine(&commitment.a, &one, &data.c, challenge, data.key0.nn())
+            let rhs = data
+                .key0
+                .nn()
+                .combine(&commitment.a, &one, &data.c, challenge)
                 .ok_or(InvalidProof::ModPowFailed)?;
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
         }
@@ -275,16 +279,14 @@ pub mod interactive {
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
         }
         {
-            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
+            let lhs = aux
+                .rsa_modulo
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)
                 .ok_or(InvalidProof::ModPowFailed)?;
-            let rhs = BigNumber::combine(
-                &commitment.d,
-                &one,
-                &commitment.s,
-                challenge,
-                &aux.rsa_modulo,
-            )
-            .ok_or(InvalidProof::ModPowFailed)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.d, &one, &commitment.s, challenge)
+                .ok_or(InvalidProof::ModPowFailed)?;
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
         }
         fail_if(
