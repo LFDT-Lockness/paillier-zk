@@ -255,14 +255,16 @@ pub mod interactive {
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
         }
         {
-            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo);
+            let lhs = BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo)
+                .ok_or(InvalidProof::ModPowFailed)?;
             let rhs = BigNumber::combine(
                 &commitment.t,
                 &one,
                 &commitment.s,
                 challenge,
                 &aux.rsa_modulo,
-            );
+            )
+            .ok_or(InvalidProof::ModPowFailed)?;
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
         }
 

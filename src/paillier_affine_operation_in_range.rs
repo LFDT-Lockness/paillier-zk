@@ -403,24 +403,28 @@ pub mod interactive {
         fail_if(
             InvalidProof::EqualityCheckFailed(4),
             BigNumber::combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
+                .ok_or(InvalidProof::ModPowFailed)?
                 == BigNumber::combine(
                     &commitment.e,
                     &one,
                     &commitment.s,
                     challenge,
                     &aux.rsa_modulo,
-                ),
+                )
+                .ok_or(InvalidProof::ModPowFailed)?,
         )?;
         fail_if(
             InvalidProof::EqualityCheckFailed(5),
             BigNumber::combine(&aux.s, &proof.z2, &aux.t, &proof.z4, &aux.rsa_modulo)
+                .ok_or(InvalidProof::ModPowFailed)?
                 == BigNumber::combine(
                     &commitment.f,
                     &one,
                     &commitment.t,
                     challenge,
                     &aux.rsa_modulo,
-                ),
+                )
+                .ok_or(InvalidProof::ModPowFailed)?,
         )?;
         fail_if(
             InvalidProof::RangeCheckFailed(6),
