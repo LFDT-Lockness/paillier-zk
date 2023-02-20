@@ -271,7 +271,7 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.a, &one, &commitment.p, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheckFailed(1).into());
+                return Err(InvalidProofReason::EqualityCheck(1).into());
             }
         }
         // check 2
@@ -283,7 +283,7 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.b, &one, &commitment.q, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheckFailed(2).into());
+                return Err(InvalidProofReason::EqualityCheck(2).into());
             }
         }
         // check 3
@@ -296,17 +296,17 @@ pub mod interactive {
                 .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
             let rhs = aux.rsa_modulo.combine(&commitment.t, &one, &r, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheckFailed(3).into());
+                return Err(InvalidProofReason::EqualityCheck(3).into());
             }
         }
         let range = (BigNumber::from(1) << (security.l + security.epsilon + 1)) * data.n_root;
         // range check for z1
         if proof.z1 > range {
-            return Err(InvalidProofReason::RangeCheckFailed(1).into());
+            return Err(InvalidProofReason::RangeCheck(1).into());
         }
         // range check for z2
         if proof.z2 > range {
-            return Err(InvalidProofReason::RangeCheckFailed(2).into());
+            return Err(InvalidProofReason::RangeCheck(2).into());
         }
 
         Ok(())
@@ -476,7 +476,7 @@ mod test {
         let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof)
             .expect_err("proof should not pass");
         match r.reason() {
-            InvalidProofReason::RangeCheckFailed(2) => (),
+            InvalidProofReason::RangeCheck(2) => (),
             e => panic!("Proof should not fail with {e:?}"),
         }
     }

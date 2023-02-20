@@ -359,41 +359,41 @@ pub mod interactive {
             let enc = data
                 .key0
                 .encrypt_with(proof.z2.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProofReason::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::Encryption)?;
             let lhs = data
                 .key0
                 .add(
                     &data
                         .key0
                         .mul(&data.c, &proof.z1)
-                        .ok_or(InvalidProofReason::EncryptionFailed)?,
+                        .ok_or(InvalidProofReason::Encryption)?,
                     &enc,
                 )
-                .ok_or(InvalidProofReason::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::Encryption)?;
             let rhs = data
                 .key0
                 .nn()
                 .combine(&commitment.a, &one, &data.d, challenge)?;
-            fail_if(InvalidProofReason::EqualityCheckFailed(1), lhs == rhs)?;
+            fail_if(InvalidProofReason::EqualityCheck(1), lhs == rhs)?;
         }
         {
             let lhs = Point::<C>::generator() * proof.z1.to_scalar();
             let rhs = commitment.b_x + data.x * challenge.to_scalar();
-            fail_if(InvalidProofReason::EqualityCheckFailed(2), lhs == rhs)?;
+            fail_if(InvalidProofReason::EqualityCheck(2), lhs == rhs)?;
         }
         {
             let lhs = data
                 .key1
                 .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
-                .ok_or(InvalidProofReason::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::Encryption)?;
             let rhs = data
                 .key1
                 .nn()
                 .combine(&commitment.b_y, &one, &data.y, challenge)?;
-            fail_if(InvalidProofReason::EqualityCheckFailed(3), lhs == rhs)?;
+            fail_if(InvalidProofReason::EqualityCheck(3), lhs == rhs)?;
         }
         fail_if(
-            InvalidProofReason::EqualityCheckFailed(4),
+            InvalidProofReason::EqualityCheck(4),
             aux.rsa_modulo
                 .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
                 == aux
@@ -401,7 +401,7 @@ pub mod interactive {
                     .combine(&commitment.e, &one, &commitment.s, challenge)?,
         )?;
         fail_if(
-            InvalidProofReason::EqualityCheckFailed(5),
+            InvalidProofReason::EqualityCheck(5),
             aux.rsa_modulo
                 .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)?
                 == aux
@@ -409,11 +409,11 @@ pub mod interactive {
                     .combine(&commitment.f, &one, &commitment.t, challenge)?,
         )?;
         fail_if(
-            InvalidProofReason::RangeCheckFailed(6),
+            InvalidProofReason::RangeCheck(6),
             proof.z1 <= &one << (security.l_x + security.epsilon + 1),
         )?;
         fail_if(
-            InvalidProofReason::RangeCheckFailed(7),
+            InvalidProofReason::RangeCheck(7),
             proof.z2 <= &one << (security.l_y + security.epsilon + 1),
         )?;
         Ok(())
@@ -638,7 +638,7 @@ mod test {
         let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
             .expect_err("proof should not pass");
         match r.reason() {
-            InvalidProofReason::RangeCheckFailed(7) => (),
+            InvalidProofReason::RangeCheck(7) => (),
             e => panic!("proof should not fail with: {e:?}"),
         }
     }
@@ -660,7 +660,7 @@ mod test {
         let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
             .expect_err("proof should not pass");
         match r.reason() {
-            InvalidProofReason::RangeCheckFailed(6) => (),
+            InvalidProofReason::RangeCheck(6) => (),
             e => panic!("proof should not fail with: {e:?}"),
         }
     }
@@ -717,7 +717,7 @@ mod test {
             );
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(InvalidProofReason::RangeCheckFailed(6)) => false,
+                Err(InvalidProofReason::RangeCheck(6)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }
@@ -750,7 +750,7 @@ mod test {
             );
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(InvalidProofReason::RangeCheckFailed(7)) => false,
+                Err(InvalidProofReason::RangeCheck(7)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }

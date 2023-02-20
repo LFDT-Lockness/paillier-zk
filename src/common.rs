@@ -27,16 +27,16 @@ pub struct InvalidProof(
 pub enum InvalidProofReason {
     /// One equality doesn't hold. Parameterized by equality index
     #[error("equality check failed {0}")]
-    EqualityCheckFailed(usize),
+    EqualityCheck(usize),
     /// One range check doesn't hold. Parameterized by check index
     #[error("range check failed {0}")]
-    RangeCheckFailed(usize),
+    RangeCheck(usize),
     /// Encryption of supplied data failed when attempting to verify
     #[error("encryption failed")]
-    EncryptionFailed,
+    Encryption,
     /// Failed to evaluate powmod
     #[error("powmod failed")]
-    ModPowFailed,
+    ModPow,
 }
 
 impl InvalidProof {
@@ -48,7 +48,7 @@ impl InvalidProof {
 
 impl From<BadExponent> for InvalidProof {
     fn from(_err: BadExponent) -> Self {
-        InvalidProofReason::ModPowFailed.into()
+        InvalidProofReason::ModPow.into()
     }
 }
 

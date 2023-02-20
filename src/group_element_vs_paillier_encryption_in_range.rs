@@ -258,17 +258,17 @@ pub mod interactive {
             let lhs = data
                 .key0
                 .encrypt_with(proof.z1.to_bytes(), proof.z2.clone())
-                .ok_or(InvalidProofReason::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::Encryption)?;
             let rhs = data
                 .key0
                 .nn()
                 .combine(&commitment.a, &one, &data.c, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(1))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(1))?;
         }
         {
             let lhs = data.g * proof.z1.to_scalar();
             let rhs = commitment.y + data.x * challenge.to_scalar();
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(2))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(2))?;
         }
         {
             let lhs = aux
@@ -277,11 +277,11 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.d, &one, &commitment.s, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(3))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(3))?;
         }
         fail_if(
             proof.z1 <= one << (security.l + security.epsilon + 1),
-            InvalidProofReason::RangeCheckFailed(4),
+            InvalidProofReason::RangeCheck(4),
         )?;
 
         Ok(())
@@ -470,7 +470,7 @@ mod test {
         let plaintext = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let r = run(rng, security, plaintext).expect_err("proof should not pass");
         match r.reason() {
-            InvalidProofReason::RangeCheckFailed(_) => (),
+            InvalidProofReason::RangeCheck(_) => (),
             e => panic!("proof should not fail with: {e:?}"),
         }
     }
@@ -513,7 +513,7 @@ mod test {
             let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext);
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(InvalidProofReason::RangeCheckFailed(4)) => false,
+                Err(InvalidProofReason::RangeCheck(4)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }

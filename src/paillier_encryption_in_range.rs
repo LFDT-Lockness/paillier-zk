@@ -241,10 +241,10 @@ pub mod interactive {
                         data.key.nn(),
                     )
                 {
-                    return Err(InvalidProofReason::EqualityCheckFailed(1).into());
+                    return Err(InvalidProofReason::EqualityCheck(1).into());
                 }
             }
-            None => return Err(InvalidProofReason::EncryptionFailed.into()),
+            None => return Err(InvalidProofReason::Encryption.into()),
         }
 
         let check2 = aux
@@ -254,11 +254,11 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.c, &1.into(), &commitment.s, challenge)?;
         if !check2 {
-            return Err(InvalidProofReason::EqualityCheckFailed(2).into());
+            return Err(InvalidProofReason::EqualityCheck(2).into());
         }
 
         if proof.z1 > (BigNumber::one() << (security.l + security.epsilon + 1)) {
-            return Err(InvalidProofReason::RangeCheckFailed(3).into());
+            return Err(InvalidProofReason::RangeCheck(3).into());
         }
 
         Ok(())
@@ -409,7 +409,7 @@ mod test {
         let r = run_with(rng, security, plaintext);
         match r.map_err(|e| e.reason()) {
             Ok(()) => panic!("proof should not pass"),
-            Err(InvalidProofReason::RangeCheckFailed(_)) => (),
+            Err(InvalidProofReason::RangeCheck(_)) => (),
             Err(e) => panic!("proof should not fail with {e:?}"),
         }
     }
@@ -435,7 +435,7 @@ mod test {
             let r = run_with(rng, security, plaintext);
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(InvalidProofReason::RangeCheckFailed(_)) => false,
+                Err(InvalidProofReason::RangeCheck(_)) => false,
                 Err(e) => panic!("proof should not fail with {e:?}"),
             }
         }

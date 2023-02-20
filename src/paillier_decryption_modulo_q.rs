@@ -236,19 +236,19 @@ pub mod interactive {
             let lhs = data
                 .key
                 .encrypt_with(proof.z1.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProofReason::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::Encryption)?;
             let rhs = data
                 .key
                 .nn()
                 .combine(&commitment.a, &one, &data.c, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(1))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(1))?;
         }
         {
             let lhs = &proof.z1 % &data.q;
             let rhs = commitment
                 .gamma
                 .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(2))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(2))?;
         }
         {
             let lhs = aux
@@ -257,7 +257,7 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.t, &one, &commitment.s, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(3))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(3))?;
         }
 
         Ok(())
