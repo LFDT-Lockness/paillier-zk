@@ -163,10 +163,6 @@ pub mod interactive {
         let phi = (p - 1) * (q - 1);
         let n_inverse = n.extended_gcd(&phi).x;
 
-        if n_inverse.modmul(&(n % &phi), &phi) != BigNumber::one() {
-            return Err(ErrorReason::AssertFailed(0).into());
-        }
-
         let points = challenge.ys.clone().map(|y| {
             let z = y.powmod(&n_inverse, n)?;
             let (a, b, y_) = find_residue(&y, w, p, q, n);
