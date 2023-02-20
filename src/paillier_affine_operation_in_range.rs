@@ -296,22 +296,10 @@ pub mod interactive {
                 .key1
                 .encrypt_with(beta.to_bytes(), r_y.clone())
                 .ok_or(ErrorReason::Encryption)?,
-            e: aux
-                .rsa_modulo
-                .combine(&aux.s, &alpha, &aux.t, &gamma)
-                .ok_or(ErrorReason::ModPow)?,
-            s: aux
-                .rsa_modulo
-                .combine(&aux.s, &pdata.x, &aux.t, &m)
-                .ok_or(ErrorReason::ModPow)?,
-            f: aux
-                .rsa_modulo
-                .combine(&aux.s, &beta, &aux.t, &delta)
-                .ok_or(ErrorReason::ModPow)?,
-            t: aux
-                .rsa_modulo
-                .combine(&aux.s, &pdata.y, &aux.t, &mu)
-                .ok_or(ErrorReason::ModPow)?,
+            e: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
+            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &m)?,
+            f: aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &delta)?,
+            t: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -341,13 +329,11 @@ pub mod interactive {
             w: data
                 .key0
                 .n()
-                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)
-                .ok_or(ErrorReason::ModPow)?,
+                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)?,
             w_y: data
                 .key1
                 .n()
-                .combine(&pcomm.r_y, &BigNumber::one(), &pdata.nonce_y, challenge)
-                .ok_or(ErrorReason::ModPow)?,
+                .combine(&pcomm.r_y, &BigNumber::one(), &pdata.nonce_y, challenge)?,
         })
     }
 
@@ -387,8 +373,7 @@ pub mod interactive {
             let rhs = data
                 .key0
                 .nn()
-                .combine(&commitment.a, &one, &data.d, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.a, &one, &data.d, challenge)?;
             fail_if(InvalidProof::EqualityCheckFailed(1), lhs == rhs)?;
         }
         {
@@ -404,29 +389,24 @@ pub mod interactive {
             let rhs = data
                 .key1
                 .nn()
-                .combine(&commitment.b_y, &one, &data.y, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.b_y, &one, &data.y, challenge)?;
             fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
         }
         fail_if(
             InvalidProof::EqualityCheckFailed(4),
             aux.rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)
-                .ok_or(InvalidProof::ModPowFailed)?
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
                 == aux
                     .rsa_modulo
-                    .combine(&commitment.e, &one, &commitment.s, challenge)
-                    .ok_or(InvalidProof::ModPowFailed)?,
+                    .combine(&commitment.e, &one, &commitment.s, challenge)?,
         )?;
         fail_if(
             InvalidProof::EqualityCheckFailed(5),
             aux.rsa_modulo
-                .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)
-                .ok_or(InvalidProof::ModPowFailed)?
+                .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)?
                 == aux
                     .rsa_modulo
-                    .combine(&commitment.f, &one, &commitment.t, challenge)
-                    .ok_or(InvalidProof::ModPowFailed)?,
+                    .combine(&commitment.f, &one, &commitment.t, challenge)?,
         )?;
         fail_if(
             InvalidProof::RangeCheckFailed(6),

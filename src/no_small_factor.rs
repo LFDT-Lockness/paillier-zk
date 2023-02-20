@@ -163,7 +163,7 @@ pub use crate::common::Aux;
 pub mod interactive {
     use rand_core::RngCore;
 
-    use crate::{common::BigNumberExt, unknown_order::BigNumber, Error, ErrorReason};
+    use crate::{common::BigNumberExt, unknown_order::BigNumber, Error};
 
     use super::{
         Aux, Challenge, Commitment, Data, InvalidProof, PrivateCommitment, PrivateData, Proof,
@@ -195,26 +195,11 @@ pub mod interactive {
         let x = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
         let y = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
 
-        let p = aux
-            .rsa_modulo
-            .combine(&aux.s, pdata.p, &aux.t, &mu)
-            .ok_or(ErrorReason::ModPow)?;
-        let q = aux
-            .rsa_modulo
-            .combine(&aux.s, pdata.q, &aux.t, &nu)
-            .ok_or(ErrorReason::ModPow)?;
-        let a = aux
-            .rsa_modulo
-            .combine(&aux.s, &alpha, &aux.t, &x)
-            .ok_or(ErrorReason::ModPow)?;
-        let b = aux
-            .rsa_modulo
-            .combine(&aux.s, &beta, &aux.t, &y)
-            .ok_or(ErrorReason::ModPow)?;
-        let t = aux
-            .rsa_modulo
-            .combine(&q, &alpha, &aux.t, &r)
-            .ok_or(ErrorReason::ModPow)?;
+        let p = aux.rsa_modulo.combine(&aux.s, pdata.p, &aux.t, &mu)?;
+        let q = aux.rsa_modulo.combine(&aux.s, pdata.q, &aux.t, &nu)?;
+        let a = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &x)?;
+        let b = aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &y)?;
+        let t = aux.rsa_modulo.combine(&q, &alpha, &aux.t, &r)?;
 
         let commitment = Commitment {
             p,
@@ -277,12 +262,10 @@ pub mod interactive {
         {
             let lhs = aux
                 .rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.w1)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.w1)?;
             let rhs = aux
                 .rsa_modulo
-                .combine(&commitment.a, &one, &commitment.p, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.a, &one, &commitment.p, challenge)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(1));
             }
@@ -291,12 +274,10 @@ pub mod interactive {
         {
             let lhs = aux
                 .rsa_modulo
-                .combine(&aux.s, &proof.z2, &aux.t, &proof.w2)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&aux.s, &proof.z2, &aux.t, &proof.w2)?;
             let rhs = aux
                 .rsa_modulo
-                .combine(&commitment.b, &one, &commitment.q, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.b, &one, &commitment.q, challenge)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(2));
             }
@@ -305,16 +286,11 @@ pub mod interactive {
         {
             let r = aux
                 .rsa_modulo
-                .combine(&aux.s, data.n, &aux.t, &commitment.sigma)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&aux.s, data.n, &aux.t, &commitment.sigma)?;
             let lhs = aux
                 .rsa_modulo
-                .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)
-                .ok_or(InvalidProof::ModPowFailed)?;
-            let rhs = aux
-                .rsa_modulo
-                .combine(&commitment.t, &one, &r, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
+            let rhs = aux.rsa_modulo.combine(&commitment.t, &one, &r, challenge)?;
             if lhs != rhs {
                 return Err(InvalidProof::EqualityCheckFailed(3));
             }

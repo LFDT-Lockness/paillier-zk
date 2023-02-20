@@ -20,7 +20,7 @@ pub use libpaillier;
 /// the correct version of the library
 pub use libpaillier::unknown_order;
 
-pub use common::{BigNumberExt, InvalidProof, ProtocolError};
+pub use common::{BadExponent, BigNumberExt, InvalidProof};
 
 #[derive(Debug, Clone, Error)]
 #[error(transparent)]
@@ -32,4 +32,10 @@ enum ErrorReason {
     ModPow,
     #[error("couldn't encrypt a message")]
     Encryption,
+}
+
+impl From<BadExponent> for Error {
+    fn from(_err: BadExponent) -> Self {
+        Error(ErrorReason::ModPow)
+    }
 }

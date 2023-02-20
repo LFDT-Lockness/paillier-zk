@@ -205,16 +205,10 @@ pub mod interactive {
             .ok_or(ErrorReason::Encryption)?;
 
         let commitment = Commitment {
-            s: aux
-                .rsa_modulo
-                .combine(&aux.s, &pdata.x, &aux.t, &mu)
-                .ok_or(ErrorReason::ModPow)?,
+            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &mu)?,
             a,
             y: data.g * alpha.to_scalar(),
-            d: aux
-                .rsa_modulo
-                .combine(&aux.s, &alpha, &aux.t, &gamma)
-                .ok_or(ErrorReason::ModPow)?,
+            d: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -237,8 +231,7 @@ pub mod interactive {
             z2: data
                 .key0
                 .n()
-                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)
-                .ok_or(ErrorReason::ModPow)?,
+                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)?,
             z3: &pcomm.gamma + challenge * &pcomm.mu,
         })
     }
@@ -269,8 +262,7 @@ pub mod interactive {
             let rhs = data
                 .key0
                 .nn()
-                .combine(&commitment.a, &one, &data.c, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.a, &one, &data.c, challenge)?;
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
         }
         {
@@ -281,12 +273,10 @@ pub mod interactive {
         {
             let lhs = aux
                 .rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?;
             let rhs = aux
                 .rsa_modulo
-                .combine(&commitment.d, &one, &commitment.s, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.d, &one, &commitment.s, challenge)?;
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
         }
         fail_if(

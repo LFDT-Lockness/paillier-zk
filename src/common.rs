@@ -26,14 +26,10 @@ pub enum InvalidProof {
     ModPowFailed,
 }
 
-/// Unexpeted error that can happen in a protocol. You should probably panic if
-/// you see this.
-#[derive(Debug, PartialEq, Eq)]
-pub enum ProtocolError {
-    /// Encryption of supplied data failed when computing proof
-    EncryptionFailed,
-    /// Hashing of supplied data failed when computing proof or challenge
-    HashFailed,
+impl From<BadExponent> for InvalidProof {
+    fn from(_err: BadExponent) -> Self {
+        InvalidProof::ModPowFailed
+    }
 }
 
 /// Regular paillier encryption methods are easy to misuse and generate
@@ -77,7 +73,7 @@ pub trait BigNumberExt: Sized {
     fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, rng: &mut R) -> Self;
 
     /// Compute l^le * r^re modulo self
-    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Option<Self>;
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent>;
 
     /// Embed BigInt into chosen scalar type
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
@@ -89,7 +85,7 @@ pub trait BigNumberExt: Sized {
     ///
     /// Unlike [`BigNumber::modpow`], this method correctly handles negative exponent. `None`
     /// is returned if modpow cannot be computed.
-    fn powmod(&self, exponent: &Self, modulo: &Self) -> Option<Self>;
+    fn powmod(&self, exponent: &Self, modulo: &Self) -> Result<Self, BadExponent>;
 }
 
 impl BigNumberExt for BigNumber {
@@ -102,8 +98,8 @@ impl BigNumberExt for BigNumber {
         }
     }
 
-    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Option<Self> {
-        Some(l.powmod(le, self)?.modmul(&r.powmod(re, self)?, self))
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent> {
+        Ok(l.powmod(le, self)?.modmul(&r.powmod(re, self)?, self))
     }
 
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C> {
@@ -115,23 +111,30 @@ impl BigNumberExt for BigNumber {
         n - range
     }
 
-    fn powmod(&self, exponent: &Self, modulo: &Self) -> Option<Self> {
+    fn powmod(&self, exponent: &Self, modulo: &Self) -> Result<Self, BadExponent> {
         if modulo <= &BigNumber::zero() {
-            return None;
+            return Err(BadExponent);
         }
 
         #[allow(clippy::disallowed_methods)]
         if exponent < &BigNumber::zero() {
-            Some(BigNumber::modpow(
-                &self.invert(modulo)?,
+            Ok(BigNumber::modpow(
+                &self.invert(modulo).ok_or(BadExponent)?,
                 &(-exponent),
                 modulo,
             ))
         } else {
-            Some(BigNumber::modpow(self, exponent, modulo))
+            Ok(BigNumber::modpow(self, exponent, modulo))
         }
     }
 }
+
+/// Indicates that computation is not defined because of bad exponent
+///
+/// Returned by [`BigNumberExt::powmod`] and other functions that do exponentiation internally
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+#[error("exponent is undefined")]
+pub struct BadExponent;
 
 #[cfg(test)]
 pub mod test {

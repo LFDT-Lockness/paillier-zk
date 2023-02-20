@@ -85,6 +85,12 @@ pub enum InvalidProof {
     ModPow,
 }
 
+impl From<crate::BadExponent> for InvalidProof {
+    fn from(_err: crate::BadExponent) -> Self {
+        InvalidProof::ModPow
+    }
+}
+
 /// Public data that both parties know: the Paillier-Blum modulus
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -164,7 +170,7 @@ pub mod interactive {
         let n_inverse = n.extended_gcd(&phi).x;
 
         let points = challenge.ys.clone().map(|y| {
-            let z = y.powmod(&n_inverse, n)?;
+            let z = y.powmod(&n_inverse, n).ok()?;
             let (a, b, y_) = find_residue(&y, w, p, q, n);
             let x = sqrt(sqrt(y_));
             Some(ProofPoint { x, a, b, z })
@@ -193,12 +199,7 @@ pub mod interactive {
             return Err(InvalidProof::ModulusIsEven);
         }
         for (point, y) in proof.points.iter().zip(challenge.ys.iter()) {
-            if point
-                .z
-                .powmod(&data.n, &data.n)
-                .ok_or(InvalidProof::ModPow)?
-                != *y
-            {
+            if point.z.powmod(&data.n, &data.n)? != *y {
                 return Err(InvalidProof::IncorrectNthRoot);
             }
             let y = y.clone();
@@ -208,12 +209,7 @@ pub mod interactive {
             } else {
                 y
             };
-            if point
-                .x
-                .powmod(&4.into(), &data.n)
-                .ok_or(InvalidProof::ModPow)?
-                != y
-            {
+            if point.x.powmod(&4.into(), &data.n)? != y {
                 return Err(InvalidProof::IncorrectFourthRoot);
             }
         }

@@ -182,14 +182,8 @@ pub mod interactive {
             .ok_or(ErrorReason::Encryption)?;
 
         let commitment = Commitment {
-            s: aux
-                .rsa_modulo
-                .combine(&aux.s, &pdata.y, &aux.t, &mu)
-                .ok_or(ErrorReason::ModPow)?,
-            t: aux
-                .rsa_modulo
-                .combine(&aux.s, &alpha, &aux.t, &nu)
-                .ok_or(ErrorReason::ModPow)?,
+            s: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
+            t: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &nu)?,
             a,
             gamma: &alpha % &data.q,
         };
@@ -217,8 +211,7 @@ pub mod interactive {
             w: data
                 .key
                 .n()
-                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)
-                .ok_or(ErrorReason::ModPow)?,
+                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)?,
         })
     }
 
@@ -247,8 +240,7 @@ pub mod interactive {
             let rhs = data
                 .key
                 .nn()
-                .combine(&commitment.a, &one, &data.c, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.a, &one, &data.c, challenge)?;
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
         }
         {
@@ -261,12 +253,10 @@ pub mod interactive {
         {
             let lhs = aux
                 .rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z2)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z2)?;
             let rhs = aux
                 .rsa_modulo
-                .combine(&commitment.t, &one, &commitment.s, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.t, &one, &commitment.s, challenge)?;
             fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
         }
 

@@ -154,7 +154,7 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::{common::SafePaillierExt, unknown_order::BigNumber, Error, ErrorReason};
+    use crate::{common::SafePaillierExt, unknown_order::BigNumber, Error};
     use rand_core::RngCore;
 
     use crate::common::{BigNumberExt, InvalidProof};
@@ -181,17 +181,12 @@ pub mod interactive {
 
         let s = aux
             .rsa_modulo
-            .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)
-            .ok_or(ErrorReason::ModPow)?;
+            .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)?;
         let a = data
             .key
             .nn()
-            .combine(&(data.key.n() + 1), &alpha, &r, data.key.n())
-            .ok_or(ErrorReason::ModPow)?;
-        let c = aux
-            .rsa_modulo
-            .combine(&aux.s, &alpha, &aux.t, &gamma)
-            .ok_or(ErrorReason::ModPow)?;
+            .combine(&(data.key.n() + 1), &alpha, &r, data.key.n())?;
+        let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
         Ok((
             Commitment { s, a, c },
             PrivateCommitment {
@@ -216,10 +211,7 @@ pub mod interactive {
         let z2 = &m
             * (
                 &private_commitment.r,
-                &pdata
-                    .nonce
-                    .powmod(challenge, data.key.n())
-                    .ok_or(ErrorReason::ModPow)?,
+                &pdata.nonce.powmod(challenge, data.key.n())?,
             );
         let z1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
         let z3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
@@ -241,10 +233,7 @@ pub mod interactive {
             Some(cipher) => {
                 if cipher
                     != commitment.a.modmul(
-                        &data
-                            .ciphertext
-                            .powmod(challenge, data.key.nn())
-                            .ok_or(InvalidProof::ModPowFailed)?,
+                        &data.ciphertext.powmod(challenge, data.key.nn())?,
                         data.key.nn(),
                     )
                 {
@@ -256,12 +245,10 @@ pub mod interactive {
 
         let check2 = aux
             .rsa_modulo
-            .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)
-            .ok_or(InvalidProof::ModPowFailed)?
+            .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
             == aux
                 .rsa_modulo
-                .combine(&commitment.c, &1.into(), &commitment.s, challenge)
-                .ok_or(InvalidProof::ModPowFailed)?;
+                .combine(&commitment.c, &1.into(), &commitment.s, challenge)?;
         if !check2 {
             return Err(InvalidProof::EqualityCheckFailed(2));
         }
