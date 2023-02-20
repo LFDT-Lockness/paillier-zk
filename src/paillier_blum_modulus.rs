@@ -69,28 +69,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::unknown_order::BigNumber;
 
-/// Reason for failure. If the proof failes, you should only be interested in a
-/// reason for debugging purposes
-#[derive(Debug, PartialEq, Eq)]
-pub enum InvalidProof {
-    /// Paillier-Blum modulus is prime
-    ModulusIsPrime,
-    /// Paillier-Blum modulus
-    ModulusIsEven,
-    /// Proof's z value in n-th power does not equal commitment value
-    IncorrectNthRoot,
-    /// Proof's x value in 4-th power does not equal commitment value
-    IncorrectFourthRoot,
-    /// Couldn't compute modpow
-    ModPow,
-}
-
-impl From<crate::BadExponent> for InvalidProof {
-    fn from(_err: crate::BadExponent) -> Self {
-        InvalidProof::ModPow
-    }
-}
-
 /// Public data that both parties know: the Paillier-Blum modulus
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -147,9 +125,9 @@ pub mod interactive {
     use crate::common::sqrt::{blum_sqrt, find_residue, non_residue_in};
     use crate::common::BigNumberExt;
     use crate::unknown_order::BigNumber;
-    use crate::{Error, ErrorReason};
+    use crate::{Error, ErrorReason, InvalidProof, InvalidProofReason};
 
-    use super::{Challenge, Commitment, Data, InvalidProof, PrivateData, Proof, ProofPoint};
+    use super::{Challenge, Commitment, Data, PrivateData, Proof, ProofPoint};
 
     /// Create random commitment
     pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
@@ -193,14 +171,14 @@ pub mod interactive {
         proof: &Proof<M>,
     ) -> Result<(), InvalidProof> {
         if data.n.is_prime() {
-            return Err(InvalidProof::ModulusIsPrime);
+            return Err(InvalidProofReason::ModulusIsPrime.into());
         }
         if &data.n % BigNumber::from(2) == BigNumber::zero() {
-            return Err(InvalidProof::ModulusIsEven);
+            return Err(InvalidProofReason::ModulusIsEven.into());
         }
         for (point, y) in proof.points.iter().zip(challenge.ys.iter()) {
             if point.z.powmod(&data.n, &data.n)? != *y {
-                return Err(InvalidProof::IncorrectNthRoot);
+                return Err(InvalidProofReason::IncorrectNthRoot.into());
             }
             let y = y.clone();
             let y = if point.a { &data.n - y } else { y };
@@ -210,7 +188,7 @@ pub mod interactive {
                 y
             };
             if point.x.powmod(&4.into(), &data.n)? != y {
-                return Err(InvalidProof::IncorrectFourthRoot);
+                return Err(InvalidProofReason::IncorrectFourthRoot.into());
             }
         }
         Ok(())
@@ -234,9 +212,10 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use super::{Challenge, Commitment, Data, InvalidProof, PrivateData, Proof};
     use crate::unknown_order::BigNumber;
-    use crate::Error;
+    use crate::{Error, InvalidProof};
+
+    use super::{Challenge, Commitment, Data, PrivateData, Proof};
 
     /// Compute proof for the given data, producing random commitment and
     /// deriving determenistic challenge.

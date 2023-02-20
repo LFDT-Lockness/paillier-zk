@@ -20,6 +20,7 @@ pub use libpaillier;
 /// the correct version of the library
 pub use libpaillier::unknown_order;
 
+use common::InvalidProofReason;
 pub use common::{BadExponent, BigNumberExt, InvalidProof};
 
 #[derive(Debug, Clone, Error)]

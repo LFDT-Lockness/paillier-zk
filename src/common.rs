@@ -37,6 +37,18 @@ pub enum InvalidProofReason {
     /// Failed to evaluate powmod
     #[error("powmod failed")]
     ModPow,
+    /// Paillier-Blum modulus is prime
+    #[error("modulus is prime")]
+    ModulusIsPrime,
+    /// Paillier-Blum modulus
+    #[error("modulus is even")]
+    ModulusIsEven,
+    /// Proof's z value in n-th power does not equal commitment value
+    #[error("incorrect nth root")]
+    IncorrectNthRoot,
+    /// Proof's x value in 4-th power does not equal commitment value
+    #[error("incorrect 4th root")]
+    IncorrectFourthRoot,
 }
 
 impl InvalidProof {
