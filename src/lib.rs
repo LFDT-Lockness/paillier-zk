@@ -23,6 +23,7 @@ pub use libpaillier::unknown_order;
 use common::InvalidProofReason;
 pub use common::{BadExponent, BigNumberExt, InvalidProof};
 
+/// Library general error type
 #[derive(Debug, Clone, Error)]
 #[error(transparent)]
 pub struct Error(#[from] ErrorReason);

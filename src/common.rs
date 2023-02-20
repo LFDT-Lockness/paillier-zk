@@ -40,7 +40,7 @@ pub enum InvalidProofReason {
     /// Paillier-Blum modulus is prime
     #[error("modulus is prime")]
     ModulusIsPrime,
-    /// Paillier-Blum modulus
+    /// Paillier-Blum modulus is even
     #[error("modulus is even")]
     ModulusIsEven,
     /// Proof's z value in n-th power does not equal commitment value
@@ -115,7 +115,7 @@ pub trait BigNumberExt: Sized {
 
     /// Computes self^exponent mod modulo
     ///
-    /// Unlike [`BigNumber::modpow`], this method correctly handles negative exponent. `None`
+    /// Unlike [`BigNumber::modpow`], this method correctly handles negative exponent. `Err(_)`
     /// is returned if modpow cannot be computed.
     fn powmod(&self, exponent: &Self, modulo: &Self) -> Result<Self, BadExponent>;
 }
@@ -161,7 +161,7 @@ impl BigNumberExt for BigNumber {
     }
 }
 
-/// Indicates that computation is not defined because of bad exponent
+/// Error indicating that computation cannot be evaluated because of bad exponent
 ///
 /// Returned by [`BigNumberExt::powmod`] and other functions that do exponentiation internally
 #[derive(Clone, Copy, Debug, thiserror::Error)]
