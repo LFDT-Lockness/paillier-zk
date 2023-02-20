@@ -14,6 +14,7 @@
 //!
 //! ``` no_run
 //! # use paillier_zk::unknown_order::BigNumber;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use paillier_zk::paillier_encryption_in_range as p;
 //! use generic_ec::hash_to_curve::Tag;
 //! let shared_state_prover = sha2::Sha256::default();
@@ -54,7 +55,7 @@
 //! let data = p::Data { key, ciphertext };
 //! let pdata = p::PrivateData { plaintext, nonce };
 //! let (commitment, proof) =
-//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng);
+//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng)?;
 //!
 //! // 4. Prover sends this data to verifier
 //!
@@ -66,7 +67,7 @@
 //!
 //! let (data, commitment, proof) = recv();
 //! p::non_interactive::verify(shared_state_verifier, &aux, &data, &commitment, &security, &proof);
-//!
+//! # Ok(()) }
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover
@@ -153,10 +154,14 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
+    use crate::{
+        common::{InvalidProofReason, SafePaillierExt},
+        unknown_order::BigNumber,
+        Error,
+    };
     use rand_core::RngCore;
 
-    use crate::common::{combine, gen_inversible, InvalidProof};
+    use crate::common::{BigNumberExt, InvalidProof};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -169,19 +174,24 @@ pub mod interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         mut rng: R,
-    ) -> (Commitment, PrivateCommitment) {
+    ) -> Result<(Commitment, PrivateCommitment), Error> {
         // add 1 to exponents to account for +-
         let two_to_l = BigNumber::from(1) << (security.l + 1);
         let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
         let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
-        let r = gen_inversible(data.key.n(), &mut rng);
+        let r = BigNumber::gen_inversible(data.key.n(), &mut rng);
         let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
 
-        let s = combine(&aux.s, &pdata.plaintext, &aux.t, &mu, &aux.rsa_modulo);
-        let a = combine(&(data.key.n() + 1), &alpha, &r, data.key.n(), data.key.nn());
-        let c = combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo);
-        (
+        let s = aux
+            .rsa_modulo
+            .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)?;
+        let a = data
+            .key
+            .nn()
+            .combine(&(data.key.n() + 1), &alpha, &r, data.key.n())?;
+        let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
+        Ok((
             Commitment { s, a, c },
             PrivateCommitment {
                 alpha,
@@ -189,7 +199,7 @@ pub mod interactive {
                 r,
                 gamma,
             },
-        )
+        ))
     }
 
     /// Compute proof for given data and prior protocol values
@@ -198,18 +208,18 @@ pub mod interactive {
         pdata: &PrivateData,
         private_commitment: &PrivateCommitment,
         challenge: &Challenge,
-    ) -> Proof {
+    ) -> Result<Proof, Error> {
         let m = crate::unknown_order::Group {
             modulus: data.key.n().clone(),
         };
         let z2 = &m
             * (
                 &private_commitment.r,
-                &pdata.nonce.modpow(challenge, data.key.n()),
+                &pdata.nonce.powmod(challenge, data.key.n())?,
             );
         let z1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
         let z3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
-        Proof { z1, z2, z3 }
+        Ok(Proof { z1, z2, z3 })
     }
 
     /// Verify the proof
@@ -227,30 +237,28 @@ pub mod interactive {
             Some(cipher) => {
                 if cipher
                     != commitment.a.modmul(
-                        &data.ciphertext.modpow(challenge, data.key.nn()),
+                        &data.ciphertext.powmod(challenge, data.key.nn())?,
                         data.key.nn(),
                     )
                 {
-                    return Err(InvalidProof::EqualityCheckFailed(1));
+                    return Err(InvalidProofReason::EqualityCheck(1).into());
                 }
             }
-            None => return Err(InvalidProof::EncryptionFailed),
+            None => return Err(InvalidProofReason::Encryption.into()),
         }
 
-        let check2 = combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
-            == combine(
-                &commitment.c,
-                &1.into(),
-                &commitment.s,
-                challenge,
-                &aux.rsa_modulo,
-            );
+        let check2 = aux
+            .rsa_modulo
+            .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
+            == aux
+                .rsa_modulo
+                .combine(&commitment.c, &1.into(), &commitment.s, challenge)?;
         if !check2 {
-            return Err(InvalidProof::EqualityCheckFailed(2));
+            return Err(InvalidProofReason::EqualityCheck(2).into());
         }
 
         if proof.z1 > (BigNumber::one() << (security.l + security.epsilon + 1)) {
-            return Err(InvalidProof::RangeCheckFailed(3));
+            return Err(InvalidProofReason::RangeCheck(3).into());
         }
 
         Ok(())
@@ -273,7 +281,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::common::InvalidProof;
+    use crate::{Error, InvalidProof};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 
@@ -288,14 +296,14 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> (Commitment, Proof)
+    ) -> Result<(Commitment, Proof), Error>
     where
         D: Digest<OutputSize = U32>,
     {
-        let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng);
+        let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &comm, security);
-        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
-        (comm, proof)
+        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge)?;
+        Ok((comm, proof))
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
@@ -344,7 +352,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::{InvalidProof, SafePaillierExt};
+    use crate::common::{InvalidProofReason, SafePaillierExt};
     use crate::unknown_order::BigNumber;
 
     fn run_with<R: rand_core::RngCore>(
@@ -369,7 +377,8 @@ mod test {
             &pdata,
             &security,
             rng,
-        );
+        )
+        .unwrap();
         super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
     }
 
@@ -398,9 +407,9 @@ mod test {
         };
         let plaintext = (BigNumber::one() << (security.l + security.epsilon + 1)) + 1;
         let r = run_with(rng, security, plaintext);
-        match r {
+        match r.map_err(|e| e.reason()) {
             Ok(()) => panic!("proof should not pass"),
-            Err(InvalidProof::RangeCheckFailed(_)) => (),
+            Err(InvalidProofReason::RangeCheck(_)) => (),
             Err(e) => panic!("proof should not fail with {e:?}"),
         }
     }
@@ -424,9 +433,9 @@ mod test {
             };
             let plaintext: BigNumber = (BigNumber::one() << (security.l + 1)) - 1;
             let r = run_with(rng, security, plaintext);
-            match r {
+            match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(InvalidProof::RangeCheckFailed(_)) => false,
+                Err(InvalidProofReason::RangeCheck(_)) => false,
                 Err(e) => panic!("proof should not fail with {e:?}"),
             }
         }

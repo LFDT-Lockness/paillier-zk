@@ -28,6 +28,7 @@
 //!     ``` no_run
 //!     use paillier_zk::paillier_blum_modulus as p;
 //!     # use generic_ec::hash_to_curve::Tag;
+//!     # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     # let (n, p, q) = todo!();
 //!     # let shared_state = sha2::Sha256::default();
 //!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
@@ -43,7 +44,8 @@
 //!             &data,
 //!             &pdata,
 //!             &mut rng,
-//!         );
+//!         )?;
+//!     # Ok(()) }
 //!     ```
 //! 2. P sends `data, commitment, proof` to the verifier V
 //! 3. V verifies the proof:
@@ -66,20 +68,6 @@
 use serde::{Deserialize, Serialize};
 
 use crate::unknown_order::BigNumber;
-
-/// Reason for failure. If the proof failes, you should only be interested in a
-/// reason for debugging purposes
-#[derive(Debug, PartialEq, Eq)]
-pub enum InvalidProof {
-    /// Paillier-Blum modulus is prime
-    ModulusIsPrime,
-    /// Paillier-Blum modulus
-    ModulusIsEven,
-    /// Proof's z value in n-th power does not equal commitment value
-    IncorrectNthRoot,
-    /// Proof's x value in 4-th power does not equal commitment value
-    IncorrectFourthRoot,
-}
 
 /// Public data that both parties know: the Paillier-Blum modulus
 #[derive(Debug, Clone)]
@@ -132,12 +120,14 @@ pub struct Proof<const M: usize> {
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
 
     use crate::common::sqrt::{blum_sqrt, find_residue, non_residue_in};
+    use crate::common::BigNumberExt;
+    use crate::unknown_order::BigNumber;
+    use crate::{Error, ErrorReason, InvalidProof, InvalidProofReason};
 
-    use super::{Challenge, Commitment, Data, InvalidProof, PrivateData, Proof, ProofPoint};
+    use super::{Challenge, Commitment, Data, PrivateData, Proof, ProofPoint};
 
     /// Create random commitment
     pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
@@ -152,18 +142,24 @@ pub mod interactive {
         PrivateData { ref p, ref q }: &PrivateData,
         Commitment { ref w }: &Commitment,
         challenge: &Challenge<M>,
-    ) -> Proof<M> {
+    ) -> Result<Proof<M>, Error> {
         let sqrt = |x| blum_sqrt(&x, p, q, n);
         let phi = (p - 1) * (q - 1);
         let n_inverse = n.extended_gcd(&phi).x;
-        assert_eq!(n_inverse.modmul(&(n % &phi), &phi), BigNumber::one());
+
         let points = challenge.ys.clone().map(|y| {
-            let z = y.modpow(&n_inverse, n);
+            let z = y.powmod(&n_inverse, n).ok()?;
             let (a, b, y_) = find_residue(&y, w, p, q, n);
             let x = sqrt(sqrt(y_));
-            ProofPoint { x, a, b, z }
+            Some(ProofPoint { x, a, b, z })
         });
-        Proof { points }
+        if points.iter().any(Option::is_none) {
+            return Err(ErrorReason::ModPow.into());
+        }
+        // we checked that all points are `Some(_)`. Have to do this trick as array::try_map is
+        // not yet in stable
+        let points = points.map(Option::unwrap);
+        Ok(Proof { points })
     }
 
     /// Verify the proof. If this succeeds, the relation Rmod holds with chance
@@ -175,14 +171,14 @@ pub mod interactive {
         proof: &Proof<M>,
     ) -> Result<(), InvalidProof> {
         if data.n.is_prime() {
-            return Err(InvalidProof::ModulusIsPrime);
+            return Err(InvalidProofReason::ModulusIsPrime.into());
         }
         if &data.n % BigNumber::from(2) == BigNumber::zero() {
-            return Err(InvalidProof::ModulusIsEven);
+            return Err(InvalidProofReason::ModulusIsEven.into());
         }
         for (point, y) in proof.points.iter().zip(challenge.ys.iter()) {
-            if point.z.modpow(&data.n, &data.n) != *y {
-                return Err(InvalidProof::IncorrectNthRoot);
+            if point.z.powmod(&data.n, &data.n)? != *y {
+                return Err(InvalidProofReason::IncorrectNthRoot.into());
             }
             let y = y.clone();
             let y = if point.a { &data.n - y } else { y };
@@ -191,8 +187,8 @@ pub mod interactive {
             } else {
                 y
             };
-            if point.x.modpow(&4.into(), &data.n) != y {
-                return Err(InvalidProof::IncorrectFourthRoot);
+            if point.x.powmod(&4.into(), &data.n)? != y {
+                return Err(InvalidProofReason::IncorrectFourthRoot.into());
             }
         }
         Ok(())
@@ -213,11 +209,13 @@ pub mod interactive {
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
-    use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use super::{Challenge, Commitment, Data, InvalidProof, PrivateData, Proof};
+    use crate::unknown_order::BigNumber;
+    use crate::{Error, InvalidProof};
+
+    use super::{Challenge, Commitment, Data, PrivateData, Proof};
 
     /// Compute proof for the given data, producing random commitment and
     /// deriving determenistic challenge.
@@ -228,14 +226,14 @@ pub mod non_interactive {
         data: &Data,
         pdata: &PrivateData,
         rng: R,
-    ) -> (Commitment, Proof<M>)
+    ) -> Result<(Commitment, Proof<M>), Error>
     where
         D: Digest<OutputSize = U32> + Clone,
     {
         let commitment = super::interactive::commit(data, rng);
         let challenge = challenge(shared_state, data, &commitment);
-        let proof = super::interactive::prove(data, pdata, &commitment, &challenge);
-        (commitment, proof)
+        let proof = super::interactive::prove(data, pdata, &commitment, &challenge)?;
+        Ok((commitment, proof))
     }
 
     /// Verify the proof, deriving challenge independently from same data
@@ -297,7 +295,8 @@ mod test {
             &data,
             &pdata,
             &mut rng,
-        );
+        )
+        .unwrap();
         let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
         match r {
             Ok(()) => (),
@@ -325,7 +324,8 @@ mod test {
             &data,
             &pdata,
             &mut rng,
-        );
+        )
+        .unwrap();
         let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
         if r.is_ok() {
             panic!("proof should not pass");

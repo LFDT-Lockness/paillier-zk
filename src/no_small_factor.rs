@@ -13,6 +13,7 @@
 //! ```no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! # fn sqrt(x: &BigNumber) -> BigNumber { todo!() }
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use paillier_zk::no_small_factor::non_interactive as p;
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
@@ -57,7 +58,7 @@
 //!     p::PrivateData { p: &p, q: &q },
 //!     &security,
 //!     rng,
-//! );
+//! )?;
 //!
 //! // 4. Prover sends this data to verifier
 //!
@@ -74,6 +75,7 @@
 //!     n_root: &n_root,
 //! };
 //! p::verify(shared_state_verifier, &aux, data, &security, &proof);
+//! Ok(()) }
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover
@@ -159,8 +161,13 @@ pub struct Proof {
 pub use crate::common::Aux;
 
 pub mod interactive {
-    use crate::{common::combine, unknown_order::BigNumber};
     use rand_core::RngCore;
+
+    use crate::{
+        common::{BigNumberExt, InvalidProofReason},
+        unknown_order::BigNumber,
+        Error,
+    };
 
     use super::{
         Aux, Challenge, Commitment, Data, InvalidProof, PrivateCommitment, PrivateData, Proof,
@@ -174,7 +181,7 @@ pub mod interactive {
         pdata: PrivateData,
         security: &SecurityParams,
         mut rng: R,
-    ) -> (Commitment, PrivateCommitment) {
+    ) -> Result<(Commitment, PrivateCommitment), Error> {
         // add 1 to exponents to account for +-
         let two_to_l = BigNumber::from(1) << (security.l + 1);
         let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
@@ -192,11 +199,11 @@ pub mod interactive {
         let x = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
         let y = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
 
-        let p = combine(&aux.s, pdata.p, &aux.t, &mu, &aux.rsa_modulo);
-        let q = combine(&aux.s, pdata.q, &aux.t, &nu, &aux.rsa_modulo);
-        let a = combine(&aux.s, &alpha, &aux.t, &x, &aux.rsa_modulo);
-        let b = combine(&aux.s, &beta, &aux.t, &y, &aux.rsa_modulo);
-        let t = combine(&q, &alpha, &aux.t, &r, &aux.rsa_modulo);
+        let p = aux.rsa_modulo.combine(&aux.s, pdata.p, &aux.t, &mu)?;
+        let q = aux.rsa_modulo.combine(&aux.s, pdata.q, &aux.t, &nu)?;
+        let a = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &x)?;
+        let b = aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &y)?;
+        let t = aux.rsa_modulo.combine(&q, &alpha, &aux.t, &r)?;
 
         let commitment = Commitment {
             p,
@@ -215,7 +222,7 @@ pub mod interactive {
             x,
             y,
         };
-        (commitment, private_commitment)
+        Ok((commitment, private_commitment))
     }
 
     /// Generate random challenge
@@ -233,16 +240,16 @@ pub mod interactive {
         comm: &Commitment,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
-    ) -> Proof {
+    ) -> Result<Proof, Error> {
         let sigma_circ = &comm.sigma - &pcomm.nu * pdata.p;
 
-        Proof {
+        Ok(Proof {
             z1: &pcomm.alpha + challenge * pdata.p,
             z2: &pcomm.beta + challenge * pdata.q,
             w1: &pcomm.x + challenge * &pcomm.mu,
             w2: &pcomm.y + challenge * &pcomm.nu,
             v: &pcomm.r + challenge * sigma_circ,
-        }
+        })
     }
 
     /// Verify the proof
@@ -257,49 +264,49 @@ pub mod interactive {
         let one = BigNumber::one();
         // check 1
         {
-            let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.w1, &aux.rsa_modulo);
-            let rhs = combine(
-                &commitment.a,
-                &one,
-                &commitment.p,
-                challenge,
-                &aux.rsa_modulo,
-            );
+            let lhs = aux
+                .rsa_modulo
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.w1)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.a, &one, &commitment.p, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProof::EqualityCheckFailed(1));
+                return Err(InvalidProofReason::EqualityCheck(1).into());
             }
         }
         // check 2
         {
-            let lhs = combine(&aux.s, &proof.z2, &aux.t, &proof.w2, &aux.rsa_modulo);
-            let rhs = combine(
-                &commitment.b,
-                &one,
-                &commitment.q,
-                challenge,
-                &aux.rsa_modulo,
-            );
+            let lhs = aux
+                .rsa_modulo
+                .combine(&aux.s, &proof.z2, &aux.t, &proof.w2)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.b, &one, &commitment.q, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProof::EqualityCheckFailed(2));
+                return Err(InvalidProofReason::EqualityCheck(2).into());
             }
         }
         // check 3
         {
-            let r = combine(&aux.s, data.n, &aux.t, &commitment.sigma, &aux.rsa_modulo);
-            let lhs = combine(&commitment.q, &proof.z1, &aux.t, &proof.v, &aux.rsa_modulo);
-            let rhs = combine(&commitment.t, &one, &r, challenge, &aux.rsa_modulo);
+            let r = aux
+                .rsa_modulo
+                .combine(&aux.s, data.n, &aux.t, &commitment.sigma)?;
+            let lhs = aux
+                .rsa_modulo
+                .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
+            let rhs = aux.rsa_modulo.combine(&commitment.t, &one, &r, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProof::EqualityCheckFailed(3));
+                return Err(InvalidProofReason::EqualityCheck(3).into());
             }
         }
         let range = (BigNumber::from(1) << (security.l + security.epsilon + 1)) * data.n_root;
         // range check for z1
         if proof.z1 > range {
-            return Err(InvalidProof::RangeCheckFailed(1));
+            return Err(InvalidProofReason::RangeCheck(1).into());
         }
         // range check for z2
         if proof.z2 > range {
-            return Err(InvalidProof::RangeCheckFailed(2));
+            return Err(InvalidProofReason::RangeCheck(2).into());
         }
 
         Ok(())
@@ -311,7 +318,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    pub use crate::common::{InvalidProof, ProtocolError};
+    pub use crate::{Error, InvalidProof};
 
     pub use super::{Aux, Challenge, Data, PrivateData, SecurityParams};
 
@@ -334,14 +341,14 @@ pub mod non_interactive {
         pdata: PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Proof
+    ) -> Result<Proof, Error>
     where
         D: Digest<OutputSize = U32>,
     {
-        let (commitment, pcomm) = super::interactive::commit(aux, data, pdata, security, rng);
+        let (commitment, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &commitment, security);
-        let proof = super::interactive::prove(pdata, &commitment, &pcomm, &challenge);
-        Proof { commitment, proof }
+        let proof = super::interactive::prove(pdata, &commitment, &pcomm, &challenge)?;
+        Ok(Proof { commitment, proof })
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
@@ -399,7 +406,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::InvalidProof;
+    use crate::common::InvalidProofReason;
     use crate::unknown_order::BigNumber;
 
     // If q > 2^epsilon, the proof will never pass. We can make l however small
@@ -430,7 +437,8 @@ mod test {
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        );
+        )
+        .unwrap();
         let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
         match r {
             Ok(()) => (),
@@ -463,12 +471,13 @@ mod test {
             super::PrivateData { p: &p, q: &q },
             &security,
             rng,
-        );
-        let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
-        match r {
-            Ok(()) => panic!("Proof should not pass"),
-            Err(InvalidProof::RangeCheckFailed(2)) => (),
-            Err(e) => panic!("Proof should not fail with {e:?}"),
+        )
+        .unwrap();
+        let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof)
+            .expect_err("proof should not pass");
+        match r.reason() {
+            InvalidProofReason::RangeCheck(2) => (),
+            e => panic!("Proof should not fail with {e:?}"),
         }
     }
 

@@ -1,5 +1,7 @@
 #![deny(clippy::disallowed_methods)]
 
+use thiserror::Error;
+
 mod common;
 pub mod group_element_vs_paillier_encryption_in_range;
 pub mod no_small_factor;
@@ -18,4 +20,24 @@ pub use libpaillier;
 /// the correct version of the library
 pub use libpaillier::unknown_order;
 
-pub use common::{convert_scalar, InvalidProof, ProtocolError};
+use common::InvalidProofReason;
+pub use common::{BadExponent, BigNumberExt, InvalidProof};
+
+/// Library general error type
+#[derive(Debug, Clone, Error)]
+#[error(transparent)]
+pub struct Error(#[from] ErrorReason);
+
+#[derive(Debug, Clone, Error)]
+enum ErrorReason {
+    #[error("couldn't evaluate modpow")]
+    ModPow,
+    #[error("couldn't encrypt a message")]
+    Encryption,
+}
+
+impl From<BadExponent> for Error {
+    fn from(_err: BadExponent) -> Self {
+        Error(ErrorReason::ModPow)
+    }
+}

@@ -12,52 +12,56 @@ pub struct Aux {
     pub rsa_modulo: BigNumber,
 }
 
-/// Generate element in Zm*. Does so by trial.
-pub fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, mut rng: R) -> BigNumber {
-    loop {
-        let r = BigNumber::from_rng(modulo, &mut rng);
-        if r.gcd(modulo) == 1.into() {
-            break r;
-        }
-    }
-}
-
-/// Compute l^le * r^re modulo m
-pub(crate) fn combine(
-    l: &BigNumber,
-    le: &BigNumber,
-    r: &BigNumber,
-    re: &BigNumber,
-    m: &BigNumber,
-) -> BigNumber {
-    l.modpow(le, m).modmul(&r.modpow(re, m), m)
-}
-
-/// Embed BigInt into chosen scalar type
-pub fn convert_scalar<C: generic_ec::Curve>(x: &BigNumber) -> generic_ec::Scalar<C> {
-    generic_ec::Scalar::<C>::from_be_bytes_mod_order(x.to_bytes())
-}
+/// Error indicating that proof is invalid
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("invalid proof")]
+pub struct InvalidProof(
+    #[source]
+    #[from]
+    InvalidProofReason,
+);
 
 /// Reason for failure. If the proof failes, you should only be interested in a
 /// reason for debugging purposes
-#[derive(Debug, PartialEq, Eq)]
-pub enum InvalidProof {
+#[derive(Debug, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+pub enum InvalidProofReason {
     /// One equality doesn't hold. Parameterized by equality index
-    EqualityCheckFailed(usize),
+    #[error("equality check failed {0}")]
+    EqualityCheck(usize),
     /// One range check doesn't hold. Parameterized by check index
-    RangeCheckFailed(usize),
+    #[error("range check failed {0}")]
+    RangeCheck(usize),
     /// Encryption of supplied data failed when attempting to verify
-    EncryptionFailed,
+    #[error("encryption failed")]
+    Encryption,
+    /// Failed to evaluate powmod
+    #[error("powmod failed")]
+    ModPow,
+    /// Paillier-Blum modulus is prime
+    #[error("modulus is prime")]
+    ModulusIsPrime,
+    /// Paillier-Blum modulus is even
+    #[error("modulus is even")]
+    ModulusIsEven,
+    /// Proof's z value in n-th power does not equal commitment value
+    #[error("incorrect nth root")]
+    IncorrectNthRoot,
+    /// Proof's x value in 4-th power does not equal commitment value
+    #[error("incorrect 4th root")]
+    IncorrectFourthRoot,
 }
 
-/// Unexpeted error that can happen in a protocol. You should probably panic if
-/// you see this.
-#[derive(Debug, PartialEq, Eq)]
-pub enum ProtocolError {
-    /// Encryption of supplied data failed when computing proof
-    EncryptionFailed,
-    /// Hashing of supplied data failed when computing proof or challenge
-    HashFailed,
+impl InvalidProof {
+    #[cfg(test)]
+    pub(crate) fn reason(&self) -> InvalidProofReason {
+        self.0
+    }
+}
+
+impl From<BadExponent> for InvalidProof {
+    fn from(_err: BadExponent) -> Self {
+        InvalidProofReason::ModPow.into()
+    }
 }
 
 /// Regular paillier encryption methods are easy to misuse and generate
@@ -96,9 +100,80 @@ impl SafePaillierExt for libpaillier::EncryptionKey {
     }
 }
 
+pub trait BigNumberExt: Sized {
+    /// Generate element in Zm*. Does so by trial.
+    fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, rng: &mut R) -> Self;
+
+    /// Compute l^le * r^re modulo self
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent>;
+
+    /// Embed BigInt into chosen scalar type
+    fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
+
+    /// Generates a random integer in interval `[-range; range]`
+    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self;
+
+    /// Computes self^exponent mod modulo
+    ///
+    /// Unlike [`BigNumber::modpow`], this method correctly handles negative exponent. `Err(_)`
+    /// is returned if modpow cannot be computed.
+    fn powmod(&self, exponent: &Self, modulo: &Self) -> Result<Self, BadExponent>;
+}
+
+impl BigNumberExt for BigNumber {
+    fn gen_inversible<R: rand_core::RngCore>(modulo: &BigNumber, rng: &mut R) -> Self {
+        loop {
+            let r = BigNumber::from_rng(modulo, rng);
+            if r.gcd(modulo) == 1.into() {
+                break r;
+            }
+        }
+    }
+
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent> {
+        Ok(l.powmod(le, self)?.modmul(&r.powmod(re, self)?, self))
+    }
+
+    fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C> {
+        generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
+    }
+
+    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self {
+        let n = BigNumber::from_rng(&(range * 2), rng);
+        n - range
+    }
+
+    fn powmod(&self, exponent: &Self, modulo: &Self) -> Result<Self, BadExponent> {
+        if modulo <= &BigNumber::zero() {
+            return Err(BadExponent);
+        }
+
+        #[allow(clippy::disallowed_methods)]
+        if exponent < &BigNumber::zero() {
+            Ok(BigNumber::modpow(
+                &self.invert(modulo).ok_or(BadExponent)?,
+                &(-exponent),
+                modulo,
+            ))
+        } else {
+            Ok(BigNumber::modpow(self, exponent, modulo))
+        }
+    }
+}
+
+/// Error indicating that computation cannot be evaluated because of bad exponent
+///
+/// Returned by [`BigNumberExt::powmod`] and other functions that do exponentiation internally
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+#[error("exponent is undefined")]
+pub struct BadExponent;
+
 #[cfg(test)]
 pub mod test {
     use libpaillier::unknown_order::BigNumber;
+    use rand_dev::DevRng;
+
+    use super::BigNumberExt;
 
     #[test]
     fn conversion() {
@@ -108,8 +183,48 @@ pub mod test {
         let number: u64 = 0x11_22_33_44_55_66_77_88;
         let bignumber = BigNumber::from(number);
         let scalar1 = Scalar::from(number);
-        let scalar2 = super::convert_scalar(&bignumber);
+        let scalar2 = bignumber.to_scalar();
         assert_eq!(scalar1, scalar2);
+    }
+
+    #[test]
+    fn generates_negative_numbers() {
+        let mut rng = DevRng::new();
+
+        let n = BigNumber::from(100);
+        let mut generated_neg_numbers = 0;
+
+        for _ in 0..32 {
+            let i = BigNumber::from_rng_pm(&mut rng, &n);
+            if i < BigNumber::zero() {
+                generated_neg_numbers += 1
+            }
+        }
+
+        assert!(generated_neg_numbers > 0);
+        println!("generated {generated_neg_numbers} negative numbers");
+    }
+
+    #[test]
+    fn arithmetic_with_negative_numbers_works_fine() {
+        let two = BigNumber::from(2);
+        let neg_2 = BigNumber::zero() - &two;
+
+        assert_eq!(two + &neg_2, BigNumber::zero());
+        assert_eq!(BigNumber::from(3) + &neg_2, BigNumber::one());
+        assert_eq!(
+            BigNumber::from(5) * &neg_2,
+            BigNumber::zero() - BigNumber::from(10)
+        );
+
+        assert_eq!(
+            BigNumber::from(5).modmul(&neg_2, &BigNumber::from(17)),
+            BigNumber::from(7)
+        );
+        assert_eq!(
+            BigNumber::one().modadd(&neg_2, &BigNumber::from(17)),
+            BigNumber::from(16)
+        );
     }
 
     pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {

@@ -32,6 +32,7 @@
 //! ``` no_run
 //! # use paillier_zk::unknown_order::BigNumber;
 //! use paillier_zk::paillier_affine_operation_in_range as p;
+//! use paillier_zk::BigNumberExt;
 //! use generic_ec::hash_to_curve::Tag;
 //!
 //! // Prover and verifier have a shared protocol state
@@ -78,7 +79,7 @@
 //! // C in paper
 //! let (ciphertext_orig, _) = key0.encrypt(plaintext_orig.to_bytes(), None).unwrap();
 //! // X in paper
-//! let ciphertext_mult = g * paillier_zk::convert_scalar(&plaintext_mult);
+//! let ciphertext_mult = g * plaintext_mult.to_scalar();
 //! // Y' in further docs, and ρy in paper
 //! let (ciphertext_add, nonce_y) = key1.encrypt(plaintext_add.to_bytes(), None).unwrap();
 //! // Y and ρ in paper
@@ -242,11 +243,12 @@ pub use crate::common::Aux;
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
 
-    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use generic_ec::{Curve, Point};
     use rand_core::RngCore;
 
-    use crate::common::{combine, convert_scalar, gen_inversible, InvalidProof, ProtocolError};
+    use crate::common::{BigNumberExt, InvalidProof, InvalidProofReason, SafePaillierExt};
+    use crate::unknown_order::BigNumber;
+    use crate::{Error, ErrorReason};
 
     use super::*;
 
@@ -257,7 +259,7 @@ pub mod interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         mut rng: R,
-    ) -> Result<(Commitment<C>, PrivateCommitment), ProtocolError> {
+    ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
         let two_to_l = BigNumber::one() << (security.l_x + 1);
         let two_to_l_e = BigNumber::one() << (security.l_x + security.epsilon + 1);
         let modulo_l = two_to_l * &aux.rsa_modulo;
@@ -268,8 +270,8 @@ pub mod interactive {
             &(BigNumber::one() << (security.l_y + security.epsilon + 1)),
             &mut rng,
         );
-        let r = gen_inversible(data.key0.n(), &mut rng);
-        let r_y = gen_inversible(data.key1.n(), &mut rng);
+        let r = BigNumber::gen_inversible(data.key0.n(), &mut rng);
+        let r_y = BigNumber::gen_inversible(data.key1.n(), &mut rng);
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
         let m = BigNumber::from_rng(&modulo_l, &mut rng);
         let delta = BigNumber::from_rng(&modulo_l_e, &mut rng);
@@ -278,26 +280,26 @@ pub mod interactive {
         let a_add = data
             .key0
             .encrypt_with(beta.to_bytes(), r.clone())
-            .ok_or(ProtocolError::EncryptionFailed)?;
+            .ok_or(ErrorReason::Encryption)?;
         let c_to_alpha = data
             .key0
             .mul(&data.c, &alpha)
-            .ok_or(ProtocolError::EncryptionFailed)?;
+            .ok_or(ErrorReason::Encryption)?;
         let a = data
             .key0
             .add(&c_to_alpha, &a_add)
-            .ok_or(ProtocolError::EncryptionFailed)?;
+            .ok_or(ErrorReason::Encryption)?;
         let commitment = Commitment {
             a,
-            b_x: Point::<C>::generator() * convert_scalar(&alpha),
+            b_x: Point::<C>::generator() * alpha.to_scalar(),
             b_y: data
                 .key1
                 .encrypt_with(beta.to_bytes(), r_y.clone())
-                .ok_or(ProtocolError::EncryptionFailed)?,
-            e: combine(&aux.s, &alpha, &aux.t, &gamma, &aux.rsa_modulo),
-            s: combine(&aux.s, &pdata.x, &aux.t, &m, &aux.rsa_modulo),
-            f: combine(&aux.s, &beta, &aux.t, &delta, &aux.rsa_modulo),
-            t: combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
+                .ok_or(ErrorReason::Encryption)?,
+            e: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
+            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &m)?,
+            f: aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &delta)?,
+            t: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -318,27 +320,21 @@ pub mod interactive {
         pdata: &PrivateData,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
-    ) -> Proof {
-        Proof {
+    ) -> Result<Proof, Error> {
+        Ok(Proof {
             z1: &pcomm.alpha + challenge * &pdata.x,
             z2: &pcomm.beta + challenge * &pdata.y,
             z3: &pcomm.gamma + challenge * &pcomm.m,
             z4: &pcomm.delta + challenge * &pcomm.mu,
-            w: combine(
-                &pcomm.r,
-                &BigNumber::one(),
-                &pdata.nonce,
-                challenge,
-                data.key0.n(),
-            ),
-            w_y: combine(
-                &pcomm.r_y,
-                &BigNumber::one(),
-                &pdata.nonce_y,
-                challenge,
-                data.key1.n(),
-            ),
-        }
+            w: data
+                .key0
+                .n()
+                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)?,
+            w_y: data
+                .key1
+                .n()
+                .combine(&pcomm.r_y, &BigNumber::one(), &pdata.nonce_y, challenge)?,
+        })
     }
 
     /// Verify the proof
@@ -351,11 +347,11 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(msg: InvalidProof, b: bool) -> Result<(), InvalidProof> {
+        fn fail_if(msg: InvalidProofReason, b: bool) -> Result<(), InvalidProof> {
             if b {
                 Ok(())
             } else {
-                Err(msg)
+                Err(msg.into())
             }
         }
         // Five equality checks and two range checks
@@ -363,61 +359,61 @@ pub mod interactive {
             let enc = data
                 .key0
                 .encrypt_with(proof.z2.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProof::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::Encryption)?;
             let lhs = data
                 .key0
                 .add(
                     &data
                         .key0
                         .mul(&data.c, &proof.z1)
-                        .ok_or(InvalidProof::EncryptionFailed)?,
+                        .ok_or(InvalidProofReason::Encryption)?,
                     &enc,
                 )
-                .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = combine(&commitment.a, &one, &data.d, challenge, data.key0.nn());
-            fail_if(InvalidProof::EqualityCheckFailed(1), lhs == rhs)?;
+                .ok_or(InvalidProofReason::Encryption)?;
+            let rhs = data
+                .key0
+                .nn()
+                .combine(&commitment.a, &one, &data.d, challenge)?;
+            fail_if(InvalidProofReason::EqualityCheck(1), lhs == rhs)?;
         }
         {
-            let lhs = Point::<C>::generator() * convert_scalar(&proof.z1);
-            let rhs = commitment.b_x + data.x * convert_scalar(challenge);
-            fail_if(InvalidProof::EqualityCheckFailed(2), lhs == rhs)?;
+            let lhs = Point::<C>::generator() * proof.z1.to_scalar();
+            let rhs = commitment.b_x + data.x * challenge.to_scalar();
+            fail_if(InvalidProofReason::EqualityCheck(2), lhs == rhs)?;
         }
         {
             let lhs = data
                 .key1
                 .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
-                .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = combine(&commitment.b_y, &one, &data.y, challenge, data.key1.nn());
-            fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
+                .ok_or(InvalidProofReason::Encryption)?;
+            let rhs = data
+                .key1
+                .nn()
+                .combine(&commitment.b_y, &one, &data.y, challenge)?;
+            fail_if(InvalidProofReason::EqualityCheck(3), lhs == rhs)?;
         }
         fail_if(
-            InvalidProof::EqualityCheckFailed(4),
-            combine(&aux.s, &proof.z1, &aux.t, &proof.z3, &aux.rsa_modulo)
-                == combine(
-                    &commitment.e,
-                    &one,
-                    &commitment.s,
-                    challenge,
-                    &aux.rsa_modulo,
-                ),
+            InvalidProofReason::EqualityCheck(4),
+            aux.rsa_modulo
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
+                == aux
+                    .rsa_modulo
+                    .combine(&commitment.e, &one, &commitment.s, challenge)?,
         )?;
         fail_if(
-            InvalidProof::EqualityCheckFailed(5),
-            combine(&aux.s, &proof.z2, &aux.t, &proof.z4, &aux.rsa_modulo)
-                == combine(
-                    &commitment.f,
-                    &one,
-                    &commitment.t,
-                    challenge,
-                    &aux.rsa_modulo,
-                ),
+            InvalidProofReason::EqualityCheck(5),
+            aux.rsa_modulo
+                .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)?
+                == aux
+                    .rsa_modulo
+                    .combine(&commitment.f, &one, &commitment.t, challenge)?,
         )?;
         fail_if(
-            InvalidProof::RangeCheckFailed(6),
+            InvalidProofReason::RangeCheck(6),
             proof.z1 <= &one << (security.l_x + security.epsilon + 1),
         )?;
         fail_if(
-            InvalidProof::RangeCheckFailed(7),
+            InvalidProofReason::RangeCheck(7),
             proof.z2 <= &one << (security.l_y + security.epsilon + 1),
         )?;
         Ok(())
@@ -438,12 +434,12 @@ pub mod interactive {
 /// see the documentation of parent module.
 pub mod non_interactive {
 
-    use crate::unknown_order::BigNumber;
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::common::{InvalidProof, ProtocolError};
+    use crate::unknown_order::BigNumber;
+    use crate::{Error, InvalidProof};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 
@@ -458,14 +454,14 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Result<(Commitment<C>, Proof), ProtocolError>
+    ) -> Result<(Commitment<C>, Proof), Error>
     where
         Scalar<C>: FromHash,
         D: Digest<OutputSize = U32>,
     {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &comm, security);
-        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
+        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge)?;
         Ok((comm, proof))
     }
 
@@ -530,7 +526,7 @@ mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
 
     use crate::common::test::random_key;
-    use crate::common::{convert_scalar, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
     use crate::unknown_order::BigNumber;
 
     fn run<R: rand_core::RngCore, C: Curve>(
@@ -556,7 +552,7 @@ mod test {
         let (ciphertext_orig, _) = key0
             .encrypt_with_random(plaintext_orig.to_bytes(), &mut rng)
             .unwrap();
-        let ciphertext_mult = g * convert_scalar(&plaintext_mult);
+        let ciphertext_mult = g * plaintext_mult.to_scalar();
         let (ciphertext_add, nonce_y) = key1
             .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
             .unwrap();
@@ -639,11 +635,11 @@ mod test {
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
         let plaintext_add = (BigNumber::from(1) << (security.l_y + security.epsilon + 1)) + 1;
-        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(crate::common::InvalidProof::RangeCheckFailed(7)) => (),
-            Err(e) => panic!("proof should not fail with: {e:?}"),
+        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
+            .expect_err("proof should not pass");
+        match r.reason() {
+            InvalidProofReason::RangeCheck(7) => (),
+            e => panic!("proof should not fail with: {e:?}"),
         }
     }
 
@@ -661,11 +657,11 @@ mod test {
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = (BigNumber::from(1) << (security.l_x + security.epsilon + 1)) + 1;
         let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
-        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(crate::common::InvalidProof::RangeCheckFailed(6)) => (),
-            Err(e) => panic!("proof should not fail with: {e:?}"),
+        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
+            .expect_err("proof should not pass");
+        match r.reason() {
+            InvalidProofReason::RangeCheck(6) => (),
+            e => panic!("proof should not fail with: {e:?}"),
         }
     }
 
@@ -719,9 +715,9 @@ mod test {
                 plaintext_mult,
                 plaintext_add,
             );
-            match r {
+            match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(crate::common::InvalidProof::RangeCheckFailed(6)) => false,
+                Err(InvalidProofReason::RangeCheck(6)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }
@@ -752,9 +748,9 @@ mod test {
                 plaintext_mult,
                 plaintext_add,
             );
-            match r {
+            match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(crate::common::InvalidProof::RangeCheckFailed(7)) => false,
+                Err(InvalidProofReason::RangeCheck(7)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }

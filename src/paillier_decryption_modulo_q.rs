@@ -153,7 +153,8 @@ pub mod interactive {
     use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
-    use crate::common::{combine, InvalidProof, ProtocolError};
+    use crate::common::{BigNumberExt, InvalidProofReason};
+    use crate::{Error, ErrorReason, InvalidProof};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -166,7 +167,7 @@ pub mod interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         mut rng: R,
-    ) -> Result<(Commitment, PrivateCommitment), ProtocolError> {
+    ) -> Result<(Commitment, PrivateCommitment), Error> {
         let two_to_l_e = BigNumber::one() << (security.l + security.epsilon + 1);
         let modulo_l = (BigNumber::one() << (security.l + 1)) * &aux.rsa_modulo;
         let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
@@ -178,11 +179,11 @@ pub mod interactive {
         let (a, r) = data
             .key
             .encrypt_with_random(alpha.to_bytes(), &mut rng)
-            .ok_or(ProtocolError::EncryptionFailed)?;
+            .ok_or(ErrorReason::Encryption)?;
 
         let commitment = Commitment {
-            s: combine(&aux.s, &pdata.y, &aux.t, &mu, &aux.rsa_modulo),
-            t: combine(&aux.s, &alpha, &aux.t, &nu, &aux.rsa_modulo),
+            s: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
+            t: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &nu)?,
             a,
             gamma: &alpha % &data.q,
         };
@@ -203,18 +204,15 @@ pub mod interactive {
         pdata: &PrivateData,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
-    ) -> Proof {
-        Proof {
+    ) -> Result<Proof, Error> {
+        Ok(Proof {
             z1: &pcomm.alpha + challenge * &pdata.y,
             z2: &pcomm.nu + challenge * &pcomm.mu,
-            w: combine(
-                &pcomm.r,
-                &BigNumber::one(),
-                &pdata.nonce,
-                challenge,
-                data.key.n(),
-            ),
-        }
+            w: data
+                .key
+                .n()
+                .combine(&pcomm.r, &BigNumber::one(), &pdata.nonce, challenge)?,
+        })
     }
 
     /// Verify the proof
@@ -226,11 +224,11 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(b: bool, msg: InvalidProof) -> Result<(), InvalidProof> {
+        fn fail_if(b: bool, msg: InvalidProofReason) -> Result<(), InvalidProof> {
             if b {
                 Ok(())
             } else {
-                Err(msg)
+                Err(msg.into())
             }
         }
         // Three equality checks
@@ -238,27 +236,28 @@ pub mod interactive {
             let lhs = data
                 .key
                 .encrypt_with(proof.z1.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProof::EncryptionFailed)?;
-            let rhs = combine(&commitment.a, &one, &data.c, challenge, data.key.nn());
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
+                .ok_or(InvalidProofReason::Encryption)?;
+            let rhs = data
+                .key
+                .nn()
+                .combine(&commitment.a, &one, &data.c, challenge)?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(1))?;
         }
         {
             let lhs = &proof.z1 % &data.q;
             let rhs = commitment
                 .gamma
                 .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(2))?;
         }
         {
-            let lhs = combine(&aux.s, &proof.z1, &aux.t, &proof.z2, &aux.rsa_modulo);
-            let rhs = combine(
-                &commitment.t,
-                &one,
-                &commitment.s,
-                challenge,
-                &aux.rsa_modulo,
-            );
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
+            let lhs = aux
+                .rsa_modulo
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z2)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.t, &one, &commitment.s, challenge)?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(3))?;
         }
 
         Ok(())
@@ -272,7 +271,7 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::common::{InvalidProof, ProtocolError};
+    use crate::{Error, InvalidProof};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
 
@@ -287,13 +286,13 @@ pub mod non_interactive {
         pdata: &PrivateData,
         security: &SecurityParams,
         rng: R,
-    ) -> Result<(Commitment, Proof), ProtocolError>
+    ) -> Result<(Commitment, Proof), Error>
     where
         D: Digest<OutputSize = U32>,
     {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
         let challenge = challenge(shared_state, aux, data, &comm);
-        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge);
+        let proof = super::interactive::prove(data, pdata, &pcomm, &challenge)?;
         Ok((comm, proof))
     }
 
