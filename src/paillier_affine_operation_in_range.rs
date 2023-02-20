@@ -246,7 +246,7 @@ pub mod interactive {
     use generic_ec::{Curve, Point};
     use rand_core::RngCore;
 
-    use crate::common::{BigNumberExt, InvalidProof, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProof, InvalidProofReason, SafePaillierExt};
     use crate::unknown_order::BigNumber;
     use crate::{Error, ErrorReason};
 
@@ -347,11 +347,11 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(msg: InvalidProof, b: bool) -> Result<(), InvalidProof> {
+        fn fail_if(msg: InvalidProofReason, b: bool) -> Result<(), InvalidProof> {
             if b {
                 Ok(())
             } else {
-                Err(msg)
+                Err(msg.into())
             }
         }
         // Five equality checks and two range checks
@@ -359,41 +359,41 @@ pub mod interactive {
             let enc = data
                 .key0
                 .encrypt_with(proof.z2.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProof::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::EncryptionFailed)?;
             let lhs = data
                 .key0
                 .add(
                     &data
                         .key0
                         .mul(&data.c, &proof.z1)
-                        .ok_or(InvalidProof::EncryptionFailed)?,
+                        .ok_or(InvalidProofReason::EncryptionFailed)?,
                     &enc,
                 )
-                .ok_or(InvalidProof::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::EncryptionFailed)?;
             let rhs = data
                 .key0
                 .nn()
                 .combine(&commitment.a, &one, &data.d, challenge)?;
-            fail_if(InvalidProof::EqualityCheckFailed(1), lhs == rhs)?;
+            fail_if(InvalidProofReason::EqualityCheckFailed(1), lhs == rhs)?;
         }
         {
             let lhs = Point::<C>::generator() * proof.z1.to_scalar();
             let rhs = commitment.b_x + data.x * challenge.to_scalar();
-            fail_if(InvalidProof::EqualityCheckFailed(2), lhs == rhs)?;
+            fail_if(InvalidProofReason::EqualityCheckFailed(2), lhs == rhs)?;
         }
         {
             let lhs = data
                 .key1
                 .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
-                .ok_or(InvalidProof::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::EncryptionFailed)?;
             let rhs = data
                 .key1
                 .nn()
                 .combine(&commitment.b_y, &one, &data.y, challenge)?;
-            fail_if(InvalidProof::EqualityCheckFailed(3), lhs == rhs)?;
+            fail_if(InvalidProofReason::EqualityCheckFailed(3), lhs == rhs)?;
         }
         fail_if(
-            InvalidProof::EqualityCheckFailed(4),
+            InvalidProofReason::EqualityCheckFailed(4),
             aux.rsa_modulo
                 .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
                 == aux
@@ -401,7 +401,7 @@ pub mod interactive {
                     .combine(&commitment.e, &one, &commitment.s, challenge)?,
         )?;
         fail_if(
-            InvalidProof::EqualityCheckFailed(5),
+            InvalidProofReason::EqualityCheckFailed(5),
             aux.rsa_modulo
                 .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)?
                 == aux
@@ -409,11 +409,11 @@ pub mod interactive {
                     .combine(&commitment.f, &one, &commitment.t, challenge)?,
         )?;
         fail_if(
-            InvalidProof::RangeCheckFailed(6),
+            InvalidProofReason::RangeCheckFailed(6),
             proof.z1 <= &one << (security.l_x + security.epsilon + 1),
         )?;
         fail_if(
-            InvalidProof::RangeCheckFailed(7),
+            InvalidProofReason::RangeCheckFailed(7),
             proof.z2 <= &one << (security.l_y + security.epsilon + 1),
         )?;
         Ok(())
@@ -526,7 +526,7 @@ mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
 
     use crate::common::test::random_key;
-    use crate::common::{BigNumberExt, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
     use crate::unknown_order::BigNumber;
 
     fn run<R: rand_core::RngCore, C: Curve>(
@@ -635,11 +635,11 @@ mod test {
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
         let plaintext_add = (BigNumber::from(1) << (security.l_y + security.epsilon + 1)) + 1;
-        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(crate::common::InvalidProof::RangeCheckFailed(7)) => (),
-            Err(e) => panic!("proof should not fail with: {e:?}"),
+        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
+            .expect_err("proof should not pass");
+        match r.reason() {
+            InvalidProofReason::RangeCheckFailed(7) => (),
+            e => panic!("proof should not fail with: {e:?}"),
         }
     }
 
@@ -657,11 +657,11 @@ mod test {
         let plaintext_orig = BigNumber::from(100);
         let plaintext_mult = (BigNumber::from(1) << (security.l_x + security.epsilon + 1)) + 1;
         let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
-        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(crate::common::InvalidProof::RangeCheckFailed(6)) => (),
-            Err(e) => panic!("proof should not fail with: {e:?}"),
+        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
+            .expect_err("proof should not pass");
+        match r.reason() {
+            InvalidProofReason::RangeCheckFailed(6) => (),
+            e => panic!("proof should not fail with: {e:?}"),
         }
     }
 
@@ -715,9 +715,9 @@ mod test {
                 plaintext_mult,
                 plaintext_add,
             );
-            match r {
+            match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(crate::common::InvalidProof::RangeCheckFailed(6)) => false,
+                Err(InvalidProofReason::RangeCheckFailed(6)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }
@@ -748,9 +748,9 @@ mod test {
                 plaintext_mult,
                 plaintext_add,
             );
-            match r {
+            match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(crate::common::InvalidProof::RangeCheckFailed(7)) => false,
+                Err(InvalidProofReason::RangeCheckFailed(7)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }

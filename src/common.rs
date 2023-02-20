@@ -12,23 +12,43 @@ pub struct Aux {
     pub rsa_modulo: BigNumber,
 }
 
+/// Error indicating that proof is invalid
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("invalid proof")]
+pub struct InvalidProof(
+    #[source]
+    #[from]
+    InvalidProofReason,
+);
+
 /// Reason for failure. If the proof failes, you should only be interested in a
 /// reason for debugging purposes
-#[derive(Debug, PartialEq, Eq)]
-pub enum InvalidProof {
+#[derive(Debug, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+pub enum InvalidProofReason {
     /// One equality doesn't hold. Parameterized by equality index
+    #[error("equality check failed {0}")]
     EqualityCheckFailed(usize),
     /// One range check doesn't hold. Parameterized by check index
+    #[error("range check failed {0}")]
     RangeCheckFailed(usize),
     /// Encryption of supplied data failed when attempting to verify
+    #[error("encryption failed")]
     EncryptionFailed,
     /// Failed to evaluate powmod
+    #[error("powmod failed")]
     ModPowFailed,
+}
+
+impl InvalidProof {
+    #[cfg(test)]
+    pub(crate) fn reason(&self) -> InvalidProofReason {
+        self.0
+    }
 }
 
 impl From<BadExponent> for InvalidProof {
     fn from(_err: BadExponent) -> Self {
-        InvalidProof::ModPowFailed
+        InvalidProofReason::ModPowFailed.into()
     }
 }
 

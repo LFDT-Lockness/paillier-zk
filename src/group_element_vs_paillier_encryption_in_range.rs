@@ -174,7 +174,7 @@ pub mod interactive {
     use libpaillier::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    use crate::common::{BigNumberExt, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
     use crate::{Error, ErrorReason, InvalidProof};
 
     use super::{
@@ -246,11 +246,11 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(b: bool, msg: InvalidProof) -> Result<(), InvalidProof> {
+        fn fail_if(b: bool, msg: InvalidProofReason) -> Result<(), InvalidProof> {
             if b {
                 Ok(())
             } else {
-                Err(msg)
+                Err(InvalidProof::from(msg))
             }
         }
         // Three equality checks and one range check
@@ -258,17 +258,17 @@ pub mod interactive {
             let lhs = data
                 .key0
                 .encrypt_with(proof.z1.to_bytes(), proof.z2.clone())
-                .ok_or(InvalidProof::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::EncryptionFailed)?;
             let rhs = data
                 .key0
                 .nn()
                 .combine(&commitment.a, &one, &data.c, challenge)?;
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(1))?;
         }
         {
             let lhs = data.g * proof.z1.to_scalar();
             let rhs = commitment.y + data.x * challenge.to_scalar();
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(2))?;
         }
         {
             let lhs = aux
@@ -277,11 +277,11 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.d, &one, &commitment.s, challenge)?;
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(3))?;
         }
         fail_if(
             proof.z1 <= one << (security.l + security.epsilon + 1),
-            InvalidProof::RangeCheckFailed(4),
+            InvalidProofReason::RangeCheckFailed(4),
         )?;
 
         Ok(())
@@ -392,7 +392,7 @@ mod test {
     use libpaillier::unknown_order::BigNumber;
 
     use crate::common::test::random_key;
-    use crate::common::{BigNumberExt, InvalidProof, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
 
     fn run<R: rand_core::RngCore, C: Curve>(
         mut rng: R,
@@ -468,11 +468,10 @@ mod test {
             q: BigNumber::prime_from_rng(128, &mut rng),
         };
         let plaintext = BigNumber::from(1) << (security.l + security.epsilon + 1);
-        let r = run(rng, security, plaintext);
-        match r {
-            Ok(()) => panic!("proof should not pass"),
-            Err(InvalidProof::RangeCheckFailed(_)) => (),
-            Err(e) => panic!("proof should not fail with: {e:?}"),
+        let r = run(rng, security, plaintext).expect_err("proof should not pass");
+        match r.reason() {
+            InvalidProofReason::RangeCheckFailed(_) => (),
+            e => panic!("proof should not fail with: {e:?}"),
         }
     }
 
@@ -512,9 +511,9 @@ mod test {
             };
             let plaintext = (BigNumber::from(1) << (security.l + 1)) - 1;
             let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext);
-            match r {
+            match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(crate::common::InvalidProof::RangeCheckFailed(4)) => false,
+                Err(InvalidProofReason::RangeCheckFailed(4)) => false,
                 Err(e) => panic!("proof should not fail with: {e:?}"),
             }
         }

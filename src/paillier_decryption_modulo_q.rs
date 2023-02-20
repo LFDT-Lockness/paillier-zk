@@ -153,7 +153,7 @@ pub mod interactive {
     use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
-    use crate::common::BigNumberExt;
+    use crate::common::{BigNumberExt, InvalidProofReason};
     use crate::{Error, ErrorReason, InvalidProof};
 
     use super::{
@@ -224,11 +224,11 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(b: bool, msg: InvalidProof) -> Result<(), InvalidProof> {
+        fn fail_if(b: bool, msg: InvalidProofReason) -> Result<(), InvalidProof> {
             if b {
                 Ok(())
             } else {
-                Err(msg)
+                Err(msg.into())
             }
         }
         // Three equality checks
@@ -236,19 +236,19 @@ pub mod interactive {
             let lhs = data
                 .key
                 .encrypt_with(proof.z1.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProof::EncryptionFailed)?;
+                .ok_or(InvalidProofReason::EncryptionFailed)?;
             let rhs = data
                 .key
                 .nn()
                 .combine(&commitment.a, &one, &data.c, challenge)?;
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(1))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(1))?;
         }
         {
             let lhs = &proof.z1 % &data.q;
             let rhs = commitment
                 .gamma
                 .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(2))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(2))?;
         }
         {
             let lhs = aux
@@ -257,7 +257,7 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.t, &one, &commitment.s, challenge)?;
-            fail_if(lhs == rhs, InvalidProof::EqualityCheckFailed(3))?;
+            fail_if(lhs == rhs, InvalidProofReason::EqualityCheckFailed(3))?;
         }
 
         Ok(())

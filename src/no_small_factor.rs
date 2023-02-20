@@ -163,7 +163,11 @@ pub use crate::common::Aux;
 pub mod interactive {
     use rand_core::RngCore;
 
-    use crate::{common::BigNumberExt, unknown_order::BigNumber, Error};
+    use crate::{
+        common::{BigNumberExt, InvalidProofReason},
+        unknown_order::BigNumber,
+        Error,
+    };
 
     use super::{
         Aux, Challenge, Commitment, Data, InvalidProof, PrivateCommitment, PrivateData, Proof,
@@ -267,7 +271,7 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.a, &one, &commitment.p, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProof::EqualityCheckFailed(1));
+                return Err(InvalidProofReason::EqualityCheckFailed(1).into());
             }
         }
         // check 2
@@ -279,7 +283,7 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.b, &one, &commitment.q, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProof::EqualityCheckFailed(2));
+                return Err(InvalidProofReason::EqualityCheckFailed(2).into());
             }
         }
         // check 3
@@ -292,17 +296,17 @@ pub mod interactive {
                 .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
             let rhs = aux.rsa_modulo.combine(&commitment.t, &one, &r, challenge)?;
             if lhs != rhs {
-                return Err(InvalidProof::EqualityCheckFailed(3));
+                return Err(InvalidProofReason::EqualityCheckFailed(3).into());
             }
         }
         let range = (BigNumber::from(1) << (security.l + security.epsilon + 1)) * data.n_root;
         // range check for z1
         if proof.z1 > range {
-            return Err(InvalidProof::RangeCheckFailed(1));
+            return Err(InvalidProofReason::RangeCheckFailed(1).into());
         }
         // range check for z2
         if proof.z2 > range {
-            return Err(InvalidProof::RangeCheckFailed(2));
+            return Err(InvalidProofReason::RangeCheckFailed(2).into());
         }
 
         Ok(())
@@ -402,7 +406,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::InvalidProof;
+    use crate::common::InvalidProofReason;
     use crate::unknown_order::BigNumber;
 
     // If q > 2^epsilon, the proof will never pass. We can make l however small
@@ -469,11 +473,11 @@ mod test {
             rng,
         )
         .unwrap();
-        let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof);
-        match r {
-            Ok(()) => panic!("Proof should not pass"),
-            Err(InvalidProof::RangeCheckFailed(2)) => (),
-            Err(e) => panic!("Proof should not fail with {e:?}"),
+        let r = super::non_interactive::verify(shared_state, &aux, data, &security, &proof)
+            .expect_err("proof should not pass");
+        match r.reason() {
+            InvalidProofReason::RangeCheckFailed(2) => (),
+            e => panic!("Proof should not fail with {e:?}"),
         }
     }
 

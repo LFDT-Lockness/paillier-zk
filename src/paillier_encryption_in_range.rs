@@ -154,7 +154,11 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::{common::SafePaillierExt, unknown_order::BigNumber, Error};
+    use crate::{
+        common::{InvalidProofReason, SafePaillierExt},
+        unknown_order::BigNumber,
+        Error,
+    };
     use rand_core::RngCore;
 
     use crate::common::{BigNumberExt, InvalidProof};
@@ -237,10 +241,10 @@ pub mod interactive {
                         data.key.nn(),
                     )
                 {
-                    return Err(InvalidProof::EqualityCheckFailed(1));
+                    return Err(InvalidProofReason::EqualityCheckFailed(1).into());
                 }
             }
-            None => return Err(InvalidProof::EncryptionFailed),
+            None => return Err(InvalidProofReason::EncryptionFailed.into()),
         }
 
         let check2 = aux
@@ -250,11 +254,11 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.c, &1.into(), &commitment.s, challenge)?;
         if !check2 {
-            return Err(InvalidProof::EqualityCheckFailed(2));
+            return Err(InvalidProofReason::EqualityCheckFailed(2).into());
         }
 
         if proof.z1 > (BigNumber::one() << (security.l + security.epsilon + 1)) {
-            return Err(InvalidProof::RangeCheckFailed(3));
+            return Err(InvalidProofReason::RangeCheckFailed(3).into());
         }
 
         Ok(())
@@ -348,7 +352,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::{InvalidProof, SafePaillierExt};
+    use crate::common::{InvalidProofReason, SafePaillierExt};
     use crate::unknown_order::BigNumber;
 
     fn run_with<R: rand_core::RngCore>(
@@ -403,9 +407,9 @@ mod test {
         };
         let plaintext = (BigNumber::one() << (security.l + security.epsilon + 1)) + 1;
         let r = run_with(rng, security, plaintext);
-        match r {
+        match r.map_err(|e| e.reason()) {
             Ok(()) => panic!("proof should not pass"),
-            Err(InvalidProof::RangeCheckFailed(_)) => (),
+            Err(InvalidProofReason::RangeCheckFailed(_)) => (),
             Err(e) => panic!("proof should not fail with {e:?}"),
         }
     }
@@ -429,9 +433,9 @@ mod test {
             };
             let plaintext: BigNumber = (BigNumber::one() << (security.l + 1)) - 1;
             let r = run_with(rng, security, plaintext);
-            match r {
+            match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
-                Err(InvalidProof::RangeCheckFailed(_)) => false,
+                Err(InvalidProofReason::RangeCheckFailed(_)) => false,
                 Err(e) => panic!("proof should not fail with {e:?}"),
             }
         }
