@@ -10,7 +10,7 @@ use rand_core::RngCore;
 pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> BigNumber {
     let e = ((p - 1) * (q - 1) + 4) / 8;
 
-    // `e` assumed to be non-negative
+    // e guaranteed to be non-negative by the prerequisite that p and q are blum primes
     #[allow(clippy::disallowed_methods)]
     x.modpow(&e, n)
 }
