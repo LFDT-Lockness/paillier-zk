@@ -127,7 +127,7 @@ pub trait BigNumberExt: Sized {
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
 
     /// Generates a random integer in interval `[-range; range]`
-    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self;
+    fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self;
 
     /// Computes self^exponent mod modulo
     ///
@@ -154,7 +154,7 @@ impl BigNumberExt for BigNumber {
         generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
     }
 
-    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self {
+    fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self {
         let n = BigNumber::from_rng(&(range * 2), rng);
         n - range
     }
@@ -211,7 +211,7 @@ pub mod test {
         let mut generated_neg_numbers = 0;
 
         for _ in 0..32 {
-            let i = BigNumber::from_rng_pm(&mut rng, &n);
+            let i = BigNumber::from_rng_pm(&n, &mut rng);
             if i < BigNumber::zero() {
                 generated_neg_numbers += 1
             }
