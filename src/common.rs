@@ -83,6 +83,26 @@ pub trait SafePaillierExt {
         x: &BigNumber,
         rng: &mut R,
     ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError>;
+
+    /// Homomorphic addition of two ciphertexts
+    fn oadd(
+        &self,
+        c1: &libpaillier::Ciphertext,
+        c2: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+
+    /// Homomorphic multiplication of scalar (should be unsigned integer) at ciphertext
+    fn omul(
+        &self,
+        scalar: &BigNumber,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+
+    /// Homomorphic negation of a ciphertext
+    fn oneg(
+        &self,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
 }
 
 impl SafePaillierExt for libpaillier::EncryptionKey {
@@ -91,6 +111,9 @@ impl SafePaillierExt for libpaillier::EncryptionKey {
         x: &BigNumber,
         nonce: &libpaillier::Nonce,
     ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        if !(&BigNumber::zero() <= x && x < self.n()) {
+            return Err(EncryptionError);
+        }
         #[allow(clippy::disallowed_methods)]
         self.encrypt(x.to_bytes(), Some(nonce.clone()))
             .map(|(e, _)| e)
@@ -102,10 +125,43 @@ impl SafePaillierExt for libpaillier::EncryptionKey {
         x: &BigNumber,
         rng: &mut R,
     ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError> {
+        if !(&BigNumber::zero() <= x && x < self.n()) {
+            return Err(EncryptionError);
+        }
         let nonce = libpaillier::Nonce::from_rng(self.n(), rng);
         #[allow(clippy::disallowed_methods)]
         self.encrypt(x.to_bytes(), Some(nonce))
             .ok_or(EncryptionError)
+    }
+
+    fn oadd(
+        &self,
+        c1: &libpaillier::Ciphertext,
+        c2: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        #[allow(clippy::disallowed_methods)]
+        self.add(c1, c2).ok_or(EncryptionError)
+    }
+
+    fn omul(
+        &self,
+        scalar: &BigNumber,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        #[allow(clippy::disallowed_methods)]
+        if scalar >= &BigNumber::zero() {
+            self.mul(ciphertext, scalar).ok_or(EncryptionError)
+        } else {
+            self.mul(&self.oneg(ciphertext)?, &-scalar)
+                .ok_or(EncryptionError)
+        }
+    }
+
+    fn oneg(
+        &self,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        ciphertext.invert(self.nn()).ok_or(EncryptionError)
     }
 }
 
@@ -134,6 +190,9 @@ pub trait BigNumberExt: Sized {
     /// Unlike [`BigNumber::modpow`], this method correctly handles negative exponent. `Err(_)`
     /// is returned if modpow cannot be computed.
     fn powmod(&self, exponent: &Self, modulo: &Self) -> Result<Self, BadExponent>;
+
+    /// Checks whether `self` is in interval `[-range; range]`
+    fn is_in_pm(&self, range: &Self) -> bool;
 }
 
 impl BigNumberExt for BigNumber {
@@ -174,6 +233,15 @@ impl BigNumberExt for BigNumber {
         } else {
             Ok(BigNumber::modpow(self, exponent, modulo))
         }
+    }
+
+    fn is_in_pm(&self, range: &Self) -> bool {
+        let neg_range = -range;
+
+        let low = &neg_range <= self;
+        let high = self <= range;
+
+        low & high
     }
 }
 

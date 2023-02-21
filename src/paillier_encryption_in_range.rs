@@ -173,24 +173,24 @@ pub mod interactive {
         data: &Data,
         pdata: &PrivateData,
         security: &SecurityParams,
-        mut rng: R,
+        rng: &mut R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
-        // add 1 to exponents to account for +-
-        let two_to_l = BigNumber::from(1) << (security.l + 1);
-        let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
-        let alpha = BigNumber::from_rng(&two_to_l_plus_e, &mut rng);
-        let mu = BigNumber::from_rng(&(two_to_l * &aux.rsa_modulo), &mut rng);
-        let r = BigNumber::gen_inversible(data.key.n(), &mut rng);
-        let gamma = BigNumber::from_rng(&(two_to_l_plus_e * &aux.rsa_modulo), &mut rng);
+        let two_to_l_plus_e = BigNumber::one() << (security.l + security.epsilon);
+        let two_to_l_at_hat_n = (BigNumber::one() << security.l) * &aux.rsa_modulo;
+        let two_to_l_plus_e_at_hat_n =
+            (BigNumber::one() << (security.l + security.epsilon)) * &aux.rsa_modulo;
+
+        let alpha = BigNumber::from_rng_pm(&two_to_l_plus_e, rng);
+        let mu = BigNumber::from_rng_pm(&two_to_l_at_hat_n, rng);
+        let r = BigNumber::gen_inversible(data.key.n(), rng);
+        let gamma = BigNumber::from_rng_pm(&two_to_l_plus_e_at_hat_n, rng);
 
         let s = aux
             .rsa_modulo
             .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)?;
-        let a = data
-            .key
-            .nn()
-            .combine(&(data.key.n() + 1), &alpha, &r, data.key.n())?;
+        let a = data.key.encrypt_with(&alpha.nmod(&data.key.n()), &r)?;
         let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
+
         Ok((
             Commitment { s, a, c },
             PrivateCommitment {
@@ -209,15 +209,10 @@ pub mod interactive {
         private_commitment: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
-        let m = crate::unknown_order::Group {
-            modulus: data.key.n().clone(),
-        };
-        let z2 = &m
-            * (
-                &private_commitment.r,
-                &pdata.nonce.powmod(challenge, data.key.n())?,
-            );
         let z1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
+        let z2 = private_commitment
+            .r
+            .modmul(&pdata.nonce.powmod(challenge, data.key.n())?, data.key.n());
         let z3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
         Ok(Proof { z1, z2, z3 })
     }
@@ -231,29 +226,39 @@ pub mod interactive {
         challenge: &Challenge,
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
-        // check 1
-        let pt = &proof.z1 % data.key.n();
-        let cipher = data.key.encrypt_with(&pt, &proof.z2)?;
-        if cipher
-            != commitment.a.modmul(
-                &data.ciphertext.powmod(challenge, data.key.nn())?,
-                data.key.nn(),
-            )
         {
-            return Err(InvalidProofReason::EqualityCheck(1).into());
+            let lhs = {
+                let z1_mod_n0 = proof.z1.nmod(&data.key.n());
+                data.key.encrypt_with(&z1_mod_n0, &proof.z2)?
+            };
+            let rhs = {
+                let e_at_k = data.key.omul(&challenge, &data.ciphertext)?;
+                data.key.oadd(&commitment.a, &e_at_k)?
+            };
+            if lhs != rhs {
+                return Err(InvalidProofReason::EqualityCheck(1).into());
+            }
         }
 
-        let check2 = aux
-            .rsa_modulo
-            .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
-            == aux
+        {
+            let lhs = aux
                 .rsa_modulo
-                .combine(&commitment.c, &1.into(), &commitment.s, challenge)?;
-        if !check2 {
-            return Err(InvalidProofReason::EqualityCheck(2).into());
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?;
+            let rhs = aux.rsa_modulo.combine(
+                &commitment.c,
+                &BigNumber::one(),
+                &commitment.s,
+                &challenge,
+            )?;
+            if lhs != rhs {
+                return Err(InvalidProofReason::EqualityCheck(2).into());
+            }
         }
 
-        if proof.z1 > (BigNumber::one() << (security.l + security.epsilon + 1)) {
+        if !proof
+            .z1
+            .is_in_pm(&(BigNumber::one() << (security.l + security.epsilon)))
+        {
             return Err(InvalidProofReason::RangeCheck(3).into());
         }
 
@@ -264,16 +269,13 @@ pub mod interactive {
     ///
     /// `security` parameter is used to generate challenge in correct range
     pub fn challenge<R: RngCore>(security: &SecurityParams, rng: &mut R) -> Challenge {
-        // double the range to account for +-
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, rng)
+        BigNumber::from_rng_pm(&security.q, rng)
     }
 }
 
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
-    use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
@@ -291,7 +293,7 @@ pub mod non_interactive {
         data: &Data,
         pdata: &PrivateData,
         security: &SecurityParams,
-        rng: R,
+        rng: &mut R,
     ) -> Result<(Commitment, Proof), Error>
     where
         D: Digest<OutputSize = U32>,
@@ -325,8 +327,7 @@ pub mod non_interactive {
             .chain_update(commitment.c.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, &mut rng)
+        super::interactive::challenge(&security, &mut rng)
     }
 
     /// Verify the proof, deriving challenge independently from same data
@@ -350,16 +351,19 @@ pub mod non_interactive {
 mod test {
     use crate::common::{InvalidProofReason, SafePaillierExt};
     use crate::unknown_order::BigNumber;
+    use crate::BigNumberExt;
 
     fn run_with<R: rand_core::RngCore>(
-        mut rng: R,
+        mut rng: &mut R,
         security: super::SecurityParams,
         plaintext: BigNumber,
     ) -> Result<(), crate::common::InvalidProof> {
         let aux = crate::common::test::aux(&mut rng);
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
-        let (ciphertext, nonce) = key.encrypt_with_random(&plaintext, &mut rng).unwrap();
+        let (ciphertext, nonce) = key
+            .encrypt_with_random(&plaintext.nmod(key.n()), &mut rng)
+            .unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 
@@ -382,10 +386,10 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            q: (BigNumber::one() << 128) - 1,
         };
-        let plaintext = (BigNumber::one() << (security.l + 1)) - 1;
-        let r = run_with(rng, security, plaintext);
+        let plaintext = BigNumber::from_rng_pm(&(BigNumber::one() << security.l), &mut rng);
+        let r = run_with(&mut rng, security, plaintext);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{e:?}"),
@@ -397,10 +401,10 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            q: (BigNumber::one() << 128) - 1,
         };
-        let plaintext = (BigNumber::one() << (security.l + security.epsilon + 1)) + 1;
-        let r = run_with(rng, security, plaintext);
+        let plaintext = (BigNumber::one() << (security.l + security.epsilon)) + 1;
+        let r = run_with(&mut rng, security, plaintext);
         match r.map_err(|e| e.reason()) {
             Ok(()) => panic!("proof should not pass"),
             Err(InvalidProofReason::RangeCheck(_)) => (),
@@ -423,10 +427,10 @@ mod test {
             let security = super::SecurityParams {
                 l: 512,
                 epsilon: 129,
-                q: BigNumber::prime_from_rng(128, &mut rng),
+                q: (BigNumber::one() << 128) - 1,
             };
-            let plaintext: BigNumber = (BigNumber::one() << (security.l + 1)) - 1;
-            let r = run_with(rng, security, plaintext);
+            let plaintext: BigNumber = (BigNumber::one() << security.l) - 1;
+            let r = run_with(&mut rng, security, plaintext);
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
                 Err(InvalidProofReason::RangeCheck(_)) => false,
