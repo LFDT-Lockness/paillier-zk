@@ -188,7 +188,7 @@ pub mod interactive {
         let s = aux
             .rsa_modulo
             .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)?;
-        let a = data.key.encrypt_with(&alpha.nmod(&data.key.n()), &r)?;
+        let a = data.key.encrypt_with(&alpha.nmod(data.key.n()), &r)?;
         let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
 
         Ok((
@@ -228,11 +228,11 @@ pub mod interactive {
     ) -> Result<(), InvalidProof> {
         {
             let lhs = {
-                let z1_mod_n0 = proof.z1.nmod(&data.key.n());
+                let z1_mod_n0 = proof.z1.nmod(data.key.n());
                 data.key.encrypt_with(&z1_mod_n0, &proof.z2)?
             };
             let rhs = {
-                let e_at_k = data.key.omul(&challenge, &data.ciphertext)?;
+                let e_at_k = data.key.omul(challenge, &data.ciphertext)?;
                 data.key.oadd(&commitment.a, &e_at_k)?
             };
             if lhs != rhs {
@@ -248,7 +248,7 @@ pub mod interactive {
                 &commitment.c,
                 &BigNumber::one(),
                 &commitment.s,
-                &challenge,
+                challenge,
             )?;
             if lhs != rhs {
                 return Err(InvalidProofReason::EqualityCheck(2).into());
@@ -327,7 +327,7 @@ pub mod non_interactive {
             .chain_update(commitment.c.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        super::interactive::challenge(&security, &mut rng)
+        super::interactive::challenge(security, &mut rng)
     }
 
     /// Verify the proof, deriving challenge independently from same data
