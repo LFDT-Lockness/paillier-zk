@@ -51,11 +51,11 @@
 //!     q: security_prime,
 //! };
 //!
-//! let rng = rand_core::OsRng::default();
+//! let mut rng = rand_core::OsRng::default();
 //! let data = p::Data { key, ciphertext };
 //! let pdata = p::PrivateData { plaintext, nonce };
 //! let (commitment, proof) =
-//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng)?;
+//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, &mut rng)?;
 //!
 //! // 4. Prover sends this data to verifier
 //!
