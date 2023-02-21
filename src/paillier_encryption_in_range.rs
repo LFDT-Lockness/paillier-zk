@@ -233,18 +233,14 @@ pub mod interactive {
     ) -> Result<(), InvalidProof> {
         // check 1
         let pt = &proof.z1 % data.key.n();
-        match data.key.encrypt_with(pt.to_bytes(), proof.z2.clone()) {
-            Some(cipher) => {
-                if cipher
-                    != commitment.a.modmul(
-                        &data.ciphertext.powmod(challenge, data.key.nn())?,
-                        data.key.nn(),
-                    )
-                {
-                    return Err(InvalidProofReason::EqualityCheck(1).into());
-                }
-            }
-            None => return Err(InvalidProofReason::Encryption.into()),
+        let cipher = data.key.encrypt_with(&pt, &proof.z2)?;
+        if cipher
+            != commitment.a.modmul(
+                &data.ciphertext.powmod(challenge, data.key.nn())?,
+                data.key.nn(),
+            )
+        {
+            return Err(InvalidProofReason::EqualityCheck(1).into());
         }
 
         let check2 = aux
@@ -363,9 +359,7 @@ mod test {
         let aux = crate::common::test::aux(&mut rng);
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
-        let (ciphertext, nonce) = key
-            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
-            .unwrap();
+        let (ciphertext, nonce) = key.encrypt_with_random(&plaintext, &mut rng).unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 

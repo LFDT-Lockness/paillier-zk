@@ -277,10 +277,7 @@ pub mod interactive {
         let delta = BigNumber::from_rng(&modulo_l_e, &mut rng);
         let mu = BigNumber::from_rng(&modulo_l, &mut rng);
 
-        let a_add = data
-            .key0
-            .encrypt_with(beta.to_bytes(), r.clone())
-            .ok_or(ErrorReason::Encryption)?;
+        let a_add = data.key0.encrypt_with(&beta, &r)?;
         let c_to_alpha = data
             .key0
             .mul(&data.c, &alpha)
@@ -292,10 +289,7 @@ pub mod interactive {
         let commitment = Commitment {
             a,
             b_x: Point::<C>::generator() * alpha.to_scalar(),
-            b_y: data
-                .key1
-                .encrypt_with(beta.to_bytes(), r_y.clone())
-                .ok_or(ErrorReason::Encryption)?,
+            b_y: data.key1.encrypt_with(&beta, &r_y)?,
             e: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
             s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &m)?,
             f: aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &delta)?,
@@ -356,10 +350,7 @@ pub mod interactive {
         }
         // Five equality checks and two range checks
         {
-            let enc = data
-                .key0
-                .encrypt_with(proof.z2.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProofReason::Encryption)?;
+            let enc = data.key0.encrypt_with(&proof.z2, &proof.w)?;
             let lhs = data
                 .key0
                 .add(
@@ -382,10 +373,7 @@ pub mod interactive {
             fail_if(InvalidProofReason::EqualityCheck(2), lhs == rhs)?;
         }
         {
-            let lhs = data
-                .key1
-                .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
-                .ok_or(InvalidProofReason::Encryption)?;
+            let lhs = data.key1.encrypt_with(&proof.z2, &proof.w_y)?;
             let rhs = data
                 .key1
                 .nn()
@@ -546,19 +534,12 @@ mod test {
         let private_key1 = random_key(&mut rng).unwrap();
         let key1 = libpaillier::EncryptionKey::from(&private_key1);
         let g = generic_ec::Point::<C>::generator();
-        let (ciphertext, _) = key0
-            .encrypt_with_random(affined.to_bytes(), &mut rng)
-            .unwrap();
-        let (ciphertext_orig, _) = key0
-            .encrypt_with_random(plaintext_orig.to_bytes(), &mut rng)
-            .unwrap();
+        let (ciphertext, _) = key0.encrypt_with_random(&affined, &mut rng).unwrap();
+        let (ciphertext_orig, _) = key0.encrypt_with_random(&plaintext_orig, &mut rng).unwrap();
         let ciphertext_mult = g * plaintext_mult.to_scalar();
-        let (ciphertext_add, nonce_y) = key1
-            .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
-            .unwrap();
-        let (ciphertext_add_action, nonce) = key0
-            .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
-            .unwrap();
+        let (ciphertext_add, nonce_y) = key1.encrypt_with_random(&plaintext_add, &mut rng).unwrap();
+        let (ciphertext_add_action, nonce) =
+            key0.encrypt_with_random(&plaintext_add, &mut rng).unwrap();
         // verify that D is obtained from affine transformation of C
         let transformed = key0
             .add(

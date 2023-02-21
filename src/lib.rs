@@ -21,7 +21,7 @@ pub use libpaillier;
 pub use libpaillier::unknown_order;
 
 use common::InvalidProofReason;
-pub use common::{BadExponent, BigNumberExt, InvalidProof};
+pub use common::{BadExponent, BigNumberExt, EncryptionError, InvalidProof};
 
 /// Library general error type
 #[derive(Debug, Clone, Error)]
@@ -39,5 +39,11 @@ enum ErrorReason {
 impl From<BadExponent> for Error {
     fn from(_err: BadExponent) -> Self {
         Error(ErrorReason::ModPow)
+    }
+}
+
+impl From<EncryptionError> for Error {
+    fn from(_err: EncryptionError) -> Self {
+        Error(ErrorReason::Encryption)
     }
 }

@@ -154,7 +154,7 @@ pub mod interactive {
     use rand_core::RngCore;
 
     use crate::common::{BigNumberExt, InvalidProofReason};
-    use crate::{Error, ErrorReason, InvalidProof};
+    use crate::{Error, InvalidProof};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -176,10 +176,7 @@ pub mod interactive {
         let mu = BigNumber::from_rng(&modulo_l, &mut rng);
         let nu = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
-        let (a, r) = data
-            .key
-            .encrypt_with_random(alpha.to_bytes(), &mut rng)
-            .ok_or(ErrorReason::Encryption)?;
+        let (a, r) = data.key.encrypt_with_random(&alpha, &mut rng)?;
 
         let commitment = Commitment {
             s: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
@@ -234,10 +231,7 @@ pub mod interactive {
         }
         // Three equality checks
         {
-            let lhs = data
-                .key
-                .encrypt_with(proof.z1.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProofReason::Encryption)?;
+            let lhs = data.key.encrypt_with(&proof.z1, &proof.w)?;
             let rhs = data
                 .key
                 .nn()
@@ -365,9 +359,7 @@ mod test {
         let hiddentext = BigNumber::from(228);
         let modulo = BigNumber::from(100);
         assert_eq!(&plaintext % &modulo, &hiddentext % &modulo);
-        let (ciphertext, nonce) = key0
-            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
-            .unwrap();
+        let (ciphertext, nonce) = key0.encrypt_with_random(&plaintext, &mut rng).unwrap();
 
         let data = super::Data {
             q: modulo,
@@ -415,9 +407,7 @@ mod test {
         let hiddentext = BigNumber::from(322);
         let modulo = BigNumber::prime_from_rng(128, &mut rng);
         assert_ne!(&plaintext % &modulo, &hiddentext % &modulo);
-        let (ciphertext, nonce) = key0
-            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
-            .unwrap();
+        let (ciphertext, nonce) = key0.encrypt_with_random(&plaintext, &mut rng).unwrap();
 
         let data = super::Data {
             q: modulo,
@@ -465,7 +455,7 @@ mod test {
         let hiddentext = BigNumber::from(228);
         let modulo = BigNumber::from(100);
         let (ciphertext, nonce) = key0
-            .encrypt_with_random(wrong_plaintext.to_bytes(), &mut rng)
+            .encrypt_with_random(&wrong_plaintext, &mut rng)
             .unwrap();
 
         let data = super::Data {

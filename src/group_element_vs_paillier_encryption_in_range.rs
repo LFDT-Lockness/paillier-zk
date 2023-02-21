@@ -175,7 +175,7 @@ pub mod interactive {
     use rand_core::RngCore;
 
     use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
-    use crate::{Error, ErrorReason, InvalidProof};
+    use crate::{Error, InvalidProof};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -199,10 +199,7 @@ pub mod interactive {
         let r = BigNumber::gen_inversible(data.key0.n(), &mut rng);
         let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
 
-        let a = data
-            .key0
-            .encrypt_with(alpha.to_bytes(), r.clone())
-            .ok_or(ErrorReason::Encryption)?;
+        let a = data.key0.encrypt_with(&alpha, &r)?;
 
         let commitment = Commitment {
             s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &mu)?,
@@ -255,10 +252,7 @@ pub mod interactive {
         }
         // Three equality checks and one range check
         {
-            let lhs = data
-                .key0
-                .encrypt_with(proof.z1.to_bytes(), proof.z2.clone())
-                .ok_or(InvalidProofReason::Encryption)?;
+            let lhs = data.key0.encrypt_with(&proof.z1, &proof.z2)?;
             let rhs = data
                 .key0
                 .nn()
@@ -405,9 +399,7 @@ mod test {
         let private_key0 = random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
-        let (ciphertext, nonce) = key0
-            .encrypt_with_random(plaintext.to_bytes(), &mut rng)
-            .unwrap();
+        let (ciphertext, nonce) = key0.encrypt_with_random(&plaintext, &mut rng).unwrap();
         let g = generic_ec::Point::<C>::generator() * generic_ec::Scalar::<C>::from(1337);
         let x = g * plaintext.to_scalar();
 

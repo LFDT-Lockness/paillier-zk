@@ -64,41 +64,57 @@ impl From<BadExponent> for InvalidProof {
     }
 }
 
+impl From<EncryptionError> for InvalidProof {
+    fn from(_err: EncryptionError) -> Self {
+        InvalidProof(InvalidProofReason::Encryption)
+    }
+}
+
 /// Regular paillier encryption methods are easy to misuse and generate
 /// an undeterministic nonce, we replace them with those functions
 pub trait SafePaillierExt {
-    fn encrypt_with<M: AsRef<[u8]>>(
+    fn encrypt_with(
         &self,
-        x: M,
-        nonce: libpaillier::Nonce,
-    ) -> Option<libpaillier::Ciphertext>;
-    fn encrypt_with_random<M: AsRef<[u8]>, R: rand_core::RngCore>(
+        x: &BigNumber,
+        nonce: &libpaillier::Nonce,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+    fn encrypt_with_random<R: rand_core::RngCore>(
         &self,
-        x: M,
+        x: &BigNumber,
         rng: &mut R,
-    ) -> Option<(libpaillier::Ciphertext, libpaillier::Nonce)>;
+    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError>;
 }
 
 impl SafePaillierExt for libpaillier::EncryptionKey {
-    fn encrypt_with<M: AsRef<[u8]>>(
+    fn encrypt_with(
         &self,
-        x: M,
-        nonce: libpaillier::Nonce,
-    ) -> Option<libpaillier::Ciphertext> {
+        x: &BigNumber,
+        nonce: &libpaillier::Nonce,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
         #[allow(clippy::disallowed_methods)]
-        self.encrypt(x, Some(nonce)).map(|(e, _)| e)
+        self.encrypt(x.to_bytes(), Some(nonce.clone()))
+            .map(|(e, _)| e)
+            .ok_or(EncryptionError)
     }
 
-    fn encrypt_with_random<M: AsRef<[u8]>, R: rand_core::RngCore>(
+    fn encrypt_with_random<R: rand_core::RngCore>(
         &self,
-        x: M,
+        x: &BigNumber,
         rng: &mut R,
-    ) -> Option<(libpaillier::Ciphertext, libpaillier::Nonce)> {
+    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError> {
         let nonce = libpaillier::Nonce::from_rng(self.n(), rng);
         #[allow(clippy::disallowed_methods)]
-        self.encrypt(x, Some(nonce))
+        self.encrypt(x.to_bytes(), Some(nonce))
+            .ok_or(EncryptionError)
     }
 }
+
+/// Error indicating that encryption failed
+///
+/// Returned by [SafePaillierExt] methods
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+#[error("paillier encryption failed")]
+pub struct EncryptionError;
 
 pub trait BigNumberExt: Sized {
     /// Generate element in Zm*. Does so by trial.
