@@ -451,24 +451,6 @@ mod test {
     }
 
     #[test]
-    fn tbd_delete1() {
-        let mut rng = rand_dev::DevRng::new();
-
-        let ell = 1024;
-        let epsilon = 300;
-
-        let x = BigNumber::one() << (ell + epsilon + 1);
-        let alpha = BigNumber::from_rng_pm(&(BigNumber::one() << (ell + epsilon)), &mut rng);
-        let e = BigNumber::from_rng_pm(
-            &BigNumber::curve_order::<generic_ec_curves::Secp256r1>(),
-            &mut rng,
-        );
-
-        let z1 = &alpha + &e * &x;
-        assert!(!z1.is_in_pm(&(BigNumber::one() << (ell + epsilon))));
-    }
-
-    #[test]
     fn passing_p256() {
         passing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
     }
