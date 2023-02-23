@@ -63,10 +63,9 @@
 //! let security = p::SecurityParams {
 //!     l: 1024,
 //!     epsilon: 128,
-//!     q: BigNumber::prime_from_rng(128, &mut rng),
 //! };
 //!
-//! let data = p::Data { key0, c: ciphertext, x: power, g };
+//! let data = p::Data { key0, c: ciphertext, x: power, b: g };
 //! let pdata = p::PrivateData { x: plaintext, nonce };
 //! let (commitment, proof) =
 //!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, rng).expect("proof failed");
@@ -103,8 +102,6 @@ pub struct SecurityParams {
     pub l: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
-    /// q in paper. Security parameter for challenge
-    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -115,10 +112,10 @@ pub struct Data<C: Curve> {
     pub key0: EncryptionKey,
     /// C in paper, logarithm of X encrypted on N0
     pub c: Ciphertext,
+    /// A basepoint, generator in group
+    pub b: Point<C>,
     /// X in paper, exponent of plaintext of C
     pub x: Point<C>,
-    /// A generator in group
-    pub g: Point<C>,
 }
 
 /// Private data of prover
@@ -174,7 +171,7 @@ pub mod interactive {
     use libpaillier::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
+    use crate::common::{fail_if, fail_if_ne, BigNumberExt, InvalidProofReason, SafePaillierExt};
     use crate::{Error, InvalidProof};
 
     use super::{
@@ -189,22 +186,19 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
-        let two_to_l = BigNumber::one() << (security.l + 1);
-        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon + 1);
-        let modulo_l = two_to_l * &aux.rsa_modulo;
-        let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
+        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon);
+        let hat_n_at_two_to_l = &aux.rsa_modulo * &(BigNumber::one() << security.l);
+        let hat_n_at_two_to_l_e = &aux.rsa_modulo * &two_to_l_e;
 
-        let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-        let mu = BigNumber::from_rng(&modulo_l, &mut rng);
+        let alpha = BigNumber::from_rng_pm(&two_to_l_e, &mut rng);
+        let mu = BigNumber::from_rng_pm(&hat_n_at_two_to_l, &mut rng);
         let r = BigNumber::gen_inversible(data.key0.n(), &mut rng);
-        let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
-
-        let a = data.key0.encrypt_with(&alpha, &r)?;
+        let gamma = BigNumber::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
 
         let commitment = Commitment {
             s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &mu)?,
-            a,
-            y: data.g * alpha.to_scalar(),
+            a: data.key0.encrypt_with(&alpha.nmod(data.key0.n()), &r)?,
+            y: data.b * alpha.to_scalar(),
             d: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
         };
         let private_commitment = PrivateCommitment {
@@ -243,26 +237,20 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(b: bool, msg: InvalidProofReason) -> Result<(), InvalidProof> {
-            if b {
-                Ok(())
-            } else {
-                Err(InvalidProof::from(msg))
-            }
-        }
-        // Three equality checks and one range check
         {
-            let lhs = data.key0.encrypt_with(&proof.z1, &proof.z2)?;
-            let rhs = data
+            let lhs = data
                 .key0
-                .nn()
-                .combine(&commitment.a, &one, &data.c, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(1))?;
+                .encrypt_with(&proof.z1.nmod(data.key0.n()), &proof.z2)?;
+            let rhs = {
+                let e_at_c = data.key0.omul(&challenge, &data.c)?;
+                data.key0.oadd(&commitment.a, &e_at_c)?
+            };
+            fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;
         }
         {
-            let lhs = data.g * proof.z1.to_scalar();
+            let lhs = data.b * proof.z1.to_scalar();
             let rhs = commitment.y + data.x * challenge.to_scalar();
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(2))?;
+            fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         {
             let lhs = aux
@@ -271,11 +259,13 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.d, &one, &commitment.s, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(3))?;
+            fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
         fail_if(
-            proof.z1 <= one << (security.l + security.epsilon + 1),
             InvalidProofReason::RangeCheck(4),
+            proof
+                .z1
+                .is_in_pm(&(BigNumber::one() << (security.l + security.epsilon))),
         )?;
 
         Ok(())
@@ -284,13 +274,11 @@ pub mod interactive {
     /// Generate random challenge
     ///
     /// `data` parameter is used to generate challenge in correct range
-    pub fn challenge<R>(rng: &mut R, security: &SecurityParams) -> BigNumber
+    pub fn challenge<E: generic_ec::Curve, R>(rng: &mut R) -> BigNumber
     where
         R: RngCore,
     {
-        // double the range to account for +-
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, rng)
+        BigNumber::from_rng_pm(&BigNumber::curve_order::<E>(), rng)
     }
 }
 
@@ -298,7 +286,6 @@ pub mod interactive {
 /// see the documentation of parent module.
 pub mod non_interactive {
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
-    use libpaillier::unknown_order::BigNumber;
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
@@ -360,9 +347,12 @@ pub mod non_interactive {
     {
         use rand_core::SeedableRng;
         let seed = shared_state
+            .chain_update(C::CURVE_NAME)
             .chain_update(aux.s.to_bytes())
             .chain_update(aux.t.to_bytes())
             .chain_update(aux.rsa_modulo.to_bytes())
+            .chain_update((security.l as u64).to_le_bytes())
+            .chain_update((security.epsilon as u64).to_le_bytes())
             .chain_update(data.key0.to_bytes())
             .chain_update(data.c.to_bytes())
             .chain_update(data.x.to_bytes(true))
@@ -370,19 +360,16 @@ pub mod non_interactive {
             .chain_update(commitment.a.to_bytes())
             .chain_update(commitment.y.to_bytes(true))
             .chain_update(commitment.d.to_bytes())
-            .chain_update((security.l as u64).to_le_bytes())
-            .chain_update((security.epsilon as u64).to_le_bytes())
             .finalize();
 
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, &mut rng)
+        super::interactive::challenge::<C, _>(&mut rng)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
+    use generic_ec::{hash_to_curve::FromHash, Curve, Point, Scalar};
     use libpaillier::unknown_order::BigNumber;
 
     use crate::common::test::random_key;
@@ -399,15 +386,17 @@ mod test {
         let private_key0 = random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
-        let (ciphertext, nonce) = key0.encrypt_with_random(&plaintext, &mut rng).unwrap();
-        let g = generic_ec::Point::<C>::generator() * generic_ec::Scalar::<C>::from(1337);
-        let x = g * plaintext.to_scalar();
+        let (ciphertext, nonce) = key0
+            .encrypt_with_random(&plaintext.nmod(key0.n()), &mut rng)
+            .unwrap();
+        let b = Point::<C>::generator() * Scalar::random(&mut rng);
+        let x = b * plaintext.to_scalar();
 
         let data = super::Data {
             key0,
             c: ciphertext,
             x,
-            g,
+            b,
         };
         let pdata = super::PrivateData {
             x: plaintext,
@@ -438,26 +427,20 @@ mod test {
         let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
-            epsilon: 256,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            epsilon: 300,
         };
-        let plaintext = BigNumber::from(228);
-        let r = run(rng, security, plaintext);
-        match r {
-            Ok(()) => (),
-            Err(e) => panic!("{e:?}"),
-        }
+        let plaintext = BigNumber::from_rng_pm(&(BigNumber::one() << security.l), &mut rng);
+        run(rng, security, plaintext).expect("proof failed");
     }
 
     fn failing_test<C: Curve>()
     where
         Scalar<C>: FromHash,
     {
-        let mut rng = rand_dev::DevRng::new();
+        let rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
-            epsilon: 128,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            epsilon: 300,
         };
         let plaintext = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let r = run(rng, security, plaintext).expect_err("proof should not pass");
@@ -465,6 +448,24 @@ mod test {
             InvalidProofReason::RangeCheck(_) => (),
             e => panic!("proof should not fail with: {e:?}"),
         }
+    }
+
+    #[test]
+    fn tbd_delete1() {
+        let mut rng = rand_dev::DevRng::new();
+
+        let ell = 1024;
+        let epsilon = 300;
+
+        let x = BigNumber::one() << (ell + epsilon + 1);
+        let alpha = BigNumber::from_rng_pm(&(BigNumber::one() << (ell + epsilon)), &mut rng);
+        let e = BigNumber::from_rng_pm(
+            &BigNumber::curve_order::<generic_ec_curves::Secp256r1>(),
+            &mut rng,
+        );
+
+        let z1 = &alpha + &e * &x;
+        assert!(!z1.is_in_pm(&(BigNumber::one() << (ell + epsilon))));
     }
 
     #[test]
@@ -493,15 +494,14 @@ mod test {
     // other tests
 
     #[test]
-    fn mul_rejected_with_probability_1_over_2() {
+    fn mul_rejected_with_some_probability() {
         use rand_core::SeedableRng;
-        fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
+        fn maybe_rejected(rng: rand_chacha::ChaCha20Rng) -> bool {
             let security = super::SecurityParams {
                 l: 1024,
-                epsilon: 130,
-                q: BigNumber::prime_from_rng(128, &mut rng),
+                epsilon: 255,
             };
-            let plaintext = (BigNumber::from(1) << (security.l + 1)) - 1;
+            let plaintext = (BigNumber::from(1) << security.l) - 1;
             let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext);
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
@@ -510,9 +510,9 @@ mod test {
             }
         }
 
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
-        assert!(!maybe_rejected(rng), "should fail");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(3);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
         assert!(maybe_rejected(rng), "should pass");
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
+        assert!(!maybe_rejected(rng), "should fail");
     }
 }
