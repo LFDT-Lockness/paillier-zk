@@ -182,6 +182,9 @@ pub trait BigNumberExt: Sized {
     /// Embed BigInt into chosen scalar type
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
 
+    /// Returns prime order of curve C
+    fn curve_order<C: generic_ec::Curve>() -> BigNumber;
+
     /// Generates a random integer in interval `[-range; range]`
     fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self;
 
@@ -210,7 +213,18 @@ impl BigNumberExt for BigNumber {
     }
 
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C> {
-        generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
+        if self >= &BigNumber::zero() {
+            generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
+        } else {
+            -generic_ec::Scalar::<C>::from_be_bytes_mod_order((-self).to_bytes())
+        }
+    }
+
+    fn curve_order<C: generic_ec::Curve>() -> BigNumber {
+        use generic_ec::Scalar;
+        let n_minus_one = Scalar::<C>::zero() - Scalar::one();
+        let bn = BigNumber::from_slice(n_minus_one.to_be_bytes());
+        bn + 1
     }
 
     fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self {
@@ -251,6 +265,24 @@ impl BigNumberExt for BigNumber {
 #[derive(Clone, Copy, Debug, thiserror::Error)]
 #[error("exponent is undefined")]
 pub struct BadExponent;
+
+/// Returns `Err(err)` if `assertion` is false
+pub(crate) fn fail_if<E>(err: E, assertion: bool) -> Result<(), E> {
+    if assertion {
+        Ok(())
+    } else {
+        Err(err)
+    }
+}
+
+/// Returns `Err(err)` if `lhs != rhs`
+pub(crate) fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), E> {
+    if lhs == rhs {
+        Ok(())
+    } else {
+        Err(err)
+    }
+}
 
 #[cfg(test)]
 pub mod test {
