@@ -176,14 +176,14 @@ pub mod interactive {
         rng: &mut R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
         let two_to_l_plus_e = BigNumber::one() << (security.l + security.epsilon);
-        let two_to_l_at_hat_n = (BigNumber::one() << security.l) * &aux.rsa_modulo;
-        let two_to_l_plus_e_at_hat_n =
+        let hat_n_at_two_to_l = (BigNumber::one() << security.l) * &aux.rsa_modulo;
+        let hat_n_at_two_to_l_plus_e =
             (BigNumber::one() << (security.l + security.epsilon)) * &aux.rsa_modulo;
 
         let alpha = BigNumber::from_rng_pm(&two_to_l_plus_e, rng);
-        let mu = BigNumber::from_rng_pm(&two_to_l_at_hat_n, rng);
+        let mu = BigNumber::from_rng_pm(&hat_n_at_two_to_l, rng);
         let r = BigNumber::gen_inversible(data.key.n(), rng);
-        let gamma = BigNumber::from_rng_pm(&two_to_l_plus_e_at_hat_n, rng);
+        let gamma = BigNumber::from_rng_pm(&hat_n_at_two_to_l_plus_e, rng);
 
         let s = aux
             .rsa_modulo
