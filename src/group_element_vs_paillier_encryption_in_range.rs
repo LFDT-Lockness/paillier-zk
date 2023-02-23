@@ -242,7 +242,7 @@ pub mod interactive {
                 .key0
                 .encrypt_with(&proof.z1.nmod(data.key0.n()), &proof.z2)?;
             let rhs = {
-                let e_at_c = data.key0.omul(&challenge, &data.c)?;
+                let e_at_c = data.key0.omul(challenge, &data.c)?;
                 data.key0.oadd(&commitment.a, &e_at_c)?
             };
             fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;

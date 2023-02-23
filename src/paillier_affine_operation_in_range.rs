@@ -267,8 +267,8 @@ pub mod interactive {
 
         let alpha = BigNumber::from_rng_pm(&two_to_l_e, &mut rng);
         let beta = BigNumber::from_rng_pm(&two_to_l_prime_e, &mut rng);
-        let r = BigNumber::gen_inversible(&data.key0.n(), &mut rng);
-        let r_y = BigNumber::gen_inversible(&data.key1.n(), &mut rng);
+        let r = BigNumber::gen_inversible(data.key0.n(), &mut rng);
+        let r_y = BigNumber::gen_inversible(data.key1.n(), &mut rng);
         let gamma = BigNumber::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
         let delta = BigNumber::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
         let m = BigNumber::from_rng_pm(&hat_n_at_two_to_l, &mut rng);
@@ -339,7 +339,7 @@ pub mod interactive {
                 let z1_at_c = data.key0.omul(&proof.z1, &data.c)?;
                 let enc = data
                     .key0
-                    .encrypt_with(&proof.z2.nmod(&data.key0.n()), &proof.w)?;
+                    .encrypt_with(&proof.z2.nmod(data.key0.n()), &proof.w)?;
                 data.key0.oadd(&z1_at_c, &enc)?
             };
             let rhs = {
@@ -358,7 +358,7 @@ pub mod interactive {
                 .key1
                 .encrypt_with(&proof.z2.nmod(data.key1.n()), &proof.w_y)?;
             let rhs = {
-                let e_at_y = data.key1.omul(&challenge, &data.y)?;
+                let e_at_y = data.key1.omul(challenge, &data.y)?;
                 data.key1.oadd(&commitment.b_y, &e_at_y)?
             };
             fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
@@ -515,7 +515,7 @@ mod test {
         let ek1 = libpaillier::EncryptionKey::from(&dk1);
 
         let (c, _) = {
-            let plaintext = BigNumber::from_rng(&ek0.n(), &mut rng);
+            let plaintext = BigNumber::from_rng(ek0.n(), &mut rng);
             ek0.encrypt_with_random(&plaintext, &mut rng).unwrap()
         };
 
