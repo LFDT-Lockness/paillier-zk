@@ -64,41 +64,113 @@ impl From<BadExponent> for InvalidProof {
     }
 }
 
+impl From<EncryptionError> for InvalidProof {
+    fn from(_err: EncryptionError) -> Self {
+        InvalidProof(InvalidProofReason::Encryption)
+    }
+}
+
 /// Regular paillier encryption methods are easy to misuse and generate
 /// an undeterministic nonce, we replace them with those functions
 pub trait SafePaillierExt {
-    fn encrypt_with<M: AsRef<[u8]>>(
+    fn encrypt_with(
         &self,
-        x: M,
-        nonce: libpaillier::Nonce,
-    ) -> Option<libpaillier::Ciphertext>;
-    fn encrypt_with_random<M: AsRef<[u8]>, R: rand_core::RngCore>(
+        x: &BigNumber,
+        nonce: &libpaillier::Nonce,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+    fn encrypt_with_random<R: rand_core::RngCore>(
         &self,
-        x: M,
+        x: &BigNumber,
         rng: &mut R,
-    ) -> Option<(libpaillier::Ciphertext, libpaillier::Nonce)>;
+    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError>;
+
+    /// Homomorphic addition of two ciphertexts
+    fn oadd(
+        &self,
+        c1: &libpaillier::Ciphertext,
+        c2: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+
+    /// Homomorphic multiplication of scalar (should be unsigned integer) at ciphertext
+    fn omul(
+        &self,
+        scalar: &BigNumber,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+
+    /// Homomorphic negation of a ciphertext
+    fn oneg(
+        &self,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
 }
 
 impl SafePaillierExt for libpaillier::EncryptionKey {
-    fn encrypt_with<M: AsRef<[u8]>>(
+    fn encrypt_with(
         &self,
-        x: M,
-        nonce: libpaillier::Nonce,
-    ) -> Option<libpaillier::Ciphertext> {
+        x: &BigNumber,
+        nonce: &libpaillier::Nonce,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        if !(&BigNumber::zero() <= x && x < self.n()) {
+            return Err(EncryptionError);
+        }
         #[allow(clippy::disallowed_methods)]
-        self.encrypt(x, Some(nonce)).map(|(e, _)| e)
+        self.encrypt(x.to_bytes(), Some(nonce.clone()))
+            .map(|(e, _)| e)
+            .ok_or(EncryptionError)
     }
 
-    fn encrypt_with_random<M: AsRef<[u8]>, R: rand_core::RngCore>(
+    fn encrypt_with_random<R: rand_core::RngCore>(
         &self,
-        x: M,
+        x: &BigNumber,
         rng: &mut R,
-    ) -> Option<(libpaillier::Ciphertext, libpaillier::Nonce)> {
+    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError> {
+        if !(&BigNumber::zero() <= x && x < self.n()) {
+            return Err(EncryptionError);
+        }
         let nonce = libpaillier::Nonce::from_rng(self.n(), rng);
         #[allow(clippy::disallowed_methods)]
-        self.encrypt(x, Some(nonce))
+        self.encrypt(x.to_bytes(), Some(nonce))
+            .ok_or(EncryptionError)
+    }
+
+    fn oadd(
+        &self,
+        c1: &libpaillier::Ciphertext,
+        c2: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        #[allow(clippy::disallowed_methods)]
+        self.add(c1, c2).ok_or(EncryptionError)
+    }
+
+    fn omul(
+        &self,
+        scalar: &BigNumber,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        #[allow(clippy::disallowed_methods)]
+        if scalar >= &BigNumber::zero() {
+            self.mul(ciphertext, scalar).ok_or(EncryptionError)
+        } else {
+            self.mul(&self.oneg(ciphertext)?, &-scalar)
+                .ok_or(EncryptionError)
+        }
+    }
+
+    fn oneg(
+        &self,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+        ciphertext.invert(self.nn()).ok_or(EncryptionError)
     }
 }
+
+/// Error indicating that encryption failed
+///
+/// Returned by [SafePaillierExt] methods
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+#[error("paillier encryption failed")]
+pub struct EncryptionError;
 
 pub trait BigNumberExt: Sized {
     /// Generate element in Zm*. Does so by trial.
@@ -110,14 +182,20 @@ pub trait BigNumberExt: Sized {
     /// Embed BigInt into chosen scalar type
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
 
+    /// Returns prime order of curve C
+    fn curve_order<C: generic_ec::Curve>() -> BigNumber;
+
     /// Generates a random integer in interval `[-range; range]`
-    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self;
+    fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self;
 
     /// Computes self^exponent mod modulo
     ///
     /// Unlike [`BigNumber::modpow`], this method correctly handles negative exponent. `Err(_)`
     /// is returned if modpow cannot be computed.
     fn powmod(&self, exponent: &Self, modulo: &Self) -> Result<Self, BadExponent>;
+
+    /// Checks whether `self` is in interval `[-range; range]`
+    fn is_in_pm(&self, range: &Self) -> bool;
 }
 
 impl BigNumberExt for BigNumber {
@@ -135,10 +213,21 @@ impl BigNumberExt for BigNumber {
     }
 
     fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C> {
-        generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
+        if self >= &BigNumber::zero() {
+            generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
+        } else {
+            -generic_ec::Scalar::<C>::from_be_bytes_mod_order((-self).to_bytes())
+        }
     }
 
-    fn from_rng_pm<R: rand_core::RngCore>(rng: &mut R, range: &Self) -> Self {
+    fn curve_order<C: generic_ec::Curve>() -> BigNumber {
+        use generic_ec::Scalar;
+        let n_minus_one = Scalar::<C>::zero() - Scalar::one();
+        let bn = BigNumber::from_slice(n_minus_one.to_be_bytes());
+        bn + 1
+    }
+
+    fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self {
         let n = BigNumber::from_rng(&(range * 2), rng);
         n - range
     }
@@ -159,6 +248,15 @@ impl BigNumberExt for BigNumber {
             Ok(BigNumber::modpow(self, exponent, modulo))
         }
     }
+
+    fn is_in_pm(&self, range: &Self) -> bool {
+        let neg_range = -range;
+
+        let low = &neg_range <= self;
+        let high = self <= range;
+
+        low & high
+    }
 }
 
 /// Error indicating that computation cannot be evaluated because of bad exponent
@@ -167,6 +265,24 @@ impl BigNumberExt for BigNumber {
 #[derive(Clone, Copy, Debug, thiserror::Error)]
 #[error("exponent is undefined")]
 pub struct BadExponent;
+
+/// Returns `Err(err)` if `assertion` is false
+pub(crate) fn fail_if<E>(err: E, assertion: bool) -> Result<(), E> {
+    if assertion {
+        Ok(())
+    } else {
+        Err(err)
+    }
+}
+
+/// Returns `Err(err)` if `lhs != rhs`
+pub(crate) fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), E> {
+    if lhs == rhs {
+        Ok(())
+    } else {
+        Err(err)
+    }
+}
 
 #[cfg(test)]
 pub mod test {
@@ -195,7 +311,7 @@ pub mod test {
         let mut generated_neg_numbers = 0;
 
         for _ in 0..32 {
-            let i = BigNumber::from_rng_pm(&mut rng, &n);
+            let i = BigNumber::from_rng_pm(&n, &mut rng);
             if i < BigNumber::zero() {
                 generated_neg_numbers += 1
             }

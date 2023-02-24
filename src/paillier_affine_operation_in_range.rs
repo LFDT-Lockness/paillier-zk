@@ -101,7 +101,6 @@
 //!     l_x: 1024,
 //!     l_y: 1024,
 //!     epsilon: 128,
-//!     q: BigNumber::prime_from_rng(128, &mut rng),
 //! };
 //!
 //! let data = p::Data {
@@ -156,8 +155,6 @@ pub struct SecurityParams {
     pub l_y: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
-    /// q in paper. Security parameter for challenge
-    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -246,9 +243,11 @@ pub mod interactive {
     use generic_ec::{Curve, Point};
     use rand_core::RngCore;
 
-    use crate::common::{BigNumberExt, InvalidProof, InvalidProofReason, SafePaillierExt};
+    use crate::common::{
+        fail_if, fail_if_ne, BigNumberExt, InvalidProof, InvalidProofReason, SafePaillierExt,
+    };
     use crate::unknown_order::BigNumber;
-    use crate::{Error, ErrorReason};
+    use crate::Error;
 
     use super::*;
 
@@ -260,42 +259,29 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
-        let two_to_l = BigNumber::one() << (security.l_x + 1);
-        let two_to_l_e = BigNumber::one() << (security.l_x + security.epsilon + 1);
-        let modulo_l = two_to_l * &aux.rsa_modulo;
-        let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
+        let two_to_l = BigNumber::one() << security.l_x;
+        let two_to_l_e = BigNumber::one() << (security.l_x + security.epsilon);
+        let two_to_l_prime_e = BigNumber::one() << (security.l_y + security.epsilon);
+        let hat_n_at_two_to_l_e = &aux.rsa_modulo * &two_to_l_e;
+        let hat_n_at_two_to_l = &aux.rsa_modulo * &two_to_l;
 
-        let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-        let beta = BigNumber::from_rng(
-            &(BigNumber::one() << (security.l_y + security.epsilon + 1)),
-            &mut rng,
-        );
+        let alpha = BigNumber::from_rng_pm(&two_to_l_e, &mut rng);
+        let beta = BigNumber::from_rng_pm(&two_to_l_prime_e, &mut rng);
         let r = BigNumber::gen_inversible(data.key0.n(), &mut rng);
         let r_y = BigNumber::gen_inversible(data.key1.n(), &mut rng);
-        let gamma = BigNumber::from_rng(&modulo_l_e, &mut rng);
-        let m = BigNumber::from_rng(&modulo_l, &mut rng);
-        let delta = BigNumber::from_rng(&modulo_l_e, &mut rng);
-        let mu = BigNumber::from_rng(&modulo_l, &mut rng);
+        let gamma = BigNumber::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
+        let delta = BigNumber::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
+        let m = BigNumber::from_rng_pm(&hat_n_at_two_to_l, &mut rng);
+        let mu = BigNumber::from_rng_pm(&hat_n_at_two_to_l, &mut rng);
 
-        let a_add = data
-            .key0
-            .encrypt_with(beta.to_bytes(), r.clone())
-            .ok_or(ErrorReason::Encryption)?;
-        let c_to_alpha = data
-            .key0
-            .mul(&data.c, &alpha)
-            .ok_or(ErrorReason::Encryption)?;
-        let a = data
-            .key0
-            .add(&c_to_alpha, &a_add)
-            .ok_or(ErrorReason::Encryption)?;
+        let beta_enc_key0 = data.key0.encrypt_with(&beta.nmod(data.key0.n()), &r)?;
+        let alpha_at_c = data.key0.omul(&alpha, &data.c)?;
+        let a = data.key0.oadd(&alpha_at_c, &beta_enc_key0)?;
+
         let commitment = Commitment {
             a,
             b_x: Point::<C>::generator() * alpha.to_scalar(),
-            b_y: data
-                .key1
-                .encrypt_with(beta.to_bytes(), r_y.clone())
-                .ok_or(ErrorReason::Encryption)?,
+            b_y: data.key1.encrypt_with(&beta.nmod(data.key1.n()), &r_y)?,
             e: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
             s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &m)?,
             f: aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &delta)?,
@@ -347,86 +333,71 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(msg: InvalidProofReason, b: bool) -> Result<(), InvalidProof> {
-            if b {
-                Ok(())
-            } else {
-                Err(msg.into())
-            }
-        }
         // Five equality checks and two range checks
         {
-            let enc = data
-                .key0
-                .encrypt_with(proof.z2.to_bytes(), proof.w.clone())
-                .ok_or(InvalidProofReason::Encryption)?;
-            let lhs = data
-                .key0
-                .add(
-                    &data
-                        .key0
-                        .mul(&data.c, &proof.z1)
-                        .ok_or(InvalidProofReason::Encryption)?,
-                    &enc,
-                )
-                .ok_or(InvalidProofReason::Encryption)?;
-            let rhs = data
-                .key0
-                .nn()
-                .combine(&commitment.a, &one, &data.d, challenge)?;
-            fail_if(InvalidProofReason::EqualityCheck(1), lhs == rhs)?;
+            let lhs = {
+                let z1_at_c = data.key0.omul(&proof.z1, &data.c)?;
+                let enc = data
+                    .key0
+                    .encrypt_with(&proof.z2.nmod(data.key0.n()), &proof.w)?;
+                data.key0.oadd(&z1_at_c, &enc)?
+            };
+            let rhs = {
+                let e_at_d = data.key0.omul(challenge, &data.d)?;
+                data.key0.oadd(&commitment.a, &e_at_d)?
+            };
+            fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;
         }
         {
             let lhs = Point::<C>::generator() * proof.z1.to_scalar();
             let rhs = commitment.b_x + data.x * challenge.to_scalar();
-            fail_if(InvalidProofReason::EqualityCheck(2), lhs == rhs)?;
+            fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         {
             let lhs = data
                 .key1
-                .encrypt_with(proof.z2.to_bytes(), proof.w_y.clone())
-                .ok_or(InvalidProofReason::Encryption)?;
-            let rhs = data
-                .key1
-                .nn()
-                .combine(&commitment.b_y, &one, &data.y, challenge)?;
-            fail_if(InvalidProofReason::EqualityCheck(3), lhs == rhs)?;
+                .encrypt_with(&proof.z2.nmod(data.key1.n()), &proof.w_y)?;
+            let rhs = {
+                let e_at_y = data.key1.omul(challenge, &data.y)?;
+                data.key1.oadd(&commitment.b_y, &e_at_y)?
+            };
+            fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
-        fail_if(
+        fail_if_ne(
             InvalidProofReason::EqualityCheck(4),
             aux.rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?
-                == aux
-                    .rsa_modulo
-                    .combine(&commitment.e, &one, &commitment.s, challenge)?,
+                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?,
+            aux.rsa_modulo
+                .combine(&commitment.e, &one, &commitment.s, challenge)?,
         )?;
-        fail_if(
+        fail_if_ne(
             InvalidProofReason::EqualityCheck(5),
             aux.rsa_modulo
-                .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)?
-                == aux
-                    .rsa_modulo
-                    .combine(&commitment.f, &one, &commitment.t, challenge)?,
+                .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)?,
+            aux.rsa_modulo
+                .combine(&commitment.f, &one, &commitment.t, challenge)?,
         )?;
         fail_if(
             InvalidProofReason::RangeCheck(6),
-            proof.z1 <= &one << (security.l_x + security.epsilon + 1),
+            proof
+                .z1
+                .is_in_pm(&(BigNumber::one() << (security.l_x + security.epsilon))),
         )?;
         fail_if(
             InvalidProofReason::RangeCheck(7),
-            proof.z2 <= &one << (security.l_y + security.epsilon + 1),
+            proof
+                .z2
+                .is_in_pm(&(BigNumber::one() << (security.l_y + security.epsilon))),
         )?;
         Ok(())
     }
 
     /// Generate random challenge
-    pub fn challenge<R>(rng: &mut R, security: &SecurityParams) -> BigNumber
+    pub fn challenge<E: Curve, R>(rng: &mut R) -> BigNumber
     where
         R: RngCore,
     {
-        // double the range to account for +-
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, rng)
+        BigNumber::from_rng_pm(&BigNumber::curve_order::<E>(), rng)
     }
 }
 
@@ -438,7 +409,6 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::unknown_order::BigNumber;
     use crate::{Error, InvalidProof};
 
     use super::{Aux, Challenge, Commitment, Data, PrivateData, Proof, SecurityParams};
@@ -498,6 +468,9 @@ pub mod non_interactive {
             .chain_update(aux.s.to_bytes())
             .chain_update(aux.t.to_bytes())
             .chain_update(aux.rsa_modulo.to_bytes())
+            .chain_update((security.l_x as u64).to_le_bytes())
+            .chain_update((security.l_y as u64).to_le_bytes())
+            .chain_update((security.epsilon as u64).to_le_bytes())
             .chain_update(data.key0.to_bytes())
             .chain_update(data.key1.to_bytes())
             .chain_update(data.c.to_bytes())
@@ -511,19 +484,17 @@ pub mod non_interactive {
             .chain_update(commitment.s.to_bytes())
             .chain_update(commitment.f.to_bytes())
             .chain_update(commitment.t.to_bytes())
-            .chain_update((security.l_x as u64).to_le_bytes())
-            .chain_update((security.l_y as u64).to_le_bytes())
-            .chain_update((security.epsilon as u64).to_le_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, &mut rng)
+        super::interactive::challenge::<C, _>(&mut rng)
     }
 }
 
 #[cfg(test)]
 mod test {
+    use generic_ec::Point;
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
+    use rand_core::RngCore;
 
     use crate::common::test::random_key;
     use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
@@ -532,57 +503,41 @@ mod test {
     fn run<R: rand_core::RngCore, C: Curve>(
         mut rng: R,
         security: super::SecurityParams,
-        plaintext_orig: BigNumber,
-        plaintext_mult: BigNumber,
-        plaintext_add: BigNumber,
+        x: BigNumber,
+        y: BigNumber,
     ) -> Result<(), crate::common::InvalidProof>
     where
         Scalar<C>: FromHash,
     {
-        let affined = &plaintext_mult * &plaintext_orig + &plaintext_add;
+        let dk0 = random_key(&mut rng).unwrap();
+        let dk1 = random_key(&mut rng).unwrap();
+        let ek0 = libpaillier::EncryptionKey::from(&dk0);
+        let ek1 = libpaillier::EncryptionKey::from(&dk1);
 
-        let private_key0 = random_key(&mut rng).unwrap();
-        let key0 = libpaillier::EncryptionKey::from(&private_key0);
-        let private_key1 = random_key(&mut rng).unwrap();
-        let key1 = libpaillier::EncryptionKey::from(&private_key1);
-        let g = generic_ec::Point::<C>::generator();
-        let (ciphertext, _) = key0
-            .encrypt_with_random(affined.to_bytes(), &mut rng)
-            .unwrap();
-        let (ciphertext_orig, _) = key0
-            .encrypt_with_random(plaintext_orig.to_bytes(), &mut rng)
-            .unwrap();
-        let ciphertext_mult = g * plaintext_mult.to_scalar();
-        let (ciphertext_add, nonce_y) = key1
-            .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
-            .unwrap();
-        let (ciphertext_add_action, nonce) = key0
-            .encrypt_with_random(plaintext_add.to_bytes(), &mut rng)
-            .unwrap();
-        // verify that D is obtained from affine transformation of C
-        let transformed = key0
-            .add(
-                &key0.mul(&ciphertext_orig, &plaintext_mult).unwrap(),
-                &ciphertext_add_action,
-            )
-            .unwrap();
-        assert_eq!(
-            private_key0.decrypt(&transformed).unwrap(),
-            private_key0.decrypt(&ciphertext).unwrap(),
-        );
+        let (c, _) = {
+            let plaintext = BigNumber::from_rng(ek0.n(), &mut rng);
+            ek0.encrypt_with_random(&plaintext, &mut rng).unwrap()
+        };
+
+        let (y_enc_ek1, rho_y) = ek1.encrypt_with_random(&y.nmod(ek1.n()), &mut rng).unwrap();
+
+        let (y_enc_ek0, rho) = ek0.encrypt_with_random(&y.nmod(ek0.n()), &mut rng).unwrap();
+        let x_at_c = ek0.omul(&x, &c).unwrap();
+        let d = ek0.oadd(&x_at_c, &y_enc_ek0).unwrap();
+
         let data = super::Data {
-            key0,
-            key1,
-            c: ciphertext_orig,
-            d: transformed,
-            y: ciphertext_add,
-            x: ciphertext_mult,
+            key0: ek0,
+            key1: ek1,
+            c,
+            d,
+            y: y_enc_ek1,
+            x: x.to_scalar::<C>() * Point::generator(),
         };
         let pdata = super::PrivateData {
-            x: plaintext_mult,
-            y: plaintext_add,
-            nonce,
-            nonce_y,
+            x,
+            y,
+            nonce: rho,
+            nonce_y: rho_y,
         };
 
         let aux = crate::common::test::aux(&mut rng);
@@ -600,6 +555,7 @@ mod test {
         .unwrap();
         super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
     }
+
     fn passing_test<C: Curve>()
     where
         Scalar<C>: FromHash,
@@ -608,17 +564,11 @@ mod test {
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
-            epsilon: 256,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            epsilon: 300,
         };
-        let plaintext_orig = BigNumber::from(100);
-        let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
-        let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
-        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add);
-        match r {
-            Ok(()) => (),
-            Err(e) => panic!("{e:?}"),
-        }
+        let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
+        let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
+        run(rng, security, x, y).expect("proof failed");
     }
 
     fn failing_on_additive<C: Curve>()
@@ -629,14 +579,11 @@ mod test {
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
-            epsilon: 256,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            epsilon: 300,
         };
-        let plaintext_orig = BigNumber::from(100);
-        let plaintext_mult = BigNumber::from(1) << (security.l_x + 1);
-        let plaintext_add = (BigNumber::from(1) << (security.l_y + security.epsilon + 1)) + 1;
-        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
-            .expect_err("proof should not pass");
+        let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
+        let y = (BigNumber::one() << (security.l_y + security.epsilon)) + 1;
+        let r = run(rng, security, x, y).expect_err("proof should not pass");
         match r.reason() {
             InvalidProofReason::RangeCheck(7) => (),
             e => panic!("proof should not fail with: {e:?}"),
@@ -651,14 +598,11 @@ mod test {
         let security = super::SecurityParams {
             l_x: 1024,
             l_y: 1024,
-            epsilon: 256,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            epsilon: 300,
         };
-        let plaintext_orig = BigNumber::from(100);
-        let plaintext_mult = (BigNumber::from(1) << (security.l_x + security.epsilon + 1)) + 1;
-        let plaintext_add = BigNumber::from(1) << (security.l_y + 1);
-        let r = run(rng, security, plaintext_orig, plaintext_mult, plaintext_add)
-            .expect_err("proof should not pass");
+        let x = (BigNumber::from(1) << (security.l_x + security.epsilon)) + 1;
+        let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
+        let r = run(rng, security, x, y).expect_err("proof should not pass");
         match r.reason() {
             InvalidProofReason::RangeCheck(6) => (),
             e => panic!("proof should not fail with: {e:?}"),
@@ -696,25 +640,18 @@ mod test {
     // for motivation and design of the following two tests
 
     #[test]
-    fn mul_rejected_with_probability_1_over_2() {
+    fn mul_rejected_with_some_probability() {
         use rand_core::SeedableRng;
-        fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
+        fn maybe_rejected(mut rng: &mut impl RngCore) -> bool {
+            // With these params test is failing with ~1/8 probability
             let security = super::SecurityParams {
                 l_x: 1024,
                 l_y: 1024,
-                epsilon: 130,
-                q: BigNumber::prime_from_rng(128, &mut rng),
+                epsilon: 255,
             };
-            let plaintext_orig = BigNumber::from(100);
-            let plaintext_mult = (BigNumber::from(1) << (security.l_x + 1)) - 1;
-            let plaintext_add = BigNumber::from(1) << (security.l_y / 2);
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(
-                rng,
-                security,
-                plaintext_orig,
-                plaintext_mult,
-                plaintext_add,
-            );
+            let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
+            let y = BigNumber::from_rng_pm(&BigNumber::from(1000), &mut rng);
+            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, x, y);
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
                 Err(InvalidProofReason::RangeCheck(6)) => false,
@@ -722,32 +659,24 @@ mod test {
             }
         }
 
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
-        assert!(!maybe_rejected(rng), "should fail");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
-        assert!(maybe_rejected(rng), "should pass");
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        assert!(maybe_rejected(&mut rng), "should pass");
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(3);
+        assert!(!maybe_rejected(&mut rng), "should fail");
     }
 
     #[test]
-    fn add_rejected_with_probability_1_over_2() {
+    fn add_rejected_with_some_probability() {
         use rand_core::SeedableRng;
         fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
             let security = super::SecurityParams {
                 l_x: 1024,
                 l_y: 1024,
-                epsilon: 130,
-                q: BigNumber::prime_from_rng(128, &mut rng),
+                epsilon: 255,
             };
-            let plaintext_orig = BigNumber::from(100);
-            let plaintext_mult = BigNumber::from(1) << (security.l_x / 2);
-            let plaintext_add = (BigNumber::from(1) << (security.l_y + 1)) + 1;
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(
-                rng,
-                security,
-                plaintext_orig,
-                plaintext_mult,
-                plaintext_add,
-            );
+            let x = BigNumber::from_rng_pm(&BigNumber::from(1000), &mut rng);
+            let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
+            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, x, y);
             match r.map_err(|e| e.reason()) {
                 Ok(()) => true,
                 Err(InvalidProofReason::RangeCheck(7)) => false,
@@ -757,7 +686,8 @@ mod test {
 
         let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
         assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
+
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(3);
         assert!(!maybe_rejected(rng), "should fail");
     }
 }
