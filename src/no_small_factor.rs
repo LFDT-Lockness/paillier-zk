@@ -424,7 +424,7 @@ mod test {
             n_root: &n_root,
         };
         let security = super::SecurityParams {
-            l: 4,
+            l: 64,
             epsilon: 128,
             q: BigNumber::prime_from_rng(128, &mut rng),
         };

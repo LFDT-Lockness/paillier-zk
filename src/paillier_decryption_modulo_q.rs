@@ -194,6 +194,7 @@ pub mod interactive {
     /// Generate random challenge
     pub fn challenge<R: RngCore>(data: &Data, rng: &mut R) -> Challenge {
         // double the range to account for +-
+        // Note that if result = 0 mod q, check 2 will always pass
         let m = BigNumber::from(2) * &data.q;
         BigNumber::from_rng(&m, rng)
     }
@@ -412,7 +413,7 @@ mod test {
 
         let plaintext = BigNumber::from(28);
         let hiddentext = BigNumber::from(322);
-        let modulo = BigNumber::from(100);
+        let modulo = BigNumber::prime_from_rng(128, &mut rng);
         assert_ne!(&plaintext % &modulo, &hiddentext % &modulo);
         let (ciphertext, nonce) = key0
             .encrypt_with_random(plaintext.to_bytes(), &mut rng)
