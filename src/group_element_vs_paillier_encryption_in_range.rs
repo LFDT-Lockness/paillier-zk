@@ -187,7 +187,7 @@ pub mod interactive {
         mut rng: R,
     ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
         let two_to_l_e = BigNumber::one() << (security.l + security.epsilon);
-        let hat_n_at_two_to_l = &aux.rsa_modulo * &(BigNumber::one() << security.l);
+        let hat_n_at_two_to_l = &aux.rsa_modulo * (BigNumber::one() << security.l);
         let hat_n_at_two_to_l_e = &aux.rsa_modulo * &two_to_l_e;
 
         let alpha = BigNumber::from_rng_pm(&two_to_l_e, &mut rng);
