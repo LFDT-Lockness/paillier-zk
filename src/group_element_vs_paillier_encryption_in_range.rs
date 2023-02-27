@@ -5,7 +5,7 @@
 //! A party P has a number `X = g ^ x`, with g being a generator of
 //! multiplicative group G. P has encrypted x as C. P shares X and C with V and
 //! wants to prove that the logarithm of X is the plaintext of C, and that the
-//! plaintext (i.e. x) is at most L+1 bits.
+//! plaintext (i.e. x) is at most L bits.
 //!
 //! Given:
 //! - `key0`, `pkey0` - pair of public and private keys in paillier cryptosystem

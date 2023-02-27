@@ -5,7 +5,7 @@
 //!
 //! A party P performs a paillier affine operation with C, Y, and X
 //! obtaining `D = C*X + Y`. `X` and `Y` are encrypted values of `x` and `y`. P
-//! then wants to prove that `y` and `x` are at most `L+1` and `L'+1` bits,
+//! then wants to prove that `y` and `x` are at most `L` and `L'` bits,
 //! correspondingly, and P doesn't want to disclose none of the plaintexts
 //!
 //! Given:
