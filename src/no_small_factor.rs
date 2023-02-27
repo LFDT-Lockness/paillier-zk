@@ -164,7 +164,7 @@ pub mod interactive {
     use rand_core::RngCore;
 
     use crate::{
-        common::{BigNumberExt, InvalidProofReason},
+        common::{fail_if, fail_if_ne, BigNumberExt, InvalidProofReason},
         unknown_order::BigNumber,
         Error,
     };
@@ -267,9 +267,7 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.a, &one, &commitment.p, challenge)?;
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(1).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;
         }
         // check 2
         {
@@ -279,9 +277,7 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.b, &one, &commitment.q, challenge)?;
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(2).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         // check 3
         {
@@ -292,19 +288,13 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
             let rhs = aux.rsa_modulo.combine(&commitment.t, &one, &r, challenge)?;
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(3).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
         let range = (BigNumber::from(1) << (security.l + security.epsilon)) * data.n_root;
         // range check for z1
-        if !proof.z1.is_in_pm(&range) {
-            return Err(InvalidProofReason::RangeCheck(1).into());
-        }
+        fail_if(InvalidProofReason::RangeCheck(1), proof.z1.is_in_pm(&range))?;
         // range check for z2
-        if !proof.z2.is_in_pm(&range) {
-            return Err(InvalidProofReason::RangeCheck(2).into());
-        }
+        fail_if(InvalidProofReason::RangeCheck(2), proof.z2.is_in_pm(&range))?;
 
         Ok(())
     }

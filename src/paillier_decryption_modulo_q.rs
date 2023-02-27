@@ -153,7 +153,7 @@ pub mod interactive {
     use crate::{common::SafePaillierExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
-    use crate::common::{BigNumberExt, InvalidProofReason};
+    use crate::common::{fail_if_ne, BigNumberExt, InvalidProofReason};
     use crate::{Error, InvalidProof};
 
     use super::{
@@ -222,13 +222,6 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
-        fn fail_if(b: bool, msg: InvalidProofReason) -> Result<(), InvalidProof> {
-            if b {
-                Ok(())
-            } else {
-                Err(msg.into())
-            }
-        }
         // Three equality checks
         {
             let lhs = data
@@ -238,14 +231,14 @@ pub mod interactive {
                 .key
                 .nn()
                 .combine(&commitment.a, &one, &data.c, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(1))?;
+            fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;
         }
         {
             let lhs = proof.z1.nmod(&data.q);
             let rhs = commitment
                 .gamma
                 .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(2))?;
+            fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         {
             let lhs = aux
@@ -254,7 +247,7 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.t, &one, &commitment.s, challenge)?;
-            fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(3))?;
+            fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
 
         Ok(())
