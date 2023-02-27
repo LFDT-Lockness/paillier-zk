@@ -311,7 +311,6 @@ pub mod interactive {
 }
 
 pub mod non_interactive {
-    use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 

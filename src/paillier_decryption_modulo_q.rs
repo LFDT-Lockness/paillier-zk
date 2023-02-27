@@ -168,21 +168,23 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
-        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon + 1);
-        let modulo_l = (BigNumber::one() << (security.l + 1)) * &aux.rsa_modulo;
+        let two_to_l_e = BigNumber::one() << (security.l + security.epsilon);
+        let modulo_l = (BigNumber::one() << security.l) * &aux.rsa_modulo;
         let modulo_l_e = &two_to_l_e * &aux.rsa_modulo;
 
-        let alpha = BigNumber::from_rng(&two_to_l_e, &mut rng);
-        let mu = BigNumber::from_rng(&modulo_l, &mut rng);
-        let nu = BigNumber::from_rng(&modulo_l_e, &mut rng);
+        let alpha = BigNumber::from_rng_pm(&two_to_l_e, &mut rng);
+        let mu = BigNumber::from_rng_pm(&modulo_l, &mut rng);
+        let nu = BigNumber::from_rng_pm(&modulo_l_e, &mut rng);
 
-        let (a, r) = data.key.encrypt_with_random(&alpha, &mut rng)?;
+        let (a, r) = data
+            .key
+            .encrypt_with_random(&alpha.nmod(data.key.n()), &mut rng)?;
 
         let commitment = Commitment {
             s: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
             t: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &nu)?,
             a,
-            gamma: &alpha % &data.q,
+            gamma: alpha.nmod(&data.q),
         };
         let private_commitment = PrivateCommitment { alpha, mu, nu, r };
         Ok((commitment, private_commitment))
@@ -190,10 +192,8 @@ pub mod interactive {
 
     /// Generate random challenge
     pub fn challenge<R: RngCore>(data: &Data, rng: &mut R) -> Challenge {
-        // double the range to account for +-
         // Note that if result = 0 mod q, check 2 will always pass
-        let m = BigNumber::from(2) * &data.q;
-        BigNumber::from_rng(&m, rng)
+        BigNumber::from_rng(&data.q, rng)
     }
 
     /// Compute proof for given data and prior protocol values
@@ -231,7 +231,9 @@ pub mod interactive {
         }
         // Three equality checks
         {
-            let lhs = data.key.encrypt_with(&proof.z1, &proof.w)?;
+            let lhs = data
+                .key
+                .encrypt_with(&proof.z1.nmod(data.key.n()), &proof.w)?;
             let rhs = data
                 .key
                 .nn()
@@ -239,7 +241,7 @@ pub mod interactive {
             fail_if(lhs == rhs, InvalidProofReason::EqualityCheck(1))?;
         }
         {
-            let lhs = &proof.z1 % &data.q;
+            let lhs = proof.z1.nmod(&data.q);
             let rhs = commitment
                 .gamma
                 .modadd(&challenge.modmul(&data.x, &data.q), &data.q);
@@ -262,7 +264,6 @@ pub mod interactive {
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
-    use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
@@ -316,8 +317,7 @@ pub mod non_interactive {
             .chain_update(commitment.gamma.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        let m = BigNumber::from(2) * &data.q;
-        BigNumber::from_rng(&m, &mut rng)
+        super::interactive::challenge(data, &mut rng)
     }
 
     /// Verify the proof, deriving challenge independently from same data
