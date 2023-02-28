@@ -34,6 +34,8 @@ enum ErrorReason {
     ModPow,
     #[error("couldn't encrypt a message")]
     Encryption,
+    #[error("can't find multiplicative inverse")]
+    Invert,
 }
 
 impl From<BadExponent> for Error {

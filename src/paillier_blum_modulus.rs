@@ -145,7 +145,7 @@ pub mod interactive {
     ) -> Result<Proof<M>, Error> {
         let sqrt = |x| blum_sqrt(&x, p, q, n);
         let phi = (p - 1) * (q - 1);
-        let n_inverse = n.extended_gcd(&phi).x;
+        let n_inverse = n.invert(&phi).ok_or(ErrorReason::Invert)?;
 
         let points = challenge.ys.clone().map(|y| {
             let z = y.powmod(&n_inverse, n).ok()?;
