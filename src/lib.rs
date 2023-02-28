@@ -21,7 +21,7 @@ pub use libpaillier;
 pub use libpaillier::unknown_order;
 
 use common::InvalidProofReason;
-pub use common::{BadExponent, BigNumberExt, EncryptionError, InvalidProof};
+pub use common::{BadExponent, BigNumberExt, EncryptionError, InvalidProof, SafePaillierExt};
 
 /// Library general error type
 #[derive(Debug, Clone, Error)]
