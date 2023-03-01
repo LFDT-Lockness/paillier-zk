@@ -5,8 +5,8 @@
 //!
 //! A party P has a modulus `N = pq`. P wants to prove to a verifier V that p
 //! and q are sufficiently large without disclosing p or q, with p and q each no
-//! larger than `sqrt(N) * 2^(l+1)`, or equivalently no smaller than `sqrt(N) /
-//! 2^(l+1)`
+//! larger than `sqrt(N) * 2^l`, or equivalently no smaller than `sqrt(N) /
+//! 2^l`
 //!
 //! ## Example
 //!
@@ -93,7 +93,7 @@ pub use crate::common::InvalidProof;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
     /// l in paper, security parameter for bit size of plaintext: it needs to
-    /// differ from sqrt(n) not more than by 2^(l+1)
+    /// differ from sqrt(n) not more than by 2^l
     pub l: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
@@ -164,7 +164,7 @@ pub mod interactive {
     use rand_core::RngCore;
 
     use crate::{
-        common::{BigNumberExt, InvalidProofReason},
+        common::{fail_if, fail_if_ne, BigNumberExt, InvalidProofReason},
         unknown_order::BigNumber,
         Error,
     };
@@ -182,22 +182,21 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
-        // add 1 to exponents to account for +-
-        let two_to_l = BigNumber::from(1) << (security.l + 1);
-        let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon + 1);
+        let two_to_l = BigNumber::from(1) << security.l;
+        let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon);
         let n_root_modulo = &two_to_l_plus_e * data.n_root;
         let l_n_circ_modulo = &two_to_l * &aux.rsa_modulo;
         let l_e_n_circ_modulo = &two_to_l_plus_e * &aux.rsa_modulo;
         let n_n_circ = &aux.rsa_modulo * data.n;
 
-        let alpha = BigNumber::from_rng(&n_root_modulo, &mut rng);
-        let beta = BigNumber::from_rng(&n_root_modulo, &mut rng);
-        let mu = BigNumber::from_rng(&l_n_circ_modulo, &mut rng);
-        let nu = BigNumber::from_rng(&l_n_circ_modulo, &mut rng);
-        let sigma = BigNumber::from_rng(&(&two_to_l * &n_n_circ), &mut rng);
-        let r = BigNumber::from_rng(&(&two_to_l_plus_e * &n_n_circ), &mut rng);
-        let x = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
-        let y = BigNumber::from_rng(&l_e_n_circ_modulo, &mut rng);
+        let alpha = BigNumber::from_rng_pm(&n_root_modulo, &mut rng);
+        let beta = BigNumber::from_rng_pm(&n_root_modulo, &mut rng);
+        let mu = BigNumber::from_rng_pm(&l_n_circ_modulo, &mut rng);
+        let nu = BigNumber::from_rng_pm(&l_n_circ_modulo, &mut rng);
+        let sigma = BigNumber::from_rng_pm(&(&two_to_l * &n_n_circ), &mut rng);
+        let r = BigNumber::from_rng_pm(&(&two_to_l_plus_e * &n_n_circ), &mut rng);
+        let x = BigNumber::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
+        let y = BigNumber::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
 
         let p = aux.rsa_modulo.combine(&aux.s, pdata.p, &aux.t, &mu)?;
         let q = aux.rsa_modulo.combine(&aux.s, pdata.q, &aux.t, &nu)?;
@@ -229,9 +228,7 @@ pub mod interactive {
     ///
     /// `security` parameter is used to generate challenge in correct range
     pub fn challenge<R: RngCore>(security: &SecurityParams, rng: &mut R) -> Challenge {
-        // double the range to account for +-
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, rng)
+        BigNumber::from_rng_pm(&security.q, rng)
     }
 
     /// Compute proof for given data and prior protocol values
@@ -270,9 +267,7 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.a, &one, &commitment.p, challenge)?;
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(1).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;
         }
         // check 2
         {
@@ -282,9 +277,7 @@ pub mod interactive {
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.b, &one, &commitment.q, challenge)?;
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(2).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         // check 3
         {
@@ -295,26 +288,19 @@ pub mod interactive {
                 .rsa_modulo
                 .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
             let rhs = aux.rsa_modulo.combine(&commitment.t, &one, &r, challenge)?;
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(3).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
-        let range = (BigNumber::from(1) << (security.l + security.epsilon + 1)) * data.n_root;
+        let range = (BigNumber::from(1) << (security.l + security.epsilon)) * data.n_root;
         // range check for z1
-        if proof.z1 > range {
-            return Err(InvalidProofReason::RangeCheck(1).into());
-        }
+        fail_if(InvalidProofReason::RangeCheck(1), proof.z1.is_in_pm(&range))?;
         // range check for z2
-        if proof.z2 > range {
-            return Err(InvalidProofReason::RangeCheck(2).into());
-        }
+        fail_if(InvalidProofReason::RangeCheck(2), proof.z2.is_in_pm(&range))?;
 
         Ok(())
     }
 }
 
 pub mod non_interactive {
-    use crate::unknown_order::BigNumber;
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
@@ -377,8 +363,7 @@ pub mod non_interactive {
             .chain_update(commitment.sigma.to_bytes())
             .finalize();
         let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
-        let m = BigNumber::from(2) * &security.q;
-        BigNumber::from_rng(&m, &mut rng)
+        super::interactive::challenge(security, &mut rng)
     }
 
     /// Verify the proof, deriving challenge independently from same data

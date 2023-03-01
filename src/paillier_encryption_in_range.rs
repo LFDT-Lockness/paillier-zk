@@ -7,7 +7,7 @@
 //! cryptosystem. P also has `plaintext`, `nonce`, and
 //! `ciphertext = key.encrypt(plaintext, nonce)`.
 //!
-//! P wants to prove that `plaintext` is at most `L + 1` bits, without disclosing
+//! P wants to prove that `plaintext` is at most `L` bits, without disclosing
 //! it, the `pkey`, and `nonce`
 
 //! ## Example
@@ -86,7 +86,7 @@ use crate::unknown_order::BigNumber;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
     /// l in paper, security parameter for bit size of plaintext: it needs to
-    /// be in range [-2^l; 2^l] or equivalently 2^(l+1)
+    /// be in range [-2^l; 2^l] or equivalently 2^l
     pub l: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
@@ -414,7 +414,7 @@ mod test {
 
     #[test]
     fn rejected_with_probability_1_over_2() {
-        // plaintext in range 2^(l+1) should be rejected with probablility
+        // plaintext in range 2^l should be rejected with probablility
         // q / 2^epsilon. I set parameters like this:
         //      bitsize(q) = 128
         //      epsilon = 129
