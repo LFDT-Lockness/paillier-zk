@@ -150,7 +150,7 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::{common::SafeEncryptionPaillierExt, unknown_order::BigNumber};
+    use crate::{common::SafePaillierEncryptionExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
     use crate::common::{fail_if_ne, BigNumberExt, InvalidProofReason};
@@ -329,7 +329,7 @@ pub mod non_interactive {
 mod test {
     use libpaillier::unknown_order::BigNumber;
 
-    use crate::common::SafeEncryptionPaillierExt;
+    use crate::common::SafePaillierEncryptionExt;
 
     #[test]
     fn passing_test() {

@@ -245,7 +245,7 @@ pub mod interactive {
 
     use crate::common::{
         fail_if, fail_if_ne, BigNumberExt, InvalidProof, InvalidProofReason,
-        SafeEncryptionPaillierExt,
+        SafePaillierEncryptionExt,
     };
     use crate::unknown_order::BigNumber;
     use crate::Error;
@@ -494,7 +494,7 @@ mod test {
     use rand_core::RngCore;
 
     use crate::common::test::random_key;
-    use crate::common::{BigNumberExt, InvalidProofReason, SafeEncryptionPaillierExt};
+    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierEncryptionExt};
     use crate::unknown_order::BigNumber;
 
     fn run<R: rand_core::RngCore, C: Curve>(

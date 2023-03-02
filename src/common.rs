@@ -72,7 +72,7 @@ impl From<PaillierError> for InvalidProof {
 
 /// Regular paillier encryption methods are easy to misuse and generate
 /// an undeterministic nonce, we replace them with those functions
-pub trait SafeEncryptionPaillierExt {
+pub trait SafePaillierEncryptionExt {
     /// Encrypts an integer `x` in `[-N/2; N/2)` with `nonce` in `Z*_N`
     ///
     /// Returns error if inputs are not in specified range
@@ -113,7 +113,7 @@ pub trait SafeEncryptionPaillierExt {
     ) -> Result<libpaillier::Ciphertext, PaillierError>;
 }
 
-pub trait SafeDecrytpionPaillierExt {
+pub trait SafePaillierDecryptionExt {
     /// Decrypts ciphertext to plaintext in `[-N/2; N/2)`
     ///
     /// Returns error if ciphertext is malformed
@@ -123,7 +123,7 @@ pub trait SafeDecrytpionPaillierExt {
     ) -> Result<BigNumber, PaillierError>;
 }
 
-impl SafeEncryptionPaillierExt for libpaillier::EncryptionKey {
+impl SafePaillierEncryptionExt for libpaillier::EncryptionKey {
     fn encrypt_with(
         &self,
         x: &BigNumber,
@@ -179,7 +179,7 @@ impl SafeEncryptionPaillierExt for libpaillier::EncryptionKey {
     }
 }
 
-impl SafeDecrytpionPaillierExt for libpaillier::DecryptionKey {
+impl SafePaillierDecryptionExt for libpaillier::DecryptionKey {
     fn decrypt_to_bigint(
         &self,
         ciphertext: &libpaillier::Ciphertext,
@@ -321,9 +321,9 @@ pub mod test {
     use libpaillier::unknown_order::BigNumber;
     use rand_dev::DevRng;
 
-    use crate::SafeEncryptionPaillierExt;
+    use crate::SafePaillierEncryptionExt;
 
-    use super::{BigNumberExt, SafeDecrytpionPaillierExt};
+    use super::{BigNumberExt, SafePaillierDecryptionExt};
 
     #[test]
     fn pailler_encryption_decryption() {

@@ -155,7 +155,7 @@ pub use crate::common::Aux;
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
     use crate::{
-        common::{fail_if, fail_if_ne, InvalidProofReason, SafeEncryptionPaillierExt},
+        common::{fail_if, fail_if_ne, InvalidProofReason, SafePaillierEncryptionExt},
         unknown_order::BigNumber,
         Error,
     };
@@ -349,7 +349,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::{InvalidProofReason, SafeEncryptionPaillierExt};
+    use crate::common::{InvalidProofReason, SafePaillierEncryptionExt};
     use crate::unknown_order::BigNumber;
     use crate::BigNumberExt;
 
