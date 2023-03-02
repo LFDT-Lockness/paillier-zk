@@ -64,104 +64,134 @@ impl From<BadExponent> for InvalidProof {
     }
 }
 
-impl From<EncryptionError> for InvalidProof {
-    fn from(_err: EncryptionError) -> Self {
+impl From<PaillierError> for InvalidProof {
+    fn from(_err: PaillierError) -> Self {
         InvalidProof(InvalidProofReason::Encryption)
     }
 }
 
 /// Regular paillier encryption methods are easy to misuse and generate
 /// an undeterministic nonce, we replace them with those functions
-pub trait SafePaillierExt {
+pub trait SafeEncryptionPaillierExt {
+    /// Encrypts an integer `x` in `[-N/2; N/2)` with `nonce` in `Z*_N`
+    ///
+    /// Returns error if inputs are not in specified range
     fn encrypt_with(
         &self,
         x: &BigNumber,
         nonce: &libpaillier::Nonce,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+    ) -> Result<libpaillier::Ciphertext, PaillierError>;
+
+    /// Encrypts an integer `x` in `[-N/2; N/2)`, generates a random nonce
+    /// from provided PRNG
+    ///
+    /// Returns error if `x` is not in the specified range
     fn encrypt_with_random<R: rand_core::RngCore>(
         &self,
         x: &BigNumber,
         rng: &mut R,
-    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError>;
+    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), PaillierError>;
 
     /// Homomorphic addition of two ciphertexts
     fn oadd(
         &self,
         c1: &libpaillier::Ciphertext,
         c2: &libpaillier::Ciphertext,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+    ) -> Result<libpaillier::Ciphertext, PaillierError>;
 
     /// Homomorphic multiplication of scalar (should be unsigned integer) at ciphertext
     fn omul(
         &self,
         scalar: &BigNumber,
         ciphertext: &libpaillier::Ciphertext,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+    ) -> Result<libpaillier::Ciphertext, PaillierError>;
 
     /// Homomorphic negation of a ciphertext
     fn oneg(
         &self,
         ciphertext: &libpaillier::Ciphertext,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError>;
+    ) -> Result<libpaillier::Ciphertext, PaillierError>;
 }
 
-impl SafePaillierExt for libpaillier::EncryptionKey {
+pub trait SafeDecrytpionPaillierExt {
+    /// Decrypts ciphertext to plaintext in `[-N/2; N/2)`
+    ///
+    /// Returns error if ciphertext is malformed
+    fn decrypt_to_bigint(
+        &self,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<BigNumber, PaillierError>;
+}
+
+impl SafeEncryptionPaillierExt for libpaillier::EncryptionKey {
     fn encrypt_with(
         &self,
         x: &BigNumber,
         nonce: &libpaillier::Nonce,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
-        if !(&BigNumber::zero() <= x && x < self.n()) {
-            return Err(EncryptionError);
+    ) -> Result<libpaillier::Ciphertext, PaillierError> {
+        let x_twice = x << 1;
+        if !(-self.n() <= x_twice && &x_twice < self.n()) {
+            return Err(PaillierError);
         }
         #[allow(clippy::disallowed_methods)]
-        self.encrypt(x.to_bytes(), Some(nonce.clone()))
+        self.encrypt((x.nmod(self.n())).to_bytes(), Some(nonce.clone()))
             .map(|(e, _)| e)
-            .ok_or(EncryptionError)
+            .ok_or(PaillierError)
     }
 
     fn encrypt_with_random<R: rand_core::RngCore>(
         &self,
         x: &BigNumber,
         rng: &mut R,
-    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), EncryptionError> {
-        if !(&BigNumber::zero() <= x && x < self.n()) {
-            return Err(EncryptionError);
-        }
+    ) -> Result<(libpaillier::Ciphertext, libpaillier::Nonce), PaillierError> {
         let nonce = libpaillier::Nonce::from_rng(self.n(), rng);
-        #[allow(clippy::disallowed_methods)]
-        self.encrypt(x.to_bytes(), Some(nonce))
-            .ok_or(EncryptionError)
+        self.encrypt_with(x, &nonce).map(|ciph| (ciph, nonce))
     }
 
     fn oadd(
         &self,
         c1: &libpaillier::Ciphertext,
         c2: &libpaillier::Ciphertext,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+    ) -> Result<libpaillier::Ciphertext, PaillierError> {
         #[allow(clippy::disallowed_methods)]
-        self.add(c1, c2).ok_or(EncryptionError)
+        self.add(c1, c2).ok_or(PaillierError)
     }
 
     fn omul(
         &self,
         scalar: &BigNumber,
         ciphertext: &libpaillier::Ciphertext,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
+    ) -> Result<libpaillier::Ciphertext, PaillierError> {
         #[allow(clippy::disallowed_methods)]
         if scalar >= &BigNumber::zero() {
-            self.mul(ciphertext, scalar).ok_or(EncryptionError)
+            self.mul(ciphertext, scalar).ok_or(PaillierError)
         } else {
             self.mul(&self.oneg(ciphertext)?, &-scalar)
-                .ok_or(EncryptionError)
+                .ok_or(PaillierError)
         }
     }
 
     fn oneg(
         &self,
         ciphertext: &libpaillier::Ciphertext,
-    ) -> Result<libpaillier::Ciphertext, EncryptionError> {
-        ciphertext.invert(self.nn()).ok_or(EncryptionError)
+    ) -> Result<libpaillier::Ciphertext, PaillierError> {
+        ciphertext.invert(self.nn()).ok_or(PaillierError)
+    }
+}
+
+impl SafeDecrytpionPaillierExt for libpaillier::DecryptionKey {
+    fn decrypt_to_bigint(
+        &self,
+        ciphertext: &libpaillier::Ciphertext,
+    ) -> Result<BigNumber, PaillierError> {
+        #![allow(clippy::disallowed_methods)]
+        let plaintext = self.decrypt(ciphertext).ok_or(PaillierError)?;
+        let plaintext = BigNumber::from_slice(&plaintext);
+        if &(&plaintext << 1) >= self.n() {
+            Ok(plaintext - self.n())
+        } else {
+            Ok(plaintext)
+        }
     }
 }
 
@@ -170,7 +200,7 @@ impl SafePaillierExt for libpaillier::EncryptionKey {
 /// Returned by [SafePaillierExt] methods
 #[derive(Clone, Copy, Debug, thiserror::Error)]
 #[error("paillier encryption failed")]
-pub struct EncryptionError;
+pub struct PaillierError;
 
 pub trait BigNumberExt: Sized {
     /// Generate element in Zm*. Does so by trial.
@@ -286,10 +316,34 @@ pub(crate) fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), 
 
 #[cfg(test)]
 pub mod test {
+    use std::iter;
+
     use libpaillier::unknown_order::BigNumber;
     use rand_dev::DevRng;
 
-    use super::BigNumberExt;
+    use crate::SafeEncryptionPaillierExt;
+
+    use super::{BigNumberExt, SafeDecrytpionPaillierExt};
+
+    #[test]
+    fn pailler_encryption_decryption() {
+        let mut rng = DevRng::new();
+        let dk = random_key(&mut rng).unwrap();
+        let ek = libpaillier::EncryptionKey::from(&dk);
+
+        let corner_cases = (-10..=10).map(|i| (ek.n() / 2) + i);
+        let random_xs = iter::repeat_with(|| BigNumber::from_rng(ek.n(), &mut rng)).take(20);
+        let xs = corner_cases.chain(random_xs).collect::<Vec<_>>();
+
+        for x in xs {
+            let x = if &x * 2 >= *ek.n() { x - ek.n() } else { x };
+
+            let (ciphertext, _) = ek.encrypt_with_random(&x, &mut rng).unwrap();
+            let decrypted = dk.decrypt_to_bigint(&ciphertext).unwrap();
+
+            assert_eq!(x, decrypted);
+        }
+    }
 
     #[test]
     fn conversion() {

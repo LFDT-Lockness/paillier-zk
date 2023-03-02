@@ -171,7 +171,9 @@ pub mod interactive {
     use libpaillier::unknown_order::BigNumber;
     use rand_core::RngCore;
 
-    use crate::common::{fail_if, fail_if_ne, BigNumberExt, InvalidProofReason, SafePaillierExt};
+    use crate::common::{
+        fail_if, fail_if_ne, BigNumberExt, InvalidProofReason, SafeEncryptionPaillierExt,
+    };
     use crate::{Error, InvalidProof};
 
     use super::{
@@ -373,7 +375,7 @@ mod test {
     use libpaillier::unknown_order::BigNumber;
 
     use crate::common::test::random_key;
-    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProofReason, SafeEncryptionPaillierExt};
 
     fn run<R: rand_core::RngCore, C: Curve>(
         mut rng: R,
