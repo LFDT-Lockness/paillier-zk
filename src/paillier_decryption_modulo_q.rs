@@ -176,9 +176,7 @@ pub mod interactive {
         let mu = BigNumber::from_rng_pm(&modulo_l, &mut rng);
         let nu = BigNumber::from_rng_pm(&modulo_l_e, &mut rng);
 
-        let (a, r) = data
-            .key
-            .encrypt_with_random(&alpha.nmod(data.key.n()), &mut rng)?;
+        let (a, r) = data.key.encrypt_with_random(&alpha, &mut rng)?;
 
         let commitment = Commitment {
             s: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
@@ -224,9 +222,7 @@ pub mod interactive {
         let one = BigNumber::one();
         // Three equality checks
         {
-            let lhs = data
-                .key
-                .encrypt_with(&proof.z1.nmod(data.key.n()), &proof.w)?;
+            let lhs = data.key.encrypt_with(&proof.z1, &proof.w)?;
             let rhs = data
                 .key
                 .nn()
