@@ -22,7 +22,8 @@ pub use libpaillier::unknown_order;
 
 use common::InvalidProofReason;
 pub use common::{
-    BadExponent, BigNumberExt, InvalidProof, PaillierError, SafeEncryptionPaillierExt,
+    BadExponent, BigNumberExt, InvalidProof, PaillierError, SafeDecrytpionPaillierExt,
+    SafeEncryptionPaillierExt,
 };
 
 /// Library general error type
