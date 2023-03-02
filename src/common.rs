@@ -186,7 +186,7 @@ impl SafeDecrytpionPaillierExt for libpaillier::DecryptionKey {
     ) -> Result<BigNumber, PaillierError> {
         #![allow(clippy::disallowed_methods)]
         let plaintext = self.decrypt(ciphertext).ok_or(PaillierError)?;
-        let plaintext = BigNumber::from_slice(&plaintext);
+        let plaintext = BigNumber::from_slice(plaintext);
         if &(&plaintext << 1) >= self.n() {
             Ok(plaintext - self.n())
         } else {
