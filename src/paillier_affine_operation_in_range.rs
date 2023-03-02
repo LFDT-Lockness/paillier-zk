@@ -512,12 +512,7 @@ mod test {
         let ek1 = libpaillier::EncryptionKey::from(&dk1);
 
         let (c, _) = {
-            let plaintext = BigNumber::from_rng(ek0.n(), &mut rng);
-            let plaintext = if &plaintext * 2 >= *ek0.n() {
-                plaintext - ek0.n()
-            } else {
-                plaintext
-            };
+            let plaintext = BigNumber::from_rng_pm(&(ek0.n() / 2), &mut rng);
             ek0.encrypt_with_random(&plaintext, &mut rng).unwrap()
         };
 
