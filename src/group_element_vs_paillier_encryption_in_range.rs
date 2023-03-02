@@ -199,7 +199,7 @@ pub mod interactive {
 
         let commitment = Commitment {
             s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &mu)?,
-            a: data.key0.encrypt_with(&alpha.nmod(data.key0.n()), &r)?,
+            a: data.key0.encrypt_with(&alpha, &r)?,
             y: data.b * alpha.to_scalar(),
             d: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
         };
@@ -240,9 +240,7 @@ pub mod interactive {
     ) -> Result<(), InvalidProof> {
         let one = BigNumber::one();
         {
-            let lhs = data
-                .key0
-                .encrypt_with(&proof.z1.nmod(data.key0.n()), &proof.z2)?;
+            let lhs = data.key0.encrypt_with(&proof.z1, &proof.z2)?;
             let rhs = {
                 let e_at_c = data.key0.omul(challenge, &data.c)?;
                 data.key0.oadd(&commitment.a, &e_at_c)?
@@ -388,9 +386,7 @@ mod test {
         let private_key0 = random_key(&mut rng).unwrap();
         let key0 = libpaillier::EncryptionKey::from(&private_key0);
 
-        let (ciphertext, nonce) = key0
-            .encrypt_with_random(&plaintext.nmod(key0.n()), &mut rng)
-            .unwrap();
+        let (ciphertext, nonce) = key0.encrypt_with_random(&plaintext, &mut rng).unwrap();
         let b = Point::<C>::generator() * Scalar::random(&mut rng);
         let x = b * plaintext.to_scalar();
 
