@@ -656,9 +656,9 @@ mod test {
             }
         }
 
-        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(5);
         assert!(maybe_rejected(&mut rng), "should pass");
-        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(3);
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(6);
         assert!(!maybe_rejected(&mut rng), "should fail");
     }
 
@@ -681,10 +681,10 @@ mod test {
             }
         }
 
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
         assert!(maybe_rejected(rng), "should pass");
 
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(3);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
         assert!(!maybe_rejected(rng), "should fail");
     }
 }
