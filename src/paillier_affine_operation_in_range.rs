@@ -244,7 +244,8 @@ pub mod interactive {
     use rand_core::RngCore;
 
     use crate::common::{
-        fail_if, fail_if_ne, BigNumberExt, InvalidProof, InvalidProofReason, SafePaillierExt,
+        fail_if, fail_if_ne, BigNumberExt, InvalidProof, InvalidProofReason,
+        SafePaillierEncryptionExt,
     };
     use crate::unknown_order::BigNumber;
     use crate::Error;
@@ -274,14 +275,14 @@ pub mod interactive {
         let m = BigNumber::from_rng_pm(&hat_n_at_two_to_l, &mut rng);
         let mu = BigNumber::from_rng_pm(&hat_n_at_two_to_l, &mut rng);
 
-        let beta_enc_key0 = data.key0.encrypt_with(&beta.nmod(data.key0.n()), &r)?;
+        let beta_enc_key0 = data.key0.encrypt_with(&beta, &r)?;
         let alpha_at_c = data.key0.omul(&alpha, &data.c)?;
         let a = data.key0.oadd(&alpha_at_c, &beta_enc_key0)?;
 
         let commitment = Commitment {
             a,
             b_x: Point::<C>::generator() * alpha.to_scalar(),
-            b_y: data.key1.encrypt_with(&beta.nmod(data.key1.n()), &r_y)?,
+            b_y: data.key1.encrypt_with(&beta, &r_y)?,
             e: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
             s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &m)?,
             f: aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &delta)?,
@@ -337,9 +338,7 @@ pub mod interactive {
         {
             let lhs = {
                 let z1_at_c = data.key0.omul(&proof.z1, &data.c)?;
-                let enc = data
-                    .key0
-                    .encrypt_with(&proof.z2.nmod(data.key0.n()), &proof.w)?;
+                let enc = data.key0.encrypt_with(&proof.z2, &proof.w)?;
                 data.key0.oadd(&z1_at_c, &enc)?
             };
             let rhs = {
@@ -354,9 +353,7 @@ pub mod interactive {
             fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         {
-            let lhs = data
-                .key1
-                .encrypt_with(&proof.z2.nmod(data.key1.n()), &proof.w_y)?;
+            let lhs = data.key1.encrypt_with(&proof.z2, &proof.w_y)?;
             let rhs = {
                 let e_at_y = data.key1.omul(challenge, &data.y)?;
                 data.key1.oadd(&commitment.b_y, &e_at_y)?
@@ -497,7 +494,7 @@ mod test {
     use rand_core::RngCore;
 
     use crate::common::test::random_key;
-    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierExt};
+    use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierEncryptionExt};
     use crate::unknown_order::BigNumber;
 
     fn run<R: rand_core::RngCore, C: Curve>(
@@ -515,13 +512,13 @@ mod test {
         let ek1 = libpaillier::EncryptionKey::from(&dk1);
 
         let (c, _) = {
-            let plaintext = BigNumber::from_rng(ek0.n(), &mut rng);
+            let plaintext = BigNumber::from_rng_pm(&(ek0.n() / 2), &mut rng);
             ek0.encrypt_with_random(&plaintext, &mut rng).unwrap()
         };
 
-        let (y_enc_ek1, rho_y) = ek1.encrypt_with_random(&y.nmod(ek1.n()), &mut rng).unwrap();
+        let (y_enc_ek1, rho_y) = ek1.encrypt_with_random(&y, &mut rng).unwrap();
 
-        let (y_enc_ek0, rho) = ek0.encrypt_with_random(&y.nmod(ek0.n()), &mut rng).unwrap();
+        let (y_enc_ek0, rho) = ek0.encrypt_with_random(&y, &mut rng).unwrap();
         let x_at_c = ek0.omul(&x, &c).unwrap();
         let d = ek0.oadd(&x_at_c, &y_enc_ek0).unwrap();
 
@@ -659,9 +656,9 @@ mod test {
             }
         }
 
-        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(5);
         assert!(maybe_rejected(&mut rng), "should pass");
-        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(3);
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(6);
         assert!(!maybe_rejected(&mut rng), "should fail");
     }
 
@@ -684,10 +681,10 @@ mod test {
             }
         }
 
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
         assert!(maybe_rejected(rng), "should pass");
 
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(3);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
         assert!(!maybe_rejected(rng), "should fail");
     }
 }

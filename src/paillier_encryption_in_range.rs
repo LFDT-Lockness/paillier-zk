@@ -155,7 +155,7 @@ pub use crate::common::Aux;
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
     use crate::{
-        common::{InvalidProofReason, SafePaillierExt},
+        common::{fail_if, fail_if_ne, InvalidProofReason, SafePaillierEncryptionExt},
         unknown_order::BigNumber,
         Error,
     };
@@ -188,7 +188,7 @@ pub mod interactive {
         let s = aux
             .rsa_modulo
             .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)?;
-        let a = data.key.encrypt_with(&alpha.nmod(data.key.n()), &r)?;
+        let a = data.key.encrypt_with(&alpha, &r)?;
         let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
 
         Ok((
@@ -227,17 +227,19 @@ pub mod interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
         {
-            let lhs = {
-                let z1_mod_n0 = proof.z1.nmod(data.key.n());
-                data.key.encrypt_with(&z1_mod_n0, &proof.z2)?
-            };
+            fail_if_ne(
+                InvalidProofReason::EqualityCheck(1),
+                data.ciphertext.gcd(data.key.n()),
+                BigNumber::one(),
+            )?;
+        }
+        {
+            let lhs = data.key.encrypt_with(&proof.z1, &proof.z2)?;
             let rhs = {
                 let e_at_k = data.key.omul(challenge, &data.ciphertext)?;
                 data.key.oadd(&commitment.a, &e_at_k)?
             };
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(1).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
 
         {
@@ -250,17 +252,15 @@ pub mod interactive {
                 &commitment.s,
                 challenge,
             )?;
-            if lhs != rhs {
-                return Err(InvalidProofReason::EqualityCheck(2).into());
-            }
+            fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
 
-        if !proof
-            .z1
-            .is_in_pm(&(BigNumber::one() << (security.l + security.epsilon)))
-        {
-            return Err(InvalidProofReason::RangeCheck(3).into());
-        }
+        fail_if(
+            InvalidProofReason::RangeCheck(4),
+            proof
+                .z1
+                .is_in_pm(&(BigNumber::one() << (security.l + security.epsilon))),
+        )?;
 
         Ok(())
     }
@@ -349,7 +349,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::{InvalidProofReason, SafePaillierExt};
+    use crate::common::{InvalidProofReason, SafePaillierEncryptionExt};
     use crate::unknown_order::BigNumber;
     use crate::BigNumberExt;
 
@@ -361,9 +361,7 @@ mod test {
         let aux = crate::common::test::aux(&mut rng);
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = libpaillier::EncryptionKey::from(&private_key);
-        let (ciphertext, nonce) = key
-            .encrypt_with_random(&plaintext.nmod(key.n()), &mut rng)
-            .unwrap();
+        let (ciphertext, nonce) = key.encrypt_with_random(&plaintext, &mut rng).unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 
@@ -413,7 +411,7 @@ mod test {
     }
 
     #[test]
-    fn rejected_with_probability_1_over_2() {
+    fn rejected_with_some_probability() {
         // plaintext in range 2^l should be rejected with probablility
         // q / 2^epsilon. I set parameters like this:
         //      bitsize(q) = 128

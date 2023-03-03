@@ -21,7 +21,10 @@ pub use libpaillier;
 pub use libpaillier::unknown_order;
 
 use common::InvalidProofReason;
-pub use common::{BadExponent, BigNumberExt, EncryptionError, InvalidProof, SafePaillierExt};
+pub use common::{
+    BadExponent, BigNumberExt, InvalidProof, PaillierError, SafePaillierDecryptionExt,
+    SafePaillierEncryptionExt,
+};
 
 /// Library general error type
 #[derive(Debug, Clone, Error)]
@@ -44,8 +47,8 @@ impl From<BadExponent> for Error {
     }
 }
 
-impl From<EncryptionError> for Error {
-    fn from(_err: EncryptionError) -> Self {
+impl From<PaillierError> for Error {
+    fn from(_err: PaillierError) -> Self {
         Error(ErrorReason::Encryption)
     }
 }

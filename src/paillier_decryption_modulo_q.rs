@@ -150,7 +150,7 @@ pub use crate::common::Aux;
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::{common::SafePaillierExt, unknown_order::BigNumber};
+    use crate::{common::SafePaillierEncryptionExt, unknown_order::BigNumber};
     use rand_core::RngCore;
 
     use crate::common::{fail_if_ne, BigNumberExt, InvalidProofReason};
@@ -176,9 +176,7 @@ pub mod interactive {
         let mu = BigNumber::from_rng_pm(&modulo_l, &mut rng);
         let nu = BigNumber::from_rng_pm(&modulo_l_e, &mut rng);
 
-        let (a, r) = data
-            .key
-            .encrypt_with_random(&alpha.nmod(data.key.n()), &mut rng)?;
+        let (a, r) = data.key.encrypt_with_random(&alpha, &mut rng)?;
 
         let commitment = Commitment {
             s: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
@@ -224,9 +222,7 @@ pub mod interactive {
         let one = BigNumber::one();
         // Three equality checks
         {
-            let lhs = data
-                .key
-                .encrypt_with(&proof.z1.nmod(data.key.n()), &proof.w)?;
+            let lhs = data.key.encrypt_with(&proof.z1, &proof.w)?;
             let rhs = data
                 .key
                 .nn()
@@ -333,7 +329,7 @@ pub mod non_interactive {
 mod test {
     use libpaillier::unknown_order::BigNumber;
 
-    use crate::common::SafePaillierExt;
+    use crate::common::SafePaillierEncryptionExt;
 
     #[test]
     fn passing_test() {
