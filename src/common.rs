@@ -1,4 +1,5 @@
 pub mod sqrt;
+pub mod rng;
 
 use crate::unknown_order::BigNumber;
 
