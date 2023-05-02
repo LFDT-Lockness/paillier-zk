@@ -349,20 +349,21 @@ pub mod non_interactive {
         D: Digest,
     {
         let shared_state = shared_state.finalize();
-        let hash = |d: D| d
-            .chain_update(&shared_state)
-            .chain_update(aux.s.to_bytes())
-            .chain_update(aux.t.to_bytes())
-            .chain_update(aux.rsa_modulo.to_bytes())
-            .chain_update(data.n.to_bytes())
-            .chain_update(data.n_root.to_bytes())
-            .chain_update(commitment.p.to_bytes())
-            .chain_update(commitment.q.to_bytes())
-            .chain_update(commitment.a.to_bytes())
-            .chain_update(commitment.b.to_bytes())
-            .chain_update(commitment.t.to_bytes())
-            .chain_update(commitment.sigma.to_bytes())
-            .finalize();
+        let hash = |d: D| {
+            d.chain_update(&shared_state)
+                .chain_update(aux.s.to_bytes())
+                .chain_update(aux.t.to_bytes())
+                .chain_update(aux.rsa_modulo.to_bytes())
+                .chain_update(data.n.to_bytes())
+                .chain_update(data.n_root.to_bytes())
+                .chain_update(commitment.p.to_bytes())
+                .chain_update(commitment.q.to_bytes())
+                .chain_update(commitment.a.to_bytes())
+                .chain_update(commitment.b.to_bytes())
+                .chain_update(commitment.t.to_bytes())
+                .chain_update(commitment.sigma.to_bytes())
+                .finalize()
+        };
         let mut rng = crate::common::rng::HashRng::new(hash);
         super::interactive::challenge(security, &mut rng)
     }

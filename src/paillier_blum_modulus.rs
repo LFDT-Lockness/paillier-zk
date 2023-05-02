@@ -260,11 +260,12 @@ pub mod non_interactive {
         D: Digest,
     {
         let shared_state = shared_state.finalize();
-        let hash = |d: D| d
-            .chain_update(&shared_state)
-            .chain_update(n.to_bytes())
-            .chain_update(commitment.w.to_bytes())
-            .finalize();
+        let hash = |d: D| {
+            d.chain_update(&shared_state)
+                .chain_update(n.to_bytes())
+                .chain_update(commitment.w.to_bytes())
+                .finalize()
+        };
         let mut rng = crate::common::rng::HashRng::new(hash);
         // since we can't use Default and BigNumber isn't copy, we initialize
         // like this

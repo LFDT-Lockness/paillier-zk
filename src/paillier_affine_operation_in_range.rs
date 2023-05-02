@@ -461,28 +461,29 @@ pub mod non_interactive {
         D: Digest,
     {
         let shared_state = shared_state.finalize();
-        let hash = |d: D| d
-            .chain_update(&shared_state)
-            .chain_update(aux.s.to_bytes())
-            .chain_update(aux.t.to_bytes())
-            .chain_update(aux.rsa_modulo.to_bytes())
-            .chain_update((security.l_x as u64).to_le_bytes())
-            .chain_update((security.l_y as u64).to_le_bytes())
-            .chain_update((security.epsilon as u64).to_le_bytes())
-            .chain_update(data.key0.to_bytes())
-            .chain_update(data.key1.to_bytes())
-            .chain_update(data.c.to_bytes())
-            .chain_update(data.d.to_bytes())
-            .chain_update(data.y.to_bytes())
-            .chain_update(data.x.to_bytes(true))
-            .chain_update(commitment.a.to_bytes())
-            .chain_update(commitment.b_x.to_bytes(true))
-            .chain_update(commitment.b_y.to_bytes())
-            .chain_update(commitment.e.to_bytes())
-            .chain_update(commitment.s.to_bytes())
-            .chain_update(commitment.f.to_bytes())
-            .chain_update(commitment.t.to_bytes())
-            .finalize();
+        let hash = |d: D| {
+            d.chain_update(&shared_state)
+                .chain_update(aux.s.to_bytes())
+                .chain_update(aux.t.to_bytes())
+                .chain_update(aux.rsa_modulo.to_bytes())
+                .chain_update((security.l_x as u64).to_le_bytes())
+                .chain_update((security.l_y as u64).to_le_bytes())
+                .chain_update((security.epsilon as u64).to_le_bytes())
+                .chain_update(data.key0.to_bytes())
+                .chain_update(data.key1.to_bytes())
+                .chain_update(data.c.to_bytes())
+                .chain_update(data.d.to_bytes())
+                .chain_update(data.y.to_bytes())
+                .chain_update(data.x.to_bytes(true))
+                .chain_update(commitment.a.to_bytes())
+                .chain_update(commitment.b_x.to_bytes(true))
+                .chain_update(commitment.b_y.to_bytes())
+                .chain_update(commitment.e.to_bytes())
+                .chain_update(commitment.s.to_bytes())
+                .chain_update(commitment.f.to_bytes())
+                .chain_update(commitment.t.to_bytes())
+                .finalize()
+        };
         let mut rng = crate::common::rng::HashRng::new(hash);
         super::interactive::challenge::<C, _>(&mut rng)
     }
@@ -566,7 +567,7 @@ mod test {
         };
         let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
         let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
-        run(rng, security, x, y).expect("proof failed");
+        run::<_, C>(rng, security, x, y).expect("proof failed");
     }
 
     fn failing_on_additive<C: Curve>()
@@ -581,7 +582,7 @@ mod test {
         };
         let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
         let y = (BigNumber::one() << (security.l_y + security.epsilon)) + 1;
-        let r = run(rng, security, x, y).expect_err("proof should not pass");
+        let r = run::<_, C>(rng, security, x, y).expect_err("proof should not pass");
         match r.reason() {
             InvalidProofReason::RangeCheck(7) => (),
             e => panic!("proof should not fail with: {e:?}"),
@@ -600,7 +601,7 @@ mod test {
         };
         let x = (BigNumber::from(1) << (security.l_x + security.epsilon)) + 1;
         let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
-        let r = run(rng, security, x, y).expect_err("proof should not pass");
+        let r = run::<_, C>(rng, security, x, y).expect_err("proof should not pass");
         match r.reason() {
             InvalidProofReason::RangeCheck(6) => (),
             e => panic!("proof should not fail with: {e:?}"),

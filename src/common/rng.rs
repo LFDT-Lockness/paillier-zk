@@ -1,6 +1,9 @@
 use sha2::digest;
 use sha2::digest::Digest;
 
+/// Pseudo-random generateur that obtains values by hashing the provided values
+/// salted with an internal counter. The counter is prepended to conserve
+/// entropy.
 pub struct HashRng<F, D: Digest> {
     hash: F,
     counter: u64,
@@ -8,8 +11,11 @@ pub struct HashRng<F, D: Digest> {
     offset: usize,
 }
 
-impl<F, D: Digest> HashRng<F, D>
-{
+impl<F, D: Digest> HashRng<F, D> {
+    /// Create the RNG from the hash finalization function. Use it like this:
+    /// ```ignore
+    /// HashRng::new(|d| d.chain_update("my_values").finalize())
+    /// ```
     pub fn new(hash: F) -> Self
     where
         F: Fn(D) -> digest::Output<D>,
@@ -35,14 +41,16 @@ where
         use std::borrow::Borrow;
 
         const SIZE: usize = std::mem::size_of::<u32>();
+        // NOTE: careful with SIZE usage, otherwise it panics
         if self.offset + SIZE > self.buffer.borrow().len() {
-            self.buffer = (self.hash) (D::new().chain_update(self.counter.to_le_bytes()));
+            self.buffer = (self.hash)(D::new().chain_update(self.counter.to_le_bytes()));
             self.counter += 1;
             self.offset = 0;
         }
-        let bytes = &self.buffer.borrow()[self.offset .. self.offset + SIZE];
+        let bytes = &self.buffer.borrow()[self.offset..self.offset + SIZE];
         self.offset += SIZE;
-        let bytes: [u8; SIZE] = bytes.try_into().unwrap();
+        #[allow(clippy::expect_used)]
+        let bytes: [u8; SIZE] = bytes.try_into().expect("Size mismatch");
         u32::from_le_bytes(bytes)
     }
 
@@ -55,7 +63,8 @@ where
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
-        Ok(self.fill_bytes(dest))
+        self.fill_bytes(dest);
+        Ok(())
     }
 }
 
@@ -66,9 +75,7 @@ mod test {
 
     #[test]
     fn generate_bytes() {
-        let hash = |d: sha2::Sha256| d
-            .chain_update("foobar")
-            .finalize();
+        let hash = |d: sha2::Sha256| d.chain_update("foobar").finalize();
         let mut rng = super::HashRng::new(hash);
 
         let mut zeroes = 0;

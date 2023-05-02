@@ -316,17 +316,18 @@ pub mod non_interactive {
         D: Digest,
     {
         let shared_state = shared_state.finalize();
-        let hash = |d: D| d
-            .chain_update(&shared_state)
-            .chain_update(aux.s.to_bytes())
-            .chain_update(aux.t.to_bytes())
-            .chain_update(aux.rsa_modulo.to_bytes())
-            .chain_update(data.key.to_bytes())
-            .chain_update(data.ciphertext.to_bytes())
-            .chain_update(commitment.s.to_bytes())
-            .chain_update(commitment.a.to_bytes())
-            .chain_update(commitment.c.to_bytes())
-            .finalize();
+        let hash = |d: D| {
+            d.chain_update(&shared_state)
+                .chain_update(aux.s.to_bytes())
+                .chain_update(aux.t.to_bytes())
+                .chain_update(aux.rsa_modulo.to_bytes())
+                .chain_update(data.key.to_bytes())
+                .chain_update(data.ciphertext.to_bytes())
+                .chain_update(commitment.s.to_bytes())
+                .chain_update(commitment.a.to_bytes())
+                .chain_update(commitment.c.to_bytes())
+                .finalize()
+        };
         let mut rng = crate::common::rng::HashRng::new(hash);
         super::interactive::challenge(security, &mut rng)
     }
