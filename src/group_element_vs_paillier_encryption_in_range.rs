@@ -343,10 +343,11 @@ pub mod non_interactive {
     ) -> Challenge
     where
         Scalar<C>: FromHash,
-        D: Digest<OutputSize = U32>,
+        D: Digest,
     {
-        use rand_core::SeedableRng;
-        let seed = shared_state
+        let shared_state = shared_state.finalize();
+        let hash = |d: D| d
+            .chain_update(&shared_state)
             .chain_update(C::CURVE_NAME)
             .chain_update(aux.s.to_bytes())
             .chain_update(aux.t.to_bytes())
@@ -362,7 +363,7 @@ pub mod non_interactive {
             .chain_update(commitment.d.to_bytes())
             .finalize();
 
-        let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
+        let mut rng = crate::common::rng::HashRng::new(hash);
         super::interactive::challenge::<C, _>(&mut rng)
     }
 }
@@ -492,7 +493,7 @@ mod test {
 
         let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
         assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
         assert!(!maybe_rejected(rng), "should fail");
     }
 }

@@ -257,20 +257,20 @@ pub mod non_interactive {
         commitment: &Commitment,
     ) -> Challenge<M>
     where
-        D: Digest<OutputSize = U32> + Clone,
+        D: Digest,
     {
-        use rand_core::SeedableRng;
+        let shared_state = shared_state.finalize();
         // since we can't use Default and BigNumber isn't copy, we initialize
         // like this
         let mut ys = [(); M].map(|()| BigNumber::zero());
         for (i, y_ref) in ys.iter_mut().enumerate() {
-            let seed = shared_state
-                .clone()
+            let hash = |d: D| d
+                .chain_update(&shared_state)
                 .chain_update(n.to_bytes())
                 .chain_update(commitment.w.to_bytes())
                 .chain_update((i as u64).to_le_bytes())
                 .finalize();
-            let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
+            let mut rng = crate::common::rng::HashRng::new(hash);
             *y_ref = BigNumber::from_rng(n, &mut rng);
         }
         Challenge { ys }
