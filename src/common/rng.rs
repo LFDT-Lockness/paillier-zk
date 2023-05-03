@@ -85,42 +85,42 @@ mod test {
         rng.fill_bytes(&mut bytes);
         total += bytes.len();
         zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= total + 256 / 256);
+        assert!(zeroes <= (total + 255) / 256);
 
         let mut bytes = [0; 128];
         rng.fill_bytes(&mut bytes);
         total += bytes.len();
         zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= total + 256 / 256);
+        assert!(zeroes <= (total + 255) / 256);
 
         let mut bytes = [0; 1];
         rng.fill_bytes(&mut bytes);
         total += bytes.len();
         zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= total + 256 / 256);
+        assert!(zeroes <= (total + 255) / 256);
 
         let mut bytes = [0; 1];
         rng.fill_bytes(&mut bytes);
         total += bytes.len();
         zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= total + 256 / 256);
+        assert!(zeroes <= (total + 255) / 256);
 
         let mut bytes = [0; 32];
         rng.fill_bytes(&mut bytes);
         total += bytes.len();
         zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= total + 256 / 256);
+        assert!(zeroes <= (total + 255) / 256);
 
         let mut bytes = [0; 128];
         rng.fill_bytes(&mut bytes);
         total += bytes.len();
         zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= total + 256 / 256);
+        assert!(zeroes <= (total + 255) / 256);
 
         let mut bytes = [0; 137];
         rng.fill_bytes(&mut bytes);
         total += bytes.len();
         zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= total + 256 / 256);
+        assert!(zeroes <= (total + 2*255) / 256);
     }
 }
