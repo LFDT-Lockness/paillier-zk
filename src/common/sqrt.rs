@@ -8,6 +8,7 @@ use rand_core::RngCore;
 /// - `n = pq`, p and q are Blum primes
 /// If these don't hold, the result is a bogus number in Zn
 pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> BigNumber {
+    // Exponent in pq Blum modulus to obtain the principal square root
     let e = ((p - 1) * (q - 1) + 4) / 8;
 
     // e guaranteed to be non-negative by the prerequisite that p and q are blum primes
@@ -60,6 +61,10 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
 /// Compute jacobi symbol of x over y
 ///
 /// If y is not odd, returns 0
+///
+/// The implementation is obtained from this wikipedia page retrieved on october
+/// 2022: https://en.wikipedia.org/wiki/Jacobi_symbol#Implementation_in_C++
+/// and from my handwritten lectures on number theory in Tomsk State University
 #[allow(clippy::many_single_char_names)]
 pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
     let five = BigNumber::from(5);
