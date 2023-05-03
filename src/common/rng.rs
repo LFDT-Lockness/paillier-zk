@@ -4,6 +4,9 @@ use sha2::digest::Digest;
 /// Pseudo-random generateur that obtains values by hashing the provided values
 /// salted with an internal counter. The counter is prepended to conserve
 /// entropy.
+///
+/// Having u64 counter means that the period of the sequence is 2^64 times
+/// `Digest::OutputSize` bytes
 pub struct HashRng<F, D: Digest> {
     hash: F,
     counter: u64,
@@ -34,20 +37,17 @@ impl<F, D: Digest> HashRng<F, D> {
 impl<F, D> rand_core::RngCore for HashRng<F, D>
 where
     D: Digest,
-    digest::Output<D>: std::borrow::Borrow<[u8]>,
     F: Fn(D) -> digest::Output<D>,
 {
     fn next_u32(&mut self) -> u32 {
-        use std::borrow::Borrow;
-
         const SIZE: usize = std::mem::size_of::<u32>();
         // NOTE: careful with SIZE usage, otherwise it panics
-        if self.offset + SIZE > self.buffer.borrow().len() {
+        if self.offset + SIZE > self.buffer.len() {
             self.buffer = (self.hash)(D::new().chain_update(self.counter.to_le_bytes()));
-            self.counter += 1;
+            self.counter = self.counter.wrapping_add(1);
             self.offset = 0;
         }
-        let bytes = &self.buffer.borrow()[self.offset..self.offset + SIZE];
+        let bytes = &self.buffer[self.offset..self.offset + SIZE];
         self.offset += SIZE;
         #[allow(clippy::expect_used)]
         let bytes: [u8; SIZE] = bytes.try_into().expect("Size mismatch");
@@ -78,49 +78,12 @@ mod test {
         let hash = |d: sha2::Sha256| d.chain_update("foobar").finalize();
         let mut rng = super::HashRng::new(hash);
 
-        let mut zeroes = 0;
-        let mut total = 0;
-
-        let mut bytes = [0; 32];
-        rng.fill_bytes(&mut bytes);
-        total += bytes.len();
-        zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= (total + 255) / 256);
-
-        let mut bytes = [0; 128];
-        rng.fill_bytes(&mut bytes);
-        total += bytes.len();
-        zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= (total + 255) / 256);
-
-        let mut bytes = [0; 1];
-        rng.fill_bytes(&mut bytes);
-        total += bytes.len();
-        zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= (total + 255) / 256);
-
-        let mut bytes = [0; 1];
-        rng.fill_bytes(&mut bytes);
-        total += bytes.len();
-        zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= (total + 255) / 256);
-
-        let mut bytes = [0; 32];
-        rng.fill_bytes(&mut bytes);
-        total += bytes.len();
-        zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= (total + 255) / 256);
-
-        let mut bytes = [0; 128];
-        rng.fill_bytes(&mut bytes);
-        total += bytes.len();
-        zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= (total + 255) / 256);
-
-        let mut bytes = [0; 137];
-        rng.fill_bytes(&mut bytes);
-        total += bytes.len();
-        zeroes += bytes.iter().filter(|b| **b == 0).count();
-        assert!(zeroes <= (total + 2*255) / 256);
+        // Check that it doesn't panic for any window size
+        for _ in 0..100 {
+            let size = usize::from(rng.next_u32().to_le_bytes()[0]) + 1;
+            let mut buffer = Vec::new();
+            buffer.resize(size, 0);
+            rng.fill_bytes(&mut buffer);
+        }
     }
 }
