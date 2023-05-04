@@ -19,6 +19,7 @@ zeroize = { version = "1.5", default-features = false }
 thiserror = "1"
 
 serde = { version = "1", features = ["derive"], optional = true }
+serde_with = { version = "3", default-features = false, features = ["macros"], optional = true }
 
 [dev-dependencies]
 generic-ec-curves = { git = "https://github.com/dfns-labs/generic-ec", branch = "d", features = ["secp256r1"] }
@@ -31,7 +32,7 @@ gmp = ["libpaillier/gmp"]
 #openssl = ["libpaillier/openssl"]
 rust = ["libpaillier/rust"]
 
-serde = ["dep:serde", "generic-ec/serde"]
+serde = ["dep:serde", "dep:serde_with", "generic-ec/serde"]
 
 [profile.dev.package.num-bigint]
 opt-level = 3
