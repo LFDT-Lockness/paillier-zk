@@ -80,7 +80,7 @@ mod test {
 
         // Check that it doesn't panic for any window size
         for _ in 0..100 {
-            let size = usize::from(rng.next_u32().to_le_bytes()[0]) + 1;
+            let size = (rng.next_u32() as usize) % 256 + 1;
             let mut buffer = Vec::new();
             buffer.resize(size, 0);
             rng.fill_bytes(&mut buffer);
