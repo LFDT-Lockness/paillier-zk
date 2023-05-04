@@ -343,26 +343,28 @@ pub mod non_interactive {
     ) -> Challenge
     where
         Scalar<C>: FromHash,
-        D: Digest<OutputSize = U32>,
+        D: Digest,
     {
-        use rand_core::SeedableRng;
-        let seed = shared_state
-            .chain_update(C::CURVE_NAME)
-            .chain_update(aux.s.to_bytes())
-            .chain_update(aux.t.to_bytes())
-            .chain_update(aux.rsa_modulo.to_bytes())
-            .chain_update((security.l as u64).to_le_bytes())
-            .chain_update((security.epsilon as u64).to_le_bytes())
-            .chain_update(data.key0.to_bytes())
-            .chain_update(data.c.to_bytes())
-            .chain_update(data.x.to_bytes(true))
-            .chain_update(commitment.s.to_bytes())
-            .chain_update(commitment.a.to_bytes())
-            .chain_update(commitment.y.to_bytes(true))
-            .chain_update(commitment.d.to_bytes())
-            .finalize();
+        let shared_state = shared_state.finalize();
+        let hash = |d: D| {
+            d.chain_update(&shared_state)
+                .chain_update(C::CURVE_NAME)
+                .chain_update(aux.s.to_bytes())
+                .chain_update(aux.t.to_bytes())
+                .chain_update(aux.rsa_modulo.to_bytes())
+                .chain_update((security.l as u64).to_le_bytes())
+                .chain_update((security.epsilon as u64).to_le_bytes())
+                .chain_update(data.key0.to_bytes())
+                .chain_update(data.c.to_bytes())
+                .chain_update(data.x.to_bytes(true))
+                .chain_update(commitment.s.to_bytes())
+                .chain_update(commitment.a.to_bytes())
+                .chain_update(commitment.y.to_bytes(true))
+                .chain_update(commitment.d.to_bytes())
+                .finalize()
+        };
 
-        let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
+        let mut rng = crate::common::rng::HashRng::new(hash);
         super::interactive::challenge::<C, _>(&mut rng)
     }
 }
@@ -428,7 +430,7 @@ mod test {
             epsilon: 300,
         };
         let plaintext = BigNumber::from_rng_pm(&(BigNumber::one() << security.l), &mut rng);
-        run(rng, security, plaintext).expect("proof failed");
+        run::<_, C>(rng, security, plaintext).expect("proof failed");
     }
 
     fn failing_test<C: Curve>()
@@ -441,7 +443,7 @@ mod test {
             epsilon: 300,
         };
         let plaintext = BigNumber::from(1) << (security.l + security.epsilon + 1);
-        let r = run(rng, security, plaintext).expect_err("proof should not pass");
+        let r = run::<_, C>(rng, security, plaintext).expect_err("proof should not pass");
         match r.reason() {
             InvalidProofReason::RangeCheck(_) => (),
             e => panic!("proof should not fail with: {e:?}"),
@@ -492,7 +494,7 @@ mod test {
 
         let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
         assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
         assert!(!maybe_rejected(rng), "should fail");
     }
 }

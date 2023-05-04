@@ -289,23 +289,25 @@ pub mod non_interactive {
         commitment: &Commitment,
     ) -> Challenge
     where
-        D: Digest<OutputSize = U32>,
+        D: Digest,
     {
-        use rand_core::SeedableRng;
-        let seed = shared_state
-            .chain_update(aux.s.to_bytes())
-            .chain_update(aux.t.to_bytes())
-            .chain_update(aux.rsa_modulo.to_bytes())
-            .chain_update(data.q.to_bytes())
-            .chain_update(data.key.to_bytes())
-            .chain_update(data.c.to_bytes())
-            .chain_update(data.x.to_bytes())
-            .chain_update(commitment.s.to_bytes())
-            .chain_update(commitment.t.to_bytes())
-            .chain_update(commitment.a.to_bytes())
-            .chain_update(commitment.gamma.to_bytes())
-            .finalize();
-        let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed.into());
+        let shared_state = shared_state.finalize();
+        let hash = |d: D| {
+            d.chain_update(&shared_state)
+                .chain_update(aux.s.to_bytes())
+                .chain_update(aux.t.to_bytes())
+                .chain_update(aux.rsa_modulo.to_bytes())
+                .chain_update(data.q.to_bytes())
+                .chain_update(data.key.to_bytes())
+                .chain_update(data.c.to_bytes())
+                .chain_update(data.x.to_bytes())
+                .chain_update(commitment.s.to_bytes())
+                .chain_update(commitment.t.to_bytes())
+                .chain_update(commitment.a.to_bytes())
+                .chain_update(commitment.gamma.to_bytes())
+                .finalize()
+        };
+        let mut rng = crate::common::rng::HashRng::new(hash);
         super::interactive::challenge(data, &mut rng)
     }
 
