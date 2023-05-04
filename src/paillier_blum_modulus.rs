@@ -112,7 +112,13 @@ pub struct ProofPoint {
 /// The ZK proof. Computed by [`interactive::prove`] or
 /// [`non_interactive::prove`]. Consists of M proofs for each challenge
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof<const M: usize> {
+    #[cfg_attr(
+        // A trick to serialize arbitrary size arrays
+        feature = "serde",
+        serde(with = "serde_with::As::<[serde_with::Same; M]>")
+    )]
     pub points: [ProofPoint; M],
 }
 
