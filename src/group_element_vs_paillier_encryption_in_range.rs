@@ -357,6 +357,7 @@ pub mod non_interactive {
                 .chain_update(data.key0.to_bytes())
                 .chain_update(data.c.to_bytes())
                 .chain_update(data.x.to_bytes(true))
+                .chain_update(data.b.to_bytes(true))
                 .chain_update(commitment.s.to_bytes())
                 .chain_update(commitment.a.to_bytes())
                 .chain_update(commitment.y.to_bytes(true))
@@ -494,7 +495,7 @@ mod test {
 
         let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
         assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
+        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(4);
         assert!(!maybe_rejected(rng), "should fail");
     }
 }
