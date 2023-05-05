@@ -8,7 +8,9 @@ use rand_core::RngCore;
 /// - `n = pq`, p and q are Blum primes
 /// If these don't hold, the result is a bogus number in Zn
 pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> BigNumber {
-    // Exponent in pq Blum modulus to obtain the principal square root
+    // Exponent in pq Blum modulus to obtain the principal square root.
+    // Described in [Handbook of Applied cryptography, p. 75, Fact
+    // 2.160](https://cacr.uwaterloo.ca/hac/about/chap2.pdf)
     let e = ((p - 1) * (q - 1) + 4) / 8;
 
     // e guaranteed to be non-negative by the prerequisite that p and q are blum primes
@@ -62,9 +64,9 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
 ///
 /// If y is not odd, returns 0
 ///
-/// The implementation is obtained from this wikipedia page retrieved on october
-/// 2022: https://en.wikipedia.org/wiki/Jacobi_symbol#Implementation_in_C++
-/// and from my handwritten lectures on number theory in Tomsk State University
+/// The implementation is obtained from my handwritten lectures on number theory
+/// in Tomsk State University and from [Handbook of Applied cryptography, p. 75,
+/// Algorithm 2.149](https://cacr.uwaterloo.ca/hac/about/chap2.pdf)
 #[allow(clippy::many_single_char_names)]
 pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
     let five = BigNumber::from(5);
@@ -84,8 +86,12 @@ pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
 
     while n != zero {
         // reduce two's power
+        let mut two_exp = 0_usize;
         while &n % &two == zero {
             n = &n >> 1;
+            two_exp += 1;
+        }
+        if two_exp % 2 == 1 {
             let r = &k % BigNumber::from(8);
             if r == three || r == five {
                 j = -j;
@@ -102,5 +108,36 @@ pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
         j
     } else {
         0
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::unknown_order::BigNumber;
+
+    #[test]
+    fn jacobi_and_sqrt() {
+        let mut rng = rand_dev::DevRng::new();
+        // Create a blum modulus for the calculations to make sense
+        let p = BigNumber::safe_prime_from_rng(128, &mut rng);
+        let q = BigNumber::safe_prime_from_rng(128, &mut rng);
+        let n = &p * &q;
+
+        for _ in 0..100 {
+            let x = BigNumber::from_rng(&n, &mut rng);
+            let root = super::blum_sqrt(&x, &p, &q, &n);
+            let x_ = root.modmul(&root, &n);
+
+            let jp = super::jacobi(&x, &p);
+            let jq = super::jacobi(&x, &q);
+            let j = super::jacobi(&x, &n);
+            assert_eq!(jp * jq, j);
+
+            if jp == 1 && jq == 1 {
+                assert_eq!(x_, x);
+            } else {
+                assert_ne!(x_, x);
+            }
+        }
     }
 }
