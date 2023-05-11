@@ -65,7 +65,7 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
 /// Requires odd `n >= 3`, and `0 <= a < n`. If it doesn't hold, function panics if debug asserts are enabled,
 /// or returns 0 otherwise.
 ///
-/// Implementation is taken from [Handbook of Applied cryptography][book], p. 75, Algorithm 2.149
+/// Implementation is taken from [Handbook of Applied cryptography][book], p. 73, Algorithm 2.149
 ///
 /// [book]: https://cacr.uwaterloo.ca/hac/about/chap2.pdf
 #[inline(always)]
