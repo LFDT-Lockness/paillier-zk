@@ -70,6 +70,13 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
 /// [book]: https://cacr.uwaterloo.ca/hac/about/chap2.pdf
 #[inline(always)]
 pub fn jacobi(a: &BigNumber, n: &BigNumber) -> isize {
+    // Validate inputs
+    if !(n % 2 == BigNumber::one() && *n >= BigNumber::from(3) && BigNumber::zero() <= *a && a < n)
+    {
+        debug_assert!(false, "invalid inputs: a = {a}, n = {n}");
+        return 0;
+    }
+
     jacobi_inner(1, a, n)
 }
 
@@ -80,14 +87,7 @@ pub fn jacobi(a: &BigNumber, n: &BigNumber) -> isize {
 #[allow(clippy::if_same_then_else, clippy::identity_op)]
 fn jacobi_inner(mult: isize, a: &BigNumber, n: &BigNumber) -> isize {
     let one = &BigNumber::one();
-    let two = &BigNumber::from(2);
     let three = &BigNumber::from(3);
-
-    // Validate inputs
-    if !(n % two == *one && n >= three && BigNumber::zero() <= *a && a < n) {
-        debug_assert!(false, "invalid inputs: a = {a}, n = {n}");
-        return 0;
-    }
 
     // Step 1
     if a.is_zero() {
@@ -101,7 +101,7 @@ fn jacobi_inner(mult: isize, a: &BigNumber, n: &BigNumber) -> isize {
     // Step 3. Find a1, e such that a = 2^e * a1 where a1 is odd
     let mut a1 = a.clone();
     let mut e = 0;
-    while &a1 % two != *one {
+    while &a1 % 2 != *one {
         e += 1;
         a1 = a1 >> 1;
     }
