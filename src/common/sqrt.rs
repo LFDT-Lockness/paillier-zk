@@ -68,7 +68,16 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
 /// Implementation is taken from [Handbook of Applied cryptography][book], p. 75, Algorithm 2.149
 ///
 /// [book]: https://cacr.uwaterloo.ca/hac/about/chap2.pdf
+#[inline(always)]
 pub fn jacobi(a: &BigNumber, n: &BigNumber) -> isize {
+    jacobi_inner(1, a, n)
+}
+
+/// Computes jacobi symbol of `a` over `n` multiplied at `mult`
+///
+/// `mult` is a small modification over original algorithm defined in the book, it helps to keep
+/// function in tail recursion form, which ensures that recursion is optimized out
+fn jacobi_inner(mult: isize, a: &BigNumber, n: &BigNumber) -> isize {
     let one = &BigNumber::one();
     let two = &BigNumber::from(2);
     let three = &BigNumber::from(3);
@@ -81,11 +90,11 @@ pub fn jacobi(a: &BigNumber, n: &BigNumber) -> isize {
 
     // Step 1
     if a.is_zero() {
-        return 0;
+        return mult * 0;
     }
     // Step 2
     if a.is_one() {
-        return 1;
+        return mult * 1;
     }
 
     // Step 3. Find a1, e such that a = 2^e * a1 where a1 is odd
@@ -122,9 +131,9 @@ pub fn jacobi(a: &BigNumber, n: &BigNumber) -> isize {
 
     // Step 7
     if a1.is_one() {
-        s
+        mult * s
     } else {
-        s * jacobi(&n1, &a1)
+        jacobi_inner(mult * s, &n1, &a1)
     }
 }
 
