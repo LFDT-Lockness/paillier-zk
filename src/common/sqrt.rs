@@ -77,6 +77,7 @@ pub fn jacobi(a: &BigNumber, n: &BigNumber) -> isize {
 ///
 /// `mult` is a small modification over original algorithm defined in the book, it helps to keep
 /// function in tail recursion form, which ensures that recursion is optimized out
+#[allow(clippy::if_same_then_else, clippy::identity_op)]
 fn jacobi_inner(mult: isize, a: &BigNumber, n: &BigNumber) -> isize {
     let one = &BigNumber::one();
     let two = &BigNumber::from(2);
@@ -90,7 +91,7 @@ fn jacobi_inner(mult: isize, a: &BigNumber, n: &BigNumber) -> isize {
 
     // Step 1
     if a.is_zero() {
-        return mult * 0;
+        return 0;
     }
     // Step 2
     if a.is_one() {
