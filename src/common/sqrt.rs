@@ -8,6 +8,9 @@ use rand_core::RngCore;
 /// - `n = pq`, p and q are Blum primes
 /// If these don't hold, the result is a bogus number in Zn
 pub fn blum_sqrt(x: &BigNumber, p: &BigNumber, q: &BigNumber, n: &BigNumber) -> BigNumber {
+    // Exponent in pq Blum modulus to obtain the principal square root.
+    // Described in [Handbook of Applied cryptography, p. 75, Fact
+    // 2.160](https://cacr.uwaterloo.ca/hac/about/chap2.pdf)
     let e = ((p - 1) * (q - 1) + 4) / 8;
 
     // e guaranteed to be non-negative by the prerequisite that p and q are blum primes
@@ -34,8 +37,8 @@ pub fn find_residue(
     for (a, b) in TWO_BOOLS {
         let y = if b { w.modmul(y, n) } else { y.clone() };
         let y = if a { n - y } else { y };
-        let jp = jacobi(&y, p);
-        let jq = jacobi(&y, q);
+        let jp = jacobi(&(&y % p), p);
+        let jq = jacobi(&(&y % q), q);
         if jp == 1 && jq == 1 {
             return (a, b, y);
         }
@@ -57,45 +60,111 @@ pub fn non_residue_in<R: RngCore>(n: &BigNumber, mut rng: R) -> BigNumber {
     }
 }
 
-/// Compute jacobi symbol of x over y
+/// Compute jacobi symbol of a over n
 ///
-/// If y is not odd, returns 0
-#[allow(clippy::many_single_char_names)]
-pub fn jacobi(x: &BigNumber, y: &BigNumber) -> isize {
-    let five = BigNumber::from(5);
-    let four = BigNumber::from(4);
-    let three = BigNumber::from(3);
-    let two = BigNumber::from(2);
-    let one = BigNumber::one();
-    let zero = BigNumber::zero();
-    if y % &two == zero || y <= &zero {
-        // invalid argument
+/// Requires odd `n >= 3`, and `0 <= a < n`. If it doesn't hold, function panics if debug asserts are enabled,
+/// or returns 0 otherwise.
+///
+/// Implementation is taken from [Handbook of Applied cryptography][book], p. 73, Algorithm 2.149
+///
+/// [book]: https://cacr.uwaterloo.ca/hac/about/chap2.pdf
+#[inline(always)]
+pub fn jacobi(a: &BigNumber, n: &BigNumber) -> isize {
+    // Validate inputs
+    if !(n % 2 == BigNumber::one() && *n >= BigNumber::from(3) && BigNumber::zero() <= *a && a < n)
+    {
+        debug_assert!(false, "invalid inputs: a = {a}, n = {n}");
         return 0;
     }
 
-    let mut k = y.clone();
-    let mut n = x % &k;
-    let mut j = 1;
+    jacobi_inner(1, a, n)
+}
 
-    while n != zero {
-        // reduce two's power
-        while &n % &two == zero {
-            n = &n >> 1;
-            let r = &k % BigNumber::from(8);
-            if r == three || r == five {
-                j = -j;
-            }
-        }
-        core::mem::swap(&mut n, &mut k);
-        if &n % &four == three && &k % &four == three {
-            j = -j;
-        }
-        n %= &k;
+/// Computes jacobi symbol of `a` over `n` multiplied at `mult`
+///
+/// `mult` is a small modification over original algorithm defined in the book, it helps to keep
+/// function in tail recursion form, which ensures that recursion is optimized out
+#[allow(clippy::if_same_then_else, clippy::identity_op)]
+fn jacobi_inner(mult: isize, a: &BigNumber, n: &BigNumber) -> isize {
+    let one = &BigNumber::one();
+    let three = &BigNumber::from(3);
+
+    // Step 1
+    if a.is_zero() {
+        return 0;
+    }
+    // Step 2
+    if a.is_one() {
+        return mult * 1;
     }
 
-    if k == one {
-        j
+    // Step 3. Find a1, e such that a = 2^e * a1 where a1 is odd
+    let mut a1 = a.clone();
+    let mut e = 0;
+    while &a1 % 2 != *one {
+        e += 1;
+        a1 = a1 >> 1;
+    }
+    debug_assert_eq!(*a, &a1 * (one << e));
+
+    // Step 4
+    let n_mod_8 = n % 8;
+    let mut s = if e % 2 == 0 {
+        // if e is even, s = 1
+        1
+    } else if n_mod_8 == *one || n_mod_8 == BigNumber::from(7) {
+        // if n = 1 or 7 (mod 8), s = 1
+        1
+    } else if n_mod_8 == *three || n_mod_8 == BigNumber::from(5) {
+        // if n = 3 or 5 (mod 8), s = -1
+        -1
     } else {
-        0
+        unreachable!()
+    };
+
+    // Step 5
+    if n % 4 == *three && &a1 % 4 == *three {
+        s = -s
+    }
+
+    // Step 6
+    let n1 = n % &a1;
+
+    // Step 7
+    if a1.is_one() {
+        mult * s
+    } else {
+        jacobi_inner(mult * s, &n1, &a1)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::unknown_order::BigNumber;
+
+    #[test]
+    fn jacobi_and_sqrt() {
+        let mut rng = rand_dev::DevRng::new();
+        // Create a blum modulus for the calculations to make sense
+        let p = BigNumber::safe_prime_from_rng(128, &mut rng);
+        let q = BigNumber::safe_prime_from_rng(128, &mut rng);
+        let n = &p * &q;
+
+        for _ in 0..100 {
+            let x = BigNumber::from_rng(&n, &mut rng);
+            let root = super::blum_sqrt(&x, &p, &q, &n);
+            let x_ = root.modmul(&root, &n);
+
+            let jp = super::jacobi(&(&x % &p), &p);
+            let jq = super::jacobi(&(&x % &q), &q);
+            let j = super::jacobi(&x, &n);
+            assert_eq!(jp * jq, j);
+
+            if jp == 1 && jq == 1 {
+                assert_eq!(x_, x);
+            } else {
+                assert_ne!(x_, x);
+            }
+        }
     }
 }
