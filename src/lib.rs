@@ -1,5 +1,13 @@
 #![deny(clippy::disallowed_methods)]
 
+// Don't forget to add new backends as they appear in unknown_order
+#[cfg(all(not(feature = "gmp"), not(feature = "rust")))]
+compile_error!(
+    "Attempting to build paillier-zk without a bignumber backend specified: \
+    please enable `rust` or `gmp` feature of `paillier-zk` (`openssl` backend is \
+    disabled as it doesn't support deterministic RNG)"
+);
+
 use thiserror::Error;
 
 mod common;
