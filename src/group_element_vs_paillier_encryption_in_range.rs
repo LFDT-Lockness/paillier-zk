@@ -369,7 +369,7 @@ pub mod non_interactive {
         };
 
         let mut rng = crate::common::rng::HashRng::new(hash);
-        super::interactive::challenge(&security, &mut rng)
+        super::interactive::challenge(security, &mut rng)
     }
 }
 
