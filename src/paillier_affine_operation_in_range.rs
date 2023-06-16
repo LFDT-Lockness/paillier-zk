@@ -155,6 +155,8 @@ pub struct SecurityParams {
     pub l_y: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
+    /// q in paper. Security parameter for challenge
+    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -390,11 +392,11 @@ pub mod interactive {
     }
 
     /// Generate random challenge
-    pub fn challenge<E: Curve, R>(rng: &mut R) -> BigNumber
+    pub fn challenge<R>(security: &SecurityParams, rng: &mut R) -> BigNumber
     where
         R: RngCore,
     {
-        BigNumber::from_rng_pm(&BigNumber::curve_order::<E>(), rng)
+        BigNumber::from_rng_pm(&security.q, rng)
     }
 }
 
@@ -485,7 +487,7 @@ pub mod non_interactive {
                 .finalize()
         };
         let mut rng = crate::common::rng::HashRng::new(hash);
-        super::interactive::challenge::<C, _>(&mut rng)
+        super::interactive::challenge(security, &mut rng)
     }
 }
 
@@ -564,6 +566,7 @@ mod test {
             l_x: 1024,
             l_y: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
         let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
@@ -579,6 +582,7 @@ mod test {
             l_x: 1024,
             l_y: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
         let y = (BigNumber::one() << (security.l_y + security.epsilon)) + 1;
@@ -598,6 +602,7 @@ mod test {
             l_x: 1024,
             l_y: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let x = (BigNumber::from(1) << (security.l_x + security.epsilon)) + 1;
         let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
@@ -647,6 +652,7 @@ mod test {
                 l_x: 1024,
                 l_y: 1024,
                 epsilon: 255,
+                q: BigNumber::one() << 128,
             };
             let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
             let y = BigNumber::from_rng_pm(&BigNumber::from(1000), &mut rng);
@@ -672,6 +678,7 @@ mod test {
                 l_x: 1024,
                 l_y: 1024,
                 epsilon: 255,
+                q: BigNumber::one() << 128,
             };
             let x = BigNumber::from_rng_pm(&BigNumber::from(1000), &mut rng);
             let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);

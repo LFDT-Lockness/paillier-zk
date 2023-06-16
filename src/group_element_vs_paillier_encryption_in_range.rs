@@ -102,6 +102,8 @@ pub struct SecurityParams {
     pub l: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
+    /// q in paper. Security parameter for challenge
+    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -274,11 +276,11 @@ pub mod interactive {
     /// Generate random challenge
     ///
     /// `data` parameter is used to generate challenge in correct range
-    pub fn challenge<E: generic_ec::Curve, R>(rng: &mut R) -> BigNumber
+    pub fn challenge<R>(security: &SecurityParams, rng: &mut R) -> BigNumber
     where
         R: RngCore,
     {
-        BigNumber::from_rng_pm(&BigNumber::curve_order::<E>(), rng)
+        BigNumber::from_rng_pm(&security.q, rng)
     }
 }
 
@@ -366,7 +368,7 @@ pub mod non_interactive {
         };
 
         let mut rng = crate::common::rng::HashRng::new(hash);
-        super::interactive::challenge::<C, _>(&mut rng)
+        super::interactive::challenge(&security, &mut rng)
     }
 }
 
@@ -429,6 +431,7 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let plaintext = BigNumber::from_rng_pm(&(BigNumber::one() << security.l), &mut rng);
         run::<_, C>(rng, security, plaintext).expect("proof failed");
@@ -442,6 +445,7 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let plaintext = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let r = run::<_, C>(rng, security, plaintext).expect_err("proof should not pass");
@@ -483,6 +487,7 @@ mod test {
             let security = super::SecurityParams {
                 l: 1024,
                 epsilon: 255,
+                q: BigNumber::one() << 128,
             };
             let plaintext = (BigNumber::from(1) << security.l) - 1;
             let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext);

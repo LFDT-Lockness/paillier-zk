@@ -413,7 +413,7 @@ mod test {
         let security = super::SecurityParams {
             l: 64,
             epsilon: 128,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            q: BigNumber::one() << 128,
         };
         let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
@@ -447,7 +447,7 @@ mod test {
         let security = super::SecurityParams {
             l: 4,
             epsilon: 128,
-            q: BigNumber::prime_from_rng(128, &mut rng),
+            q: BigNumber::one() << 128,
         };
         let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
