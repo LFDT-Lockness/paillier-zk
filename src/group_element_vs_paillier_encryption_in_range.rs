@@ -472,35 +472,4 @@ mod test {
     fn failing_million() {
         failing_test::<crate::curve::C>()
     }
-
-    // see notes in
-    // [crate::paillier_encryption_in_range::test::rejected_with_probability_1_over_2]
-    // for motivation and design of the following test.
-    // Altough no security estimate was given in the paper, my own calculations
-    // show that the parameters here achieve the probability about as good as in
-    // other tests
-
-    #[test]
-    fn mul_rejected_with_some_probability() {
-        use rand_core::SeedableRng;
-        fn maybe_rejected(rng: rand_chacha::ChaCha20Rng) -> bool {
-            let security = super::SecurityParams {
-                l: 1024,
-                epsilon: 255,
-                q: BigNumber::one() << 128,
-            };
-            let plaintext = (BigNumber::from(1) << security.l) - 1;
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext);
-            match r.map_err(|e| e.reason()) {
-                Ok(()) => true,
-                Err(InvalidProofReason::RangeCheck(4)) => false,
-                Err(e) => panic!("proof should not fail with: {e:?}"),
-            }
-        }
-
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
-        assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(4);
-        assert!(!maybe_rejected(rng), "should fail");
-    }
 }

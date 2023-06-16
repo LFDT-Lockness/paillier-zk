@@ -476,10 +476,4 @@ mod test {
             panic!("proof should not pass");
         }
     }
-
-    // Following motivation outlined in
-    // [crate::paillier_encryption_in_range::test::rejected_with_probability_1_over_2],
-    // I would like to make a similar borderline test, but no security estimate
-    // was given in the paper and this proof differs significantly from others
-    // in this library, so I have to omit the test.
 }
