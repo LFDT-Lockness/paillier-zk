@@ -101,6 +101,7 @@
 //!     l_x: 1024,
 //!     l_y: 1024,
 //!     epsilon: 128,
+//!     q: BigNumber::one() << 128,
 //! };
 //!
 //! let data = p::Data {

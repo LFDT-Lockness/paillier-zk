@@ -63,6 +63,7 @@
 //! let security = p::SecurityParams {
 //!     l: 1024,
 //!     epsilon: 128,
+//!     q: BigNumber::one() << 128,
 //! };
 //!
 //! let data = p::Data { key0, c: ciphertext, x: power, b: g };
