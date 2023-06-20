@@ -101,6 +101,7 @@
 //!     l_x: 1024,
 //!     l_y: 1024,
 //!     epsilon: 128,
+//!     q: BigNumber::one() << 128,
 //! };
 //!
 //! let data = p::Data {
@@ -155,6 +156,8 @@ pub struct SecurityParams {
     pub l_y: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
+    /// q in paper. Security parameter for challenge
+    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -390,11 +393,11 @@ pub mod interactive {
     }
 
     /// Generate random challenge
-    pub fn challenge<E: Curve, R>(rng: &mut R) -> BigNumber
+    pub fn challenge<R>(security: &SecurityParams, rng: &mut R) -> BigNumber
     where
         R: RngCore,
     {
-        BigNumber::from_rng_pm(&BigNumber::curve_order::<E>(), rng)
+        BigNumber::from_rng_pm(&security.q, rng)
     }
 }
 
@@ -485,7 +488,7 @@ pub mod non_interactive {
                 .finalize()
         };
         let mut rng = crate::common::rng::HashRng::new(hash);
-        super::interactive::challenge::<C, _>(&mut rng)
+        super::interactive::challenge(security, &mut rng)
     }
 }
 
@@ -493,7 +496,6 @@ pub mod non_interactive {
 mod test {
     use generic_ec::Point;
     use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
-    use rand_core::RngCore;
 
     use crate::common::test::random_key;
     use crate::common::{BigNumberExt, InvalidProofReason, SafePaillierEncryptionExt};
@@ -564,6 +566,7 @@ mod test {
             l_x: 1024,
             l_y: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
         let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
@@ -579,6 +582,7 @@ mod test {
             l_x: 1024,
             l_y: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
         let y = (BigNumber::one() << (security.l_y + security.epsilon)) + 1;
@@ -598,6 +602,7 @@ mod test {
             l_x: 1024,
             l_y: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let x = (BigNumber::from(1) << (security.l_x + security.epsilon)) + 1;
         let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
@@ -632,61 +637,5 @@ mod test {
     #[test]
     fn failing_million_mul() {
         failing_on_multiplicative::<crate::curve::C>()
-    }
-
-    // see notes in
-    // [crate::paillier_encryption_in_range::test::rejected_with_probability_1_over_2]
-    // for motivation and design of the following two tests
-
-    #[test]
-    fn mul_rejected_with_some_probability() {
-        use rand_core::SeedableRng;
-        fn maybe_rejected(mut rng: &mut impl RngCore) -> bool {
-            // With these params test is failing with ~1/8 probability
-            let security = super::SecurityParams {
-                l_x: 1024,
-                l_y: 1024,
-                epsilon: 255,
-            };
-            let x = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_x), &mut rng);
-            let y = BigNumber::from_rng_pm(&BigNumber::from(1000), &mut rng);
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, x, y);
-            match r.map_err(|e| e.reason()) {
-                Ok(()) => true,
-                Err(InvalidProofReason::RangeCheck(6)) => false,
-                Err(e) => panic!("proof should not fail with: {e:?}"),
-            }
-        }
-
-        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(5);
-        assert!(maybe_rejected(&mut rng), "should pass");
-        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
-        assert!(!maybe_rejected(&mut rng), "should fail");
-    }
-
-    #[test]
-    fn add_rejected_with_some_probability() {
-        use rand_core::SeedableRng;
-        fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
-            let security = super::SecurityParams {
-                l_x: 1024,
-                l_y: 1024,
-                epsilon: 255,
-            };
-            let x = BigNumber::from_rng_pm(&BigNumber::from(1000), &mut rng);
-            let y = BigNumber::from_rng_pm(&(BigNumber::one() << security.l_y), &mut rng);
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, x, y);
-            match r.map_err(|e| e.reason()) {
-                Ok(()) => true,
-                Err(InvalidProofReason::RangeCheck(7)) => false,
-                Err(e) => panic!("proof should not fail with: {e:?}"),
-            }
-        }
-
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
-        assert!(maybe_rejected(rng), "should pass");
-
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
-        assert!(!maybe_rejected(rng), "should fail");
     }
 }

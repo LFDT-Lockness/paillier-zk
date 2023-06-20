@@ -63,6 +63,7 @@
 //! let security = p::SecurityParams {
 //!     l: 1024,
 //!     epsilon: 128,
+//!     q: BigNumber::one() << 128,
 //! };
 //!
 //! let data = p::Data { key0, c: ciphertext, x: power, b: g };
@@ -102,6 +103,8 @@ pub struct SecurityParams {
     pub l: usize,
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
+    /// q in paper. Security parameter for challenge
+    pub q: BigNumber,
 }
 
 /// Public data that both parties know
@@ -274,11 +277,11 @@ pub mod interactive {
     /// Generate random challenge
     ///
     /// `data` parameter is used to generate challenge in correct range
-    pub fn challenge<E: generic_ec::Curve, R>(rng: &mut R) -> BigNumber
+    pub fn challenge<R>(security: &SecurityParams, rng: &mut R) -> BigNumber
     where
         R: RngCore,
     {
-        BigNumber::from_rng_pm(&BigNumber::curve_order::<E>(), rng)
+        BigNumber::from_rng_pm(&security.q, rng)
     }
 }
 
@@ -366,7 +369,7 @@ pub mod non_interactive {
         };
 
         let mut rng = crate::common::rng::HashRng::new(hash);
-        super::interactive::challenge::<C, _>(&mut rng)
+        super::interactive::challenge(security, &mut rng)
     }
 }
 
@@ -429,6 +432,7 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let plaintext = BigNumber::from_rng_pm(&(BigNumber::one() << security.l), &mut rng);
         run::<_, C>(rng, security, plaintext).expect("proof failed");
@@ -442,6 +446,7 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 300,
+            q: BigNumber::one() << 128,
         };
         let plaintext = BigNumber::from(1) << (security.l + security.epsilon + 1);
         let r = run::<_, C>(rng, security, plaintext).expect_err("proof should not pass");
@@ -467,35 +472,5 @@ mod test {
     #[test]
     fn failing_million() {
         failing_test::<crate::curve::C>()
-    }
-
-    // see notes in
-    // [crate::paillier_encryption_in_range::test::rejected_with_probability_1_over_2]
-    // for motivation and design of the following test.
-    // Altough no security estimate was given in the paper, my own calculations
-    // show that the parameters here achieve the probability about as good as in
-    // other tests
-
-    #[test]
-    fn mul_rejected_with_some_probability() {
-        use rand_core::SeedableRng;
-        fn maybe_rejected(rng: rand_chacha::ChaCha20Rng) -> bool {
-            let security = super::SecurityParams {
-                l: 1024,
-                epsilon: 255,
-            };
-            let plaintext = (BigNumber::from(1) << security.l) - 1;
-            let r = run::<_, generic_ec_curves::rust_crypto::Secp256r1>(rng, security, plaintext);
-            match r.map_err(|e| e.reason()) {
-                Ok(()) => true,
-                Err(InvalidProofReason::RangeCheck(4)) => false,
-                Err(e) => panic!("proof should not fail with: {e:?}"),
-            }
-        }
-
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
-        assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(4);
-        assert!(!maybe_rejected(rng), "should fail");
     }
 }

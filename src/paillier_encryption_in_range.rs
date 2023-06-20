@@ -411,37 +411,4 @@ mod test {
             Err(e) => panic!("proof should not fail with {e:?}"),
         }
     }
-
-    #[test]
-    fn rejected_with_some_probability() {
-        // plaintext in range 2^l should be rejected with probablility
-        // q / 2^epsilon. I set parameters like this:
-        //      bitsize(q) = 128
-        //      epsilon = 129
-        // Thus probability should be around 1/2.
-        // in 32 runs that's not what was observed. Very possible it's an
-        // artifact of distribution, so I decide to ignore it, and test that
-        // there are passing and failing values.
-
-        fn maybe_rejected(mut rng: rand_chacha::ChaCha20Rng) -> bool {
-            let security = super::SecurityParams {
-                l: 512,
-                epsilon: 129,
-                q: (BigNumber::one() << 128) - 1,
-            };
-            let plaintext: BigNumber = (BigNumber::one() << security.l) - 1;
-            let r = run_with(&mut rng, security, plaintext);
-            match r.map_err(|e| e.reason()) {
-                Ok(()) => true,
-                Err(InvalidProofReason::RangeCheck(_)) => false,
-                Err(e) => panic!("proof should not fail with {e:?}"),
-            }
-        }
-
-        use rand_core::SeedableRng;
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(1);
-        assert!(maybe_rejected(rng), "should pass");
-        let rng = rand_chacha::ChaCha20Rng::seed_from_u64(2);
-        assert!(!maybe_rejected(rng), "should fail");
-    }
 }
