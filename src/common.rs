@@ -350,7 +350,7 @@ pub mod test {
     fn conversion() {
         // checks that bignumbers use BE encoding, same as the method we use in
         // conversion
-        type Scalar = generic_ec::Scalar<generic_ec_curves::Secp256r1>;
+        type Scalar = generic_ec::Scalar<generic_ec::curves::Secp256r1>;
         let number: u64 = 0x11_22_33_44_55_66_77_88;
         let bignumber = BigNumber::from(number);
         let scalar1 = Scalar::from(number);
