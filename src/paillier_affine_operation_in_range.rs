@@ -62,7 +62,7 @@
 //!
 //! // 2. Setup: prover prepares the group used to encrypt x
 //!
-//! type C = generic_ec_curves::Secp256r1;
+//! type C = generic_ec::curves::Secp256r1;
 //! let g = generic_ec::Point::<C>::generator();
 //!
 //! // 3. Setup: prover prepares all plain texts
@@ -615,15 +615,15 @@ mod test {
 
     #[test]
     fn passing_p256() {
-        passing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
+        passing_test::<generic_ec::curves::Secp256r1>()
     }
     #[test]
     fn failing_p256_add() {
-        failing_on_additive::<generic_ec_curves::rust_crypto::Secp256r1>()
+        failing_on_additive::<generic_ec::curves::Secp256r1>()
     }
     #[test]
     fn failing_p256_mul() {
-        failing_on_multiplicative::<generic_ec_curves::rust_crypto::Secp256r1>()
+        failing_on_multiplicative::<generic_ec::curves::Secp256r1>()
     }
 
     #[test]

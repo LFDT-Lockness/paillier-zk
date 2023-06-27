@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-generic-ec = { git = "https://github.com/dfns-labs/generic-ec", branch = "d" }
-generic-ec-core = { git = "https://github.com/dfns-labs/generic-ec", branch = "d" }
+generic-ec = { git = "https://github.com/dfns-labs/generic-ec", branch = "m" }
 rand_core = { version = "0.6", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 libpaillier = { version = "0.5", default-features = false }
@@ -22,7 +21,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 serde_with = { version = "3", default-features = false, features = ["macros"], optional = true }
 
 [dev-dependencies]
-generic-ec-curves = { git = "https://github.com/dfns-labs/generic-ec", branch = "d", features = ["secp256r1"] }
+generic-ec = { git = "https://github.com/dfns-labs/generic-ec", branch = "m", features = ["all-curves"] }
 rand_dev = { version = "0.1.0", default-features = false }
 
 [features]

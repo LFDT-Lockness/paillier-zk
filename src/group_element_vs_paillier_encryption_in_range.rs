@@ -49,7 +49,7 @@
 //!
 //! // 2. Setup: prover has some plaintext, encrypts it and computes X
 //!
-//! type C = generic_ec_curves::Secp256r1;
+//! type C = generic_ec::curves::Secp256r1;
 //! let g = generic_ec::Point::<C>::generator().into();
 //!
 //! let plaintext: BigNumber = 228.into();
@@ -458,11 +458,11 @@ mod test {
 
     #[test]
     fn passing_p256() {
-        passing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
+        passing_test::<generic_ec::curves::Secp256r1>()
     }
     #[test]
     fn failing_p256() {
-        failing_test::<generic_ec_curves::rust_crypto::Secp256r1>()
+        failing_test::<generic_ec::curves::Secp256r1>()
     }
 
     #[test]
