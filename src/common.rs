@@ -125,6 +125,7 @@ pub trait SafePaillierDecryptionExt {
 }
 
 impl SafePaillierEncryptionExt for libpaillier::EncryptionKey {
+    #[allow(clippy::disallowed_methods)]
     fn encrypt_with(
         &self,
         x: &BigNumber,
@@ -134,10 +135,19 @@ impl SafePaillierEncryptionExt for libpaillier::EncryptionKey {
         if !(-self.n() <= x_twice && &x_twice < self.n()) {
             return Err(PaillierError);
         }
-        #[allow(clippy::disallowed_methods)]
-        self.encrypt((x.nmod(self.n())).to_bytes(), Some(nonce.clone()))
-            .map(|(e, _)| e)
-            .ok_or(PaillierError)
+
+        let x = x.nmod(self.n());
+        if nonce.gcd(self.n()) != 1.into() {
+            return Err(PaillierError);
+        }
+
+        // a = (1 + N)^x mod N^2 = (1 + xN) mod N^2
+        let a = BigNumber::one().modadd(&(&x * self.n()), self.nn());
+        // b = nonce^N mod N^2
+        let b = nonce.modpow(self.n(), self.nn());
+
+        let c = a.modmul(&b, self.nn());
+        Ok(c)
     }
 
     fn encrypt_with_random<R: rand_core::RngCore>(
