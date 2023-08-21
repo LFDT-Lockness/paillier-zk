@@ -273,6 +273,7 @@ dependencies = [
  "bytemuck",
  "rand_core",
  "rug",
+ "serde",
  "thiserror",
 ]
 
@@ -640,6 +641,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
 ]
 
 [[package]]

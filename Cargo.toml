@@ -33,7 +33,7 @@ gmp = ["libpaillier/gmp"]
 #openssl = ["libpaillier/openssl"]
 rust = ["libpaillier/rust"]
 
-serde = ["dep:serde", "dep:serde_with", "generic-ec/serde"]
+serde = ["dep:serde", "dep:serde_with", "generic-ec/serde", "rug/serde", "fast-paillier/serde"]
 
 [profile.dev.package.num-bigint]
 opt-level = 3
