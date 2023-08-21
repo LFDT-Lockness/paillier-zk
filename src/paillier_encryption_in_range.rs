@@ -12,10 +12,10 @@
 
 //! ## Example
 //!
-//! ``` no_run
-//! # use rug::Integer;
+//! ```
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use paillier_zk::{paillier_encryption_in_range as p, IntegerExt};
+//! use rug::{Integer, Complete};
 //!
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
@@ -24,15 +24,22 @@
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
-//! let p = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! let q = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! let rsa_modulo = p * q;
-//! let (s, t) = // ring-pedersen parameters
-//! # (Integer::from(123), Integer::from(321));
+//! let (rsa_modulo, s, t) = {
+//!     // define ring-pedersen parameters
+//! # let p = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
+//! # let q = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
+//! # let rsa_modulo = p * q;
+//! # let (s, t) = (Integer::from(123), Integer::from(321));
 //! # assert_eq!(s.clone().gcd(&rsa_modulo), *Integer::ONE);
 //! # assert_eq!(t.clone().gcd(&rsa_modulo), *Integer::ONE);
-//!
+//! # (rsa_modulo, s, t)
+//! };
 //! let aux = p::Aux { s, t, rsa_modulo };
+//! let security = p::SecurityParams {
+//!     l: 1024,
+//!     epsilon: 128,
+//!     q: (Integer::ONE << 128_u32).into(),
+//! };
 //!
 //! // 1. Setup: prover prepares the paillier keys
 //!
@@ -42,16 +49,10 @@
 //!
 //! // 2. Setup: prover has some plaintext and encrypts it
 //!
-//! let plaintext = Integer::from_rng_pm(&key.half_n(), &mut rng);
+//! let plaintext = Integer::from_rng_pm(&(Integer::ONE << security.l).complete(), &mut rng);
 //! let (ciphertext, nonce) = key.encrypt_with_random(&mut rng, &plaintext)?;
 //!
 //! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
-//!
-//! let security = p::SecurityParams {
-//!     l: 1024,
-//!     epsilon: 128,
-//!     q: (Integer::ONE << 128_u32).into(),
-//! };
 //!
 //! let data = p::Data { key, ciphertext };
 //! let pdata = p::PrivateData { plaintext, nonce };
@@ -66,12 +67,12 @@
 //!
 //! // 4. Prover sends this data to verifier
 //!
-//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof) { todo!() }
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof) {  }
 //! send(&data, &commitment, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
-//! # fn recv() -> (p::Data, p::Commitment, p::Proof) { todo!() }
+//! # let recv = || (data, commitment, proof);
 //! let (data, commitment, proof) = recv();
 //! p::non_interactive::verify(
 //!     shared_state_verifier,
