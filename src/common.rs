@@ -1,7 +1,24 @@
 pub mod rng;
 pub mod sqrt;
 
+use generic_ec::Scalar;
+use rug::Integer;
+
 use crate::unknown_order::BigNumber;
+
+pub mod for_rug {
+    use rug::Integer;
+
+    /// Auxiliary data known to both prover and verifier
+    pub struct Aux {
+        /// ring-pedersen parameter
+        pub s: Integer,
+        /// ring-pedersen parameter
+        pub t: Integer,
+        /// N^ in paper
+        pub rsa_modulo: Integer,
+    }
+}
 
 /// Auxiliary data known to both prover and verifier
 pub struct Aux {
@@ -35,6 +52,10 @@ pub enum InvalidProofReason {
     /// Encryption of supplied data failed when attempting to verify
     #[error("encryption failed")]
     Encryption,
+    #[error("paillier encryption failed")]
+    PaillierEnc,
+    #[error("paillier homomorphic op failed")]
+    PaillierOp,
     /// Failed to evaluate powmod
     #[error("powmod failed")]
     ModPow,
@@ -207,8 +228,6 @@ impl SafePaillierDecryptionExt for libpaillier::DecryptionKey {
 }
 
 /// Error indicating that encryption failed
-///
-/// Returned by [SafePaillierExt] methods
 #[derive(Clone, Copy, Debug, thiserror::Error)]
 #[error("paillier encryption failed")]
 pub struct PaillierError;
@@ -221,7 +240,7 @@ pub trait BigNumberExt: Sized {
     fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent>;
 
     /// Embed BigInt into chosen scalar type
-    fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C>;
+    fn to_scalar<C: generic_ec::Curve>(&self) -> Scalar<C>;
 
     /// Returns prime order of curve C
     fn curve_order<C: generic_ec::Curve>() -> BigNumber;
@@ -253,16 +272,15 @@ impl BigNumberExt for BigNumber {
         Ok(l.powmod(le, self)?.modmul(&r.powmod(re, self)?, self))
     }
 
-    fn to_scalar<C: generic_ec::Curve>(&self) -> generic_ec::Scalar<C> {
+    fn to_scalar<C: generic_ec::Curve>(&self) -> Scalar<C> {
         if self >= &BigNumber::zero() {
-            generic_ec::Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
+            Scalar::<C>::from_be_bytes_mod_order(self.to_bytes())
         } else {
-            -generic_ec::Scalar::<C>::from_be_bytes_mod_order((-self).to_bytes())
+            -Scalar::<C>::from_be_bytes_mod_order((-self).to_bytes())
         }
     }
 
     fn curve_order<C: generic_ec::Curve>() -> BigNumber {
-        use generic_ec::Scalar;
         let n_minus_one = Scalar::<C>::zero() - Scalar::one();
         let bn = BigNumber::from_slice(n_minus_one.to_be_bytes());
         bn + 1
@@ -300,6 +318,72 @@ impl BigNumberExt for BigNumber {
     }
 }
 
+pub trait IntegerExt: Sized {
+    /// Generate element in Zm*. Does so by trial.
+    fn gen_inversible<R: rand_core::RngCore>(modulo: &Self, rng: &mut R) -> Self;
+
+    /// Compute l^le * r^re modulo self
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent>;
+
+    /// Embed BigInt into chosen scalar type
+    fn to_scalar<C: generic_ec::Curve>(&self) -> Scalar<C>;
+
+    /// Returns prime order of curve C
+    fn curve_order<C: generic_ec::Curve>() -> Self;
+
+    /// Generates a random integer in interval `[-range; range]`
+    fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self;
+
+    /// Checks whether `self` is in interval `[-range; range]`
+    fn is_in_pm(&self, range: &Self) -> bool;
+
+    /// Returns `self mod n`
+    fn modulo(&self, n: &Self) -> Self;
+}
+
+impl IntegerExt for Integer {
+    fn gen_inversible<R: rand_core::RngCore>(modulo: &Integer, rng: &mut R) -> Self {
+        fast_paillier::utils::sample_in_mult_group(rng, modulo)
+    }
+
+    fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent> {
+        let l_to_le: Integer = l.pow_mod_ref(le, self).ok_or(BadExponent)?.into();
+        let r_to_re: Integer = r.pow_mod_ref(re, self).ok_or(BadExponent)?.into();
+        Ok((l_to_le * r_to_re).modulo(self))
+    }
+
+    fn to_scalar<C: generic_ec::Curve>(&self) -> Scalar<C> {
+        let bytes_be = self.to_digits::<u8>(rug::integer::Order::Msf);
+        let s = Scalar::<C>::from_be_bytes_mod_order(&bytes_be);
+        if self.cmp0().is_ge() {
+            s
+        } else {
+            -s
+        }
+    }
+
+    fn curve_order<C: generic_ec::Curve>() -> Self {
+        let order_minus_one = -Scalar::<C>::one();
+        let i = Integer::from_digits(&order_minus_one.to_be_bytes(), rug::integer::Order::Msf);
+        i + 1
+    }
+
+    fn from_rng_pm<R: rand_core::RngCore>(range: &Self, rng: &mut R) -> Self {
+        let mut rng = fast_paillier::utils::external_rand(rng);
+        let range_twice = range.clone() << 1u32;
+        range_twice.random_below(&mut rng) - range
+    }
+
+    fn is_in_pm(&self, range: &Self) -> bool {
+        let minus_range = -range.clone();
+        minus_range <= *self && self <= range
+    }
+
+    fn modulo(&self, n: &Self) -> Self {
+        fast_paillier::utils::IntegerExt::modulo(self, n)
+    }
+}
+
 /// Error indicating that computation cannot be evaluated because of bad exponent
 ///
 /// Returned by [`BigNumberExt::powmod`] and other functions that do exponentiation internally
@@ -331,10 +415,11 @@ pub mod test {
 
     use libpaillier::unknown_order::BigNumber;
     use rand_dev::DevRng;
+    use rug::{Complete, Integer};
 
     use crate::SafePaillierEncryptionExt;
 
-    use super::{BigNumberExt, SafePaillierDecryptionExt};
+    use super::{BigNumberExt, IntegerExt, SafePaillierDecryptionExt};
 
     #[test]
     fn pailler_encryption_decryption() {
@@ -408,10 +493,38 @@ pub mod test {
         );
     }
 
+    #[test]
+    fn to_scalar_encoding() {
+        type E = generic_ec::curves::Secp256k1;
+
+        let bytes = [123u8, 231u8];
+        let int = u16::from_be_bytes(bytes);
+        let bn = rug::Integer::from(int);
+        let scalar = bn.to_scalar();
+        assert_eq!(scalar, generic_ec::Scalar::<E>::from(int));
+
+        assert_eq!(bn.to_digits::<u8>(rug::integer::Order::Msf), &bytes);
+
+        let curve_order = Integer::curve_order::<E>();
+        assert_eq!(curve_order.to_scalar(), generic_ec::Scalar::<E>::zero());
+        assert_eq!(
+            (curve_order - 1u8).to_scalar(),
+            -generic_ec::Scalar::<E>::one()
+        );
+    }
+
     pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
         let p = BigNumber::prime_from_rng(1024, rng);
         let q = BigNumber::prime_from_rng(1024, rng);
         libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
+    }
+
+    pub fn random_key_rug<R: rand_core::RngCore>(
+        rng: &mut R,
+    ) -> Option<fast_paillier::DecryptionKey> {
+        let p = fast_paillier::utils::generate_safe_prime(rng, 1024);
+        let q = fast_paillier::utils::generate_safe_prime(rng, 1024);
+        fast_paillier::DecryptionKey::from_primes(p, q).ok()
     }
 
     pub fn aux<R: rand_core::RngCore>(rng: &mut R) -> super::Aux {
@@ -423,5 +536,28 @@ pub mod test {
         assert_eq!(s.gcd(&rsa_modulo), 1.into());
         assert_eq!(t.gcd(&rsa_modulo), 1.into());
         super::Aux { s, t, rsa_modulo }
+    }
+
+    pub fn aux_rug<R: rand_core::RngCore>(rng: &mut R) -> super::for_rug::Aux {
+        let p = fast_paillier::utils::generate_safe_prime(rng, 1024);
+        let q = fast_paillier::utils::generate_safe_prime(rng, 1024);
+        let n = (&p * &q).complete();
+
+        let (s, t) = {
+            let phi_n = (p.clone() - 1u8) * (q.clone() - 1u8);
+            let r = Integer::gen_inversible(&n, rng);
+            let lambda = phi_n.random_below(&mut fast_paillier::utils::external_rand(rng));
+
+            let t = r.square().modulo(&n);
+            let s = t.pow_mod_ref(&lambda, &n).unwrap().into();
+
+            (s, t)
+        };
+
+        super::for_rug::Aux {
+            s,
+            t,
+            rsa_modulo: n,
+        }
     }
 }

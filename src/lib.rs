@@ -30,16 +30,16 @@ pub use libpaillier::unknown_order;
 
 use common::InvalidProofReason;
 pub use common::{
-    BadExponent, BigNumberExt, InvalidProof, PaillierError, SafePaillierDecryptionExt,
+    BadExponent, BigNumberExt, IntegerExt, InvalidProof, PaillierError, SafePaillierDecryptionExt,
     SafePaillierEncryptionExt,
 };
 
 /// Library general error type
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Error)]
 #[error(transparent)]
 pub struct Error(#[from] ErrorReason);
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Error)]
 enum ErrorReason {
     #[error("couldn't evaluate modpow")]
     ModPow,
@@ -47,6 +47,8 @@ enum ErrorReason {
     Encryption,
     #[error("can't find multiplicative inverse")]
     Invert,
+    #[error("paillier error")]
+    Paillier(#[source] fast_paillier::Error),
 }
 
 impl From<BadExponent> for Error {
@@ -58,5 +60,11 @@ impl From<BadExponent> for Error {
 impl From<PaillierError> for Error {
     fn from(_err: PaillierError) -> Self {
         Error(ErrorReason::Encryption)
+    }
+}
+
+impl From<fast_paillier::Error> for Error {
+    fn from(err: fast_paillier::Error) -> Self {
+        Self(ErrorReason::Paillier(err))
     }
 }
