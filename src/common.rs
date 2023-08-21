@@ -354,7 +354,7 @@ impl IntegerExt for Integer {
 
     fn to_scalar<C: generic_ec::Curve>(&self) -> Scalar<C> {
         let bytes_be = self.to_digits::<u8>(rug::integer::Order::Msf);
-        let s = Scalar::<C>::from_be_bytes_mod_order(&bytes_be);
+        let s = Scalar::<C>::from_be_bytes_mod_order(bytes_be);
         if self.cmp0().is_ge() {
             s
         } else {
