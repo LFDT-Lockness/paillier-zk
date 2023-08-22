@@ -293,11 +293,13 @@ pub mod non_interactive {
 mod test {
     use rug::{Complete, Integer};
 
+    use crate::common::test::{generate_blum_prime, generate_prime};
+
     #[test]
     fn passing() {
         let mut rng = rand_dev::DevRng::new();
-        let p = blum_prime(256, &mut rng);
-        let q = blum_prime(256, &mut rng);
+        let p = generate_blum_prime(&mut rng, 256);
+        let q = generate_blum_prime(&mut rng, 256);
         let n = (&p * &q).complete();
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
@@ -319,10 +321,10 @@ mod test {
     #[test]
     fn failing() {
         let mut rng = rand_dev::DevRng::new();
-        let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+        let p = generate_blum_prime(&mut rng, 256);
         let q = loop {
             // non blum prime
-            let q = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+            let q = generate_prime(&mut rng, 256);
             if q.mod_u(4) == 1 {
                 break q;
             }
@@ -341,15 +343,6 @@ mod test {
         let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
         if r.is_ok() {
             panic!("proof should not pass");
-        }
-    }
-
-    fn blum_prime<R: rand_core::RngCore>(s: u32, rng: &mut R) -> Integer {
-        loop {
-            let p = fast_paillier::utils::generate_safe_prime(rng, s);
-            if p.mod_u(4) == 3 {
-                break p;
-            }
         }
     }
 }

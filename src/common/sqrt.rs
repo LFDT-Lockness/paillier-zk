@@ -148,14 +148,15 @@ fn jacobi_inner(mult: isize, a: &Integer, n: &Integer) -> isize {
 mod test {
     use rug::Complete;
 
+    use crate::common::test::generate_blum_prime;
     use crate::IntegerExt;
 
     #[test]
     fn jacobi_and_sqrt() {
         let mut rng = rand_dev::DevRng::new();
         // Create a blum modulus for the calculations to make sense
-        let p = fast_paillier::utils::generate_safe_prime(&mut rng, 128);
-        let q = fast_paillier::utils::generate_safe_prime(&mut rng, 128);
+        let p = generate_blum_prime(&mut rng, 128);
+        let q = generate_blum_prime(&mut rng, 128);
         let n = (&p * &q).complete();
 
         for _ in 0..100 {

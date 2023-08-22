@@ -398,6 +398,7 @@ pub mod non_interactive {
 mod test {
     use rug::{Complete, Integer};
 
+    use crate::common::test::generate_blum_prime;
     use crate::common::InvalidProofReason;
 
     // If q > 2^epsilon, the proof will never pass. We can make l however small
@@ -406,8 +407,8 @@ mod test {
     #[test]
     fn passing() {
         let mut rng = rand_dev::DevRng::new();
-        let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
-        let q = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+        let p = generate_blum_prime(&mut rng, 256);
+        let q = generate_blum_prime(&mut rng, 256);
         let n = (&p * &q).complete();
         let n_root = n.sqrt_ref().complete();
         let data = super::Data {
@@ -440,8 +441,8 @@ mod test {
     #[test]
     fn failing() {
         let mut rng = rand_dev::DevRng::new();
-        let p = fast_paillier::utils::generate_safe_prime(&mut rng, 128);
-        let q = fast_paillier::utils::generate_safe_prime(&mut rng, 384);
+        let p = generate_blum_prime(&mut rng, 128);
+        let q = generate_blum_prime(&mut rng, 384);
         let n = (&p * &q).complete();
         let n_root = n.sqrt_ref().complete();
         let data = super::Data {

@@ -422,8 +422,82 @@ pub(crate) fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), 
     }
 }
 
-#[cfg(test)]
+/// A common logic shared across tests and doctests
+#[cfg(any(test, feature = "__internal_doctest"))]
 pub mod test {
+    use libpaillier::unknown_order::BigNumber;
+    use rug::{Complete, Integer};
+
+    use super::IntegerExt;
+
+    pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
+        let p = BigNumber::prime_from_rng(1024, rng);
+        let q = BigNumber::prime_from_rng(1024, rng);
+        libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
+    }
+
+    pub fn random_key_rug<R: rand_core::RngCore>(
+        rng: &mut R,
+    ) -> Option<fast_paillier::DecryptionKey> {
+        let p = generate_blum_prime(rng, 1024);
+        let q = generate_blum_prime(rng, 1024);
+        fast_paillier::DecryptionKey::from_primes(p, q).ok()
+    }
+
+    pub fn aux<R: rand_core::RngCore>(rng: &mut R) -> super::Aux {
+        let p = BigNumber::prime_from_rng(1024, rng);
+        let q = BigNumber::prime_from_rng(1024, rng);
+        let rsa_modulo = p * q;
+        let s: BigNumber = 123.into();
+        let t: BigNumber = 321.into();
+        assert_eq!(s.gcd(&rsa_modulo), 1.into());
+        assert_eq!(t.gcd(&rsa_modulo), 1.into());
+        super::Aux { s, t, rsa_modulo }
+    }
+
+    pub fn aux_rug<R: rand_core::RngCore>(rng: &mut R) -> super::for_rug::Aux {
+        let p = generate_blum_prime(rng, 1024);
+        let q = generate_blum_prime(rng, 1024);
+        let n = (&p * &q).complete();
+
+        let (s, t) = {
+            let phi_n = (p.clone() - 1u8) * (q.clone() - 1u8);
+            let r = Integer::gen_inversible(&n, rng);
+            let lambda = phi_n.random_below(&mut fast_paillier::utils::external_rand(rng));
+
+            let t = r.square().modulo(&n);
+            let s = t.pow_mod_ref(&lambda, &n).unwrap().into();
+
+            (s, t)
+        };
+
+        super::for_rug::Aux {
+            s,
+            t,
+            rsa_modulo: n,
+        }
+    }
+
+    pub fn generate_blum_prime(rng: &mut impl rand_core::RngCore, bits_size: u32) -> Integer {
+        loop {
+            let n = generate_prime(rng, bits_size);
+            if n.mod_u(4) == 3 {
+                break n;
+            }
+        }
+    }
+
+    pub fn generate_prime(rng: &mut impl rand_core::RngCore, bits_size: u32) -> Integer {
+        let mut n: Integer =
+            Integer::random_bits(bits_size, &mut fast_paillier::utils::external_rand(rng)).into();
+        n.set_bit(bits_size - 1, true);
+        n.next_prime_mut();
+        n
+    }
+}
+
+#[cfg(test)]
+mod _test {
     use std::iter;
 
     use libpaillier::unknown_order::BigNumber;
@@ -432,7 +506,7 @@ pub mod test {
 
     use crate::SafePaillierEncryptionExt;
 
-    use super::{BigNumberExt, IntegerExt, SafePaillierDecryptionExt};
+    use super::{test::random_key, BigNumberExt, IntegerExt, SafePaillierDecryptionExt};
 
     #[test]
     fn pailler_encryption_decryption() {
@@ -545,53 +619,5 @@ pub mod test {
         assert_eq!(Integer::from(1).signed_modulo(&n), 1);
         assert_eq!(Integer::from(2).signed_modulo(&n), -2);
         assert_eq!(Integer::from(3).signed_modulo(&n), -1);
-    }
-
-    pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
-        let p = BigNumber::prime_from_rng(1024, rng);
-        let q = BigNumber::prime_from_rng(1024, rng);
-        libpaillier::DecryptionKey::with_primes_unchecked(&p, &q)
-    }
-
-    pub fn random_key_rug<R: rand_core::RngCore>(
-        rng: &mut R,
-    ) -> Option<fast_paillier::DecryptionKey> {
-        let p = fast_paillier::utils::generate_safe_prime(rng, 1024);
-        let q = fast_paillier::utils::generate_safe_prime(rng, 1024);
-        fast_paillier::DecryptionKey::from_primes(p, q).ok()
-    }
-
-    pub fn aux<R: rand_core::RngCore>(rng: &mut R) -> super::Aux {
-        let p = BigNumber::prime_from_rng(1024, rng);
-        let q = BigNumber::prime_from_rng(1024, rng);
-        let rsa_modulo = p * q;
-        let s: BigNumber = 123.into();
-        let t: BigNumber = 321.into();
-        assert_eq!(s.gcd(&rsa_modulo), 1.into());
-        assert_eq!(t.gcd(&rsa_modulo), 1.into());
-        super::Aux { s, t, rsa_modulo }
-    }
-
-    pub fn aux_rug<R: rand_core::RngCore>(rng: &mut R) -> super::for_rug::Aux {
-        let p = fast_paillier::utils::generate_safe_prime(rng, 1024);
-        let q = fast_paillier::utils::generate_safe_prime(rng, 1024);
-        let n = (&p * &q).complete();
-
-        let (s, t) = {
-            let phi_n = (p.clone() - 1u8) * (q.clone() - 1u8);
-            let r = Integer::gen_inversible(&n, rng);
-            let lambda = phi_n.random_below(&mut fast_paillier::utils::external_rand(rng));
-
-            let t = r.square().modulo(&n);
-            let s = t.pow_mod_ref(&lambda, &n).unwrap().into();
-
-            (s, t)
-        };
-
-        super::for_rug::Aux {
-            s,
-            t,
-            rsa_modulo: n,
-        }
     }
 }
