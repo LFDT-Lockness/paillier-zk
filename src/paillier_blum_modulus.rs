@@ -6,88 +6,80 @@
 //! without disclosing p and q.
 //!
 //! ## Example
-//! 0. Prover P derives two Blum primes and makes a Paillier-Blum modulus
-//!     ``` no_run
-//!     # use paillier_zk::unknown_order::BigNumber;
-//!     fn blum_prime(s: usize) -> BigNumber {
-//!         let three = BigNumber::from(3);
-//!         loop {
-//!             let p = BigNumber::prime(s);
-//!             if &p % 4 == three {
-//!                 break p;
-//!             }
-//!         }
-//!     }
-//!     let p = blum_prime(256);
-//!     let q = blum_prime(256);
-//!     let n = &p * &q;
-//!     // Prover can then make a key from it
-//!     let pkey = libpaillier::DecryptionKey::with_primes_unchecked(&p, &q);
-//!     ```
-//! 1. P computes a non-interactive proof that `n` is a Paillier-Blum modulus:
-//!     ``` no_run
-//!     use paillier_zk::paillier_blum_modulus as p;
-//!     # use generic_ec::hash_to_curve::Tag;
-//!     # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     # let (n, p, q) = todo!();
-//!     # let shared_state = sha2::Sha256::default();
-//!     const TAG: Tag = Tag::new_unwrap("application name".as_bytes());
-//!     const SECURITY: usize = 33;
+//! ```
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use rug::{Integer, Complete};
+//! let mut rng = rand_core::OsRng;
 //!
-//!     let data = p::Data { n };
-//!     let pdata = p::PrivateData { p, q };
-//!     let mut rng = rand_core::OsRng::default();
+//! // 0. Prover P derives two Blum primes and makes a Paillier-Blum modulus
+//! let p = let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+//! let q = let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+//! let n = (&p * &q).complete();
 //!
-//!     let (commitment, proof) =
-//!         p::non_interactive::prove::<{SECURITY}, _, _>(
-//!             shared_state,
-//!             &data,
-//!             &pdata,
-//!             &mut rng,
-//!         )?;
-//!     # Ok(()) }
-//!     ```
-//! 2. P sends `data, commitment, proof` to the verifier V
-//! 3. V verifies the proof:
-//!     ``` no_run
-//!     # use generic_ec::hash_to_curve::Tag;
-//!     # use paillier_zk::paillier_blum_modulus as p;
-//!     # let (data, commitment, proof) = todo!();
-//!     # const SECURITY: usize = 33;
-//!     # let shared_state = sha2::Sha256::default();
-//!     p::non_interactive::verify::<{SECURITY}, _>(
-//!         shared_state,
+//! // 1. P computes a non-interactive proof that `n` is a Paillier-Blum modulus:
+//! use paillier_zk::paillier_blum_modulus as p;
+//!
+//! // Security parameter
+//! const SECURITY: usize = 33;
+//! // Verifier and prover share the same state
+//! let prover_shared_state = sha2::Sha256::default();
+//! let verifier_shared_state = sha2::Sha256::default();
+//!
+//! let data = p::Data { n };
+//! let pdata = p::PrivateData { p, q };
+//!
+//! let (commitment, proof) =
+//!     p::non_interactive::prove::<{SECURITY}, _, _>(
+//!         prover_shared_state,
 //!         &data,
-//!         &commitment,
-//!         &proof,
-//!     );
-//!     ```
-//! 4. If the verification succeeded, V can continue communication with P
+//!         &pdata,
+//!         &mut rng,
+//!     )?;
+//!
+//! // 2. P sends `data, commitment, proof` to the verifier V
+//!
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof<{SECURITY}>) { }
+//! send(&data, &commitment, &proof);
+//!
+//! // 3. V receives and verifies the proof:
+//!
+//! # let recv = || (data, commitment, proof);
+//! let (data, commitment, proof) = recv();
+//!
+//! p::non_interactive::verify::<{SECURITY}, _>(
+//!     verifier_shared_state,
+//!     &data,
+//!     &commitment,
+//!     &proof,
+//! )?;
+//! # Ok(()) }
+//! ```
+//! If the verification succeeded, V can continue communication with P
+
+use rug::Integer;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
-use crate::unknown_order::BigNumber;
 
 /// Public data that both parties know: the Paillier-Blum modulus
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Data {
-    pub n: BigNumber,
+    pub n: Integer,
 }
 
 /// Private data of prover
 #[derive(Clone)]
 pub struct PrivateData {
-    pub p: BigNumber,
-    pub q: BigNumber,
+    pub p: Integer,
+    pub q: Integer,
 }
 
 /// Prover's first message, obtained by [`interactive::commit`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
-    pub w: BigNumber,
+    pub w: Integer,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
@@ -96,17 +88,17 @@ pub struct Commitment {
 /// Consists of `M` singular challenges
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Challenge<const M: usize> {
-    pub ys: [BigNumber; M],
+    pub ys: [Integer; M],
 }
 
 /// A part of proof. Having enough of those guarantees security
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProofPoint {
-    pub x: BigNumber,
+    pub x: Integer,
     pub a: bool,
     pub b: bool,
-    pub z: BigNumber,
+    pub z: Integer,
 }
 
 /// The ZK proof. Computed by [`interactive::prove`] or
@@ -127,18 +119,17 @@ pub struct Proof<const M: usize> {
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
     use rand_core::RngCore;
+    use rug::{Complete, Integer};
 
-    use crate::common::sqrt::{blum_sqrt, find_residue, non_residue_in};
-    use crate::common::BigNumberExt;
-    use crate::unknown_order::BigNumber;
-    use crate::{Error, ErrorReason, InvalidProof, InvalidProofReason};
+    use crate::common::sqrt::{blum_sqrt, find_residue, sample_non_residue_in};
+    use crate::{Error, ErrorReason, IntegerExt, InvalidProof, InvalidProofReason};
 
     use super::{Challenge, Commitment, Data, PrivateData, Proof, ProofPoint};
 
     /// Create random commitment
-    pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: R) -> Commitment {
+    pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: &mut R) -> Commitment {
         Commitment {
-            w: non_residue_in(n, rng),
+            w: sample_non_residue_in(n, rng),
         }
     }
 
@@ -150,11 +141,11 @@ pub mod interactive {
         challenge: &Challenge<M>,
     ) -> Result<Proof<M>, Error> {
         let sqrt = |x| blum_sqrt(&x, p, q, n);
-        let phi = (p - 1) * (q - 1);
-        let n_inverse = n.invert(&phi).ok_or(ErrorReason::Invert)?;
+        let phi = (p - 1u8).complete() * (q - 1u8).complete();
+        let n_inverse = n.invert_ref(&phi).ok_or(ErrorReason::Invert)?.into();
 
         let points = challenge.ys.clone().map(|y| {
-            let z = y.powmod(&n_inverse, n).ok()?;
+            let z = y.pow_mod_ref(&n_inverse, n)?.into();
             let (a, b, y_) = find_residue(&y, w, p, q, n);
             let x = sqrt(sqrt(y_));
             Some(ProofPoint { x, a, b, z })
@@ -176,24 +167,36 @@ pub mod interactive {
         challenge: &Challenge<M>,
         proof: &Proof<M>,
     ) -> Result<(), InvalidProof> {
-        if data.n.is_prime() {
+        if data.n.is_probably_prime(25) != rug::integer::IsPrime::No {
             return Err(InvalidProofReason::ModulusIsPrime.into());
         }
-        if &data.n % BigNumber::from(2) == BigNumber::zero() {
+        if data.n.is_even() {
             return Err(InvalidProofReason::ModulusIsEven.into());
         }
         for (point, y) in proof.points.iter().zip(challenge.ys.iter()) {
-            if point.z.powmod(&data.n, &data.n)? != *y {
+            if Integer::from(
+                point
+                    .z
+                    .pow_mod_ref(&data.n, &data.n)
+                    .ok_or(InvalidProofReason::ModPow)?,
+            ) != *y
+            {
                 return Err(InvalidProofReason::IncorrectNthRoot.into());
             }
             let y = y.clone();
             let y = if point.a { &data.n - y } else { y };
             let y = if point.b {
-                y.modmul(&commitment.w, &data.n)
+                (y * &commitment.w).modulo(&data.n)
             } else {
                 y
             };
-            if point.x.powmod(&4.into(), &data.n)? != y {
+            if Integer::from(
+                point
+                    .x
+                    .pow_mod_ref(&4.into(), &data.n)
+                    .ok_or(InvalidProofReason::ModPow)?,
+            ) != y
+            {
                 return Err(InvalidProofReason::IncorrectFourthRoot.into());
             }
         }
@@ -207,7 +210,10 @@ pub mod interactive {
         Data { ref n }: &Data,
         rng: &mut R,
     ) -> Challenge<M> {
-        let ys = [(); M].map(|()| BigNumber::from_rng(n, rng));
+        let ys = [(); M].map(|()| {
+            n.random_below_ref(&mut fast_paillier::utils::external_rand(rng))
+                .into()
+        });
         Challenge { ys }
     }
 }
@@ -218,7 +224,6 @@ pub mod non_interactive {
     use rand_core::RngCore;
     use sha2::{digest::typenum::U32, Digest};
 
-    use crate::unknown_order::BigNumber;
     use crate::{Error, InvalidProof};
 
     use super::{Challenge, Commitment, Data, PrivateData, Proof};
@@ -231,7 +236,7 @@ pub mod non_interactive {
         shared_state: D,
         data: &Data,
         pdata: &PrivateData,
-        rng: R,
+        rng: &mut R,
     ) -> Result<(Commitment, Proof<M>), Error>
     where
         D: Digest<OutputSize = U32> + Clone,
@@ -267,29 +272,33 @@ pub mod non_interactive {
     {
         let shared_state = shared_state.finalize();
         let hash = |d: D| {
+            let order = rug::integer::Order::Msf;
             d.chain_update(&shared_state)
-                .chain_update(n.to_bytes())
-                .chain_update(commitment.w.to_bytes())
+                .chain_update(n.to_digits::<u8>(order))
+                .chain_update(commitment.w.to_digits::<u8>(order))
                 .finalize()
         };
         let mut rng = crate::common::rng::HashRng::new(hash);
-        // since we can't use Default and BigNumber isn't copy, we initialize
+        // since we can't use Default and Integer isn't copy, we initialize
         // like this
-        let ys = [(); M].map(|()| BigNumber::from_rng(n, &mut rng));
+        let ys = [(); M].map(|()| {
+            n.random_below_ref(&mut fast_paillier::utils::external_rand(&mut rng))
+                .into()
+        });
         Challenge { ys }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::unknown_order::BigNumber;
+    use rug::{Complete, Integer};
 
     #[test]
     fn passing() {
         let mut rng = rand_dev::DevRng::new();
         let p = blum_prime(256, &mut rng);
         let q = blum_prime(256, &mut rng);
-        let n = &p * &q;
+        let n = (&p * &q).complete();
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
         let shared_state = sha2::Sha256::default();
@@ -310,15 +319,15 @@ mod test {
     #[test]
     fn failing() {
         let mut rng = rand_dev::DevRng::new();
-        let p = BigNumber::prime_from_rng(256, &mut rng);
+        let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
         let q = loop {
             // non blum prime
-            let q = BigNumber::prime_from_rng(256, &mut rng);
-            if &q % 4 == BigNumber::one() {
+            let q = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+            if q.mod_u(4) == 1 {
                 break q;
             }
         };
-        let n = &p * &q;
+        let n = (&p * &q).complete();
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
         let shared_state = sha2::Sha256::default();
@@ -335,11 +344,10 @@ mod test {
         }
     }
 
-    fn blum_prime<R: rand_core::RngCore>(s: usize, rng: &mut R) -> BigNumber {
-        let three = BigNumber::from(3);
+    fn blum_prime<R: rand_core::RngCore>(s: u32, rng: &mut R) -> Integer {
         loop {
-            let p = BigNumber::prime_from_rng(s, rng);
-            if &p % 4 == three {
+            let p = fast_paillier::utils::generate_safe_prime(rng, s);
+            if p.mod_u(4) == 3 {
                 break p;
             }
         }
