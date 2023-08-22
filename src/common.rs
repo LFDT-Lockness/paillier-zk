@@ -2,7 +2,7 @@ pub mod rng;
 pub mod sqrt;
 
 use generic_ec::Scalar;
-use rug::Integer;
+use rug::{Complete, Integer};
 
 use crate::unknown_order::BigNumber;
 
@@ -339,6 +339,9 @@ pub trait IntegerExt: Sized {
 
     /// Returns `self mod n`
     fn modulo(&self, n: &Self) -> Self;
+
+    /// Returns `self smod n` in `{-n/2, .., n/2}`
+    fn signed_modulo(&self, n: &Self) -> Self;
 }
 
 impl IntegerExt for Integer {
@@ -381,6 +384,16 @@ impl IntegerExt for Integer {
 
     fn modulo(&self, n: &Self) -> Self {
         fast_paillier::utils::IntegerExt::modulo(self, n)
+    }
+
+    fn signed_modulo(&self, n: &Self) -> Self {
+        let self_mod_n = self.modulo(n);
+        let half_n = (n >> 1_u32).complete();
+        if half_n.is_odd() && self_mod_n <= half_n || self_mod_n < half_n {
+            self_mod_n
+        } else {
+            self_mod_n - n
+        }
     }
 }
 
@@ -511,6 +524,27 @@ pub mod test {
             (curve_order - 1u8).to_scalar(),
             -generic_ec::Scalar::<E>::one()
         );
+    }
+
+    #[test]
+    fn signed_modulo() {
+        let n = Integer::from(7);
+
+        assert_eq!(Integer::from(0).signed_modulo(&n), 0);
+        assert_eq!(Integer::from(1).signed_modulo(&n), 1);
+        assert_eq!(Integer::from(2).signed_modulo(&n), 2);
+        assert_eq!(Integer::from(3).signed_modulo(&n), 3);
+        assert_eq!(Integer::from(4).signed_modulo(&n), -3);
+        assert_eq!(Integer::from(5).signed_modulo(&n), -2);
+        assert_eq!(Integer::from(6).signed_modulo(&n), -1);
+        assert_eq!(Integer::from(7).signed_modulo(&n), 0);
+        assert_eq!(Integer::from(8).signed_modulo(&n), 1);
+
+        let n = Integer::from(4);
+        assert_eq!(Integer::from(0).signed_modulo(&n), 0);
+        assert_eq!(Integer::from(1).signed_modulo(&n), 1);
+        assert_eq!(Integer::from(2).signed_modulo(&n), -2);
+        assert_eq!(Integer::from(3).signed_modulo(&n), -1);
     }
 
     pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<libpaillier::DecryptionKey> {
