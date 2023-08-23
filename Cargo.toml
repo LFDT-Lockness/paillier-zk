@@ -8,14 +8,9 @@ edition = "2021"
 [dependencies]
 generic-ec = { git = "https://github.com/dfns-labs/generic-ec", branch = "m" }
 rand_core = { version = "0.6", default-features = false }
-rand_chacha = { version = "0.3", default-features = false }
-libpaillier = { version = "0.5", default-features = false } # TODO: delete
-sha2 = { version = "0.10", default-features = false }
+digest = "0.10"
 fast-paillier = { git = "https://github.com/dfns-labs/fast-paillier", branch = "m" }
 rug = { version = "1.20", default-features = false, features = ["integer", "rand"] }
-
-subtle = { version = "2.4", default-features = false }
-zeroize = { version = "1.5", default-features = false }
 
 thiserror = "1"
 
@@ -25,17 +20,11 @@ serde_with = { version = "3", default-features = false, features = ["macros"], o
 [dev-dependencies]
 generic-ec = { git = "https://github.com/dfns-labs/generic-ec", branch = "m", features = ["all-curves"] }
 rand_dev = { version = "0.1.0", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+
+subtle = { version = "2.4", default-features = false }
+zeroize = { version = "1.5", default-features = false }
 
 [features]
-default = ["rust"]
-gmp = ["libpaillier/gmp"]
-# openssl random generation doesn't respect the rng supplied from rust, and so shouldn't be used
-#openssl = ["libpaillier/openssl"]
-rust = ["libpaillier/rust"]
-
+default = []
 serde = ["dep:serde", "dep:serde_with", "generic-ec/serde", "rug/serde", "fast-paillier/serde"]
-
-[profile.dev.package.num-bigint]
-opt-level = 3
-[profile.dev.package.glass_pumpkin]
-opt-level = 3

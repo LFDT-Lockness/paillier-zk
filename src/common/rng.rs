@@ -1,5 +1,4 @@
-use sha2::digest;
-use sha2::digest::Digest;
+use digest::Digest;
 
 /// Pseudo-random generateur that obtains values by hashing the provided values
 /// salted with an internal counter. The counter is prepended to conserve

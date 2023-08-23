@@ -299,8 +299,8 @@ pub mod interactive {
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
+    use digest::{typenum::U32, Digest};
     use rand_core::RngCore;
-    use sha2::{digest::typenum::U32, Digest};
 
     use crate::{Error, InvalidProof};
 

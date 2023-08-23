@@ -303,8 +303,8 @@ pub mod interactive {
 
 /// Non-interactive version of the proof
 pub mod non_interactive {
+    use digest::{typenum::U32, Digest};
     use rand_core::RngCore;
-    use sha2::{digest::typenum::U32, Digest};
 
     pub use crate::{Error, InvalidProof};
 
