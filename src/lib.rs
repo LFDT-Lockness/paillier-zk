@@ -14,6 +14,7 @@ mod curve;
 
 use common::InvalidProofReason;
 pub use common::{BadExponent, IntegerExt, InvalidProof, PaillierError};
+pub use {fast_paillier, rug, rug::Integer};
 
 /// Library general error type
 #[derive(Debug, Error)]
