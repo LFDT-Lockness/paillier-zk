@@ -28,7 +28,9 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Run tests
-      run: cargo test --release
+      run: cargo test --release --lib
+    - name: Run doc tests
+      run: echo "doc tests are TBD" && exit 1
     - name: Check formatting
       run: cargo fmt --all -- --check
     - name: Run clippy
