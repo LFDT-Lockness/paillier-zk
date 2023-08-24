@@ -86,7 +86,7 @@ use serde::{Deserialize, Serialize};
 
 use rug::Integer;
 
-pub use crate::common::{for_rug::Aux, InvalidProof};
+pub use crate::common::{Aux, InvalidProof};
 
 /// Security parameters for proof. Choosing the values is a tradeoff between
 /// speed and chance of rejecting a valid proof or accepting an invalid proof
@@ -420,7 +420,7 @@ mod test {
             epsilon: 128,
             q: (Integer::ONE << 128_u32).complete(),
         };
-        let aux = crate::common::test::aux_rug(&mut rng);
+        let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
         let proof = super::non_interactive::prove(
             shared_state.clone(),
@@ -454,7 +454,7 @@ mod test {
             epsilon: 128,
             q: (Integer::ONE << 128_u32).complete(),
         };
-        let aux = crate::common::test::aux_rug(&mut rng);
+        let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
         let proof = super::non_interactive::prove(
             shared_state.clone(),

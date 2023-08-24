@@ -4,18 +4,14 @@ pub mod sqrt;
 use generic_ec::Scalar;
 use rug::{Complete, Integer};
 
-pub mod for_rug {
-    use rug::Integer;
-
-    /// Auxiliary data known to both prover and verifier
-    pub struct Aux {
-        /// ring-pedersen parameter
-        pub s: Integer,
-        /// ring-pedersen parameter
-        pub t: Integer,
-        /// N^ in paper
-        pub rsa_modulo: Integer,
-    }
+/// Auxiliary data known to both prover and verifier
+pub struct Aux {
+    /// ring-pedersen parameter
+    pub s: Integer,
+    /// ring-pedersen parameter
+    pub t: Integer,
+    /// N^ in paper
+    pub rsa_modulo: Integer,
 }
 
 /// Error indicating that proof is invalid
@@ -190,21 +186,19 @@ pub fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), E> {
 }
 
 /// A common logic shared across tests and doctests
-#[cfg(any(test, feature = "__internal_doctest"))]
+#[cfg(test)]
 pub mod test {
     use rug::{Complete, Integer};
 
     use super::IntegerExt;
 
-    pub fn random_key_rug<R: rand_core::RngCore>(
-        rng: &mut R,
-    ) -> Option<fast_paillier::DecryptionKey> {
+    pub fn random_key<R: rand_core::RngCore>(rng: &mut R) -> Option<fast_paillier::DecryptionKey> {
         let p = generate_blum_prime(rng, 1024);
         let q = generate_blum_prime(rng, 1024);
         fast_paillier::DecryptionKey::from_primes(p, q).ok()
     }
 
-    pub fn aux_rug<R: rand_core::RngCore>(rng: &mut R) -> super::for_rug::Aux {
+    pub fn aux<R: rand_core::RngCore>(rng: &mut R) -> super::Aux {
         let p = generate_blum_prime(rng, 1024);
         let q = generate_blum_prime(rng, 1024);
         let n = (&p * &q).complete();
@@ -220,7 +214,7 @@ pub mod test {
             (s, t)
         };
 
-        super::for_rug::Aux {
+        super::Aux {
             s,
             t,
             rsa_modulo: n,

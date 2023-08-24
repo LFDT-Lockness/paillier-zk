@@ -93,7 +93,7 @@ use rug::Integer;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use crate::common::for_rug::Aux;
+pub use crate::common::Aux;
 pub use crate::common::InvalidProof;
 
 /// Security parameters for proof. Choosing the values is a tradeoff between
@@ -384,8 +384,8 @@ mod test {
         security: super::SecurityParams,
         plaintext: Integer,
     ) -> Result<(), crate::common::InvalidProof> {
-        let aux = crate::common::test::aux_rug(&mut rng);
-        let private_key = crate::common::test::random_key_rug(&mut rng).unwrap();
+        let aux = crate::common::test::aux(&mut rng);
+        let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = private_key.encryption_key();
         let (ciphertext, nonce) = key.encrypt_with_random(&mut rng, &plaintext).unwrap();
         let data = super::Data { key, ciphertext };

@@ -105,7 +105,7 @@ use rug::Integer;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use crate::common::for_rug::Aux;
+pub use crate::common::Aux;
 
 /// Security parameters for proof. Choosing the values is a tradeoff between
 /// speed and chance of rejecting a valid proof or accepting an invalid proof
@@ -395,7 +395,7 @@ mod test {
     use generic_ec::{hash_to_curve::FromHash, Curve, Point, Scalar};
     use rug::{Complete, Integer};
 
-    use crate::common::test::random_key_rug;
+    use crate::common::test::random_key;
     use crate::common::{IntegerExt, InvalidProofReason};
 
     fn run<R: rand_core::RngCore + rand_core::CryptoRng, C: Curve>(
@@ -406,7 +406,7 @@ mod test {
     where
         Scalar<C>: FromHash,
     {
-        let private_key0 = random_key_rug(&mut rng).unwrap();
+        let private_key0 = random_key(&mut rng).unwrap();
         let key0 = private_key0.encryption_key();
 
         let (ciphertext, nonce) = key0.encrypt_with_random(&mut rng, &plaintext).unwrap();
@@ -424,7 +424,7 @@ mod test {
             nonce,
         };
 
-        let aux = crate::common::test::aux_rug(&mut rng);
+        let aux = crate::common::test::aux(&mut rng);
 
         let shared_state = sha2::Sha256::default();
 
