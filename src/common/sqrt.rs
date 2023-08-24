@@ -81,7 +81,7 @@ pub fn sample_non_residue_in<R: RngCore>(n: &Integer, rng: &mut R) -> Integer {
 #[inline(always)]
 pub fn jacobi(a: &Integer, n: &Integer) -> isize {
     // Validate inputs
-    if !(n.is_odd() && *n >= Integer::from(3) && Integer::ZERO <= *a && a < n) {
+    if !(n.is_odd() && *n >= 3 && Integer::ZERO <= *a && a < n) {
         debug_assert!(false, "invalid inputs: a = {a}, n = {n}");
         return 0;
     }
@@ -109,7 +109,7 @@ fn jacobi_inner(mult: isize, a: &Integer, n: &Integer) -> isize {
     let mut e = 0_u32;
     while a1.is_even() {
         e += 1;
-        a1 = a1 >> 1;
+        a1 >>= 1;
     }
     debug_assert_eq!(*a, (&a1 << e).complete());
 
