@@ -25,6 +25,16 @@ sha2 = { version = "0.10", default-features = false }
 subtle = { version = "2.4", default-features = false }
 zeroize = { version = "1.5", default-features = false }
 
+anyhow = "1"
+serde_json = "1"
+
 [features]
 default = []
 serde = ["dep:serde", "dep:serde_with", "generic-ec/serde", "rug/serde", "fast-paillier/serde"]
+
+# This features is exlusively used for `cargo test --doc`
+__internal_doctest = ["serde"]
+
+[[example]]
+name = "pregenerate"
+required-features = ["serde"]

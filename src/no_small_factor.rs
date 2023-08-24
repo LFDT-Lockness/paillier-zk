@@ -10,11 +10,17 @@
 //!
 //! ## Example
 //!
-//! ```no_run
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! ```rust
 //! use rug::{Integer, Complete};
 //! use paillier_zk::no_small_factor::non_interactive as p;
+//! # mod pregenerated {
+//! #     use super::*;
+//! #     paillier_zk::load_pregenerated_data!(
+//! #         verifier_aux: p::Aux,
+//! #     );
+//! # }
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
 //! let mut rng = rand_core::OsRng;
@@ -22,17 +28,7 @@
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters, and
 //! // agree on the level of security
 //!
-//! let (rsa_modulo, s, t) = {
-//!     // define ring-pedersen parameters
-//! # let p = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! # let q = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! # let rsa_modulo = p * q;
-//! # let (s, t) = (Integer::from(123), Integer::from(321));
-//! # assert_eq!(s.clone().gcd(&rsa_modulo), *Integer::ONE);
-//! # assert_eq!(t.clone().gcd(&rsa_modulo), *Integer::ONE);
-//! # (rsa_modulo, s, t)
-//! };
-//! let aux = p::Aux { s, t, rsa_modulo };
+//! let aux: p::Aux = pregenerated::verifier_aux();
 //! let security = p::SecurityParams {
 //!     l: 4,
 //!     epsilon: 128,
@@ -75,7 +71,7 @@
 //!     n: &n,
 //!     n_root: &n_root,
 //! };
-//! p::verify(shared_state_verifier, &aux, data, &security, &proof);
+//! p::verify(shared_state_verifier, &aux, data, &security, &proof)?;
 //! # Ok(()) }
 //! ```
 //!

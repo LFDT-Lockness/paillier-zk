@@ -5,6 +5,8 @@ use generic_ec::Scalar;
 use rug::{Complete, Integer};
 
 /// Auxiliary data known to both prover and verifier
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct Aux {
     /// ring-pedersen parameter
     pub s: Integer,

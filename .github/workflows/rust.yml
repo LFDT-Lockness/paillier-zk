@@ -30,7 +30,7 @@ jobs:
     - name: Run tests
       run: cargo test --release --lib
     - name: Run doc tests
-      run: echo "doc tests are TBD" && exit 1
+      run: cargo test --doc --features __internal_doctest
     - name: Check formatting
       run: cargo fmt --all -- --check
     - name: Run clippy

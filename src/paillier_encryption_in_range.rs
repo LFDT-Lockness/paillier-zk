@@ -13,9 +13,16 @@
 //! ## Example
 //!
 //! ```
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use paillier_zk::{paillier_encryption_in_range as p, IntegerExt};
 //! use rug::{Integer, Complete};
+//! # mod pregenerated {
+//! #     use super::*;
+//! #     paillier_zk::load_pregenerated_data!(
+//! #         verifier_aux: p::Aux,
+//! #         prover_decryption_key: fast_paillier::DecryptionKey,
+//! #     );
+//! # }
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
@@ -24,17 +31,7 @@
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
-//! let (rsa_modulo, s, t) = {
-//!     // define ring-pedersen parameters
-//! # let p = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! # let q = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! # let rsa_modulo = p * q;
-//! # let (s, t) = (Integer::from(123), Integer::from(321));
-//! # assert_eq!(s.clone().gcd(&rsa_modulo), *Integer::ONE);
-//! # assert_eq!(t.clone().gcd(&rsa_modulo), *Integer::ONE);
-//! # (rsa_modulo, s, t)
-//! };
-//! let aux = p::Aux { s, t, rsa_modulo };
+//! let aux: p::Aux = pregenerated::verifier_aux();
 //! let security = p::SecurityParams {
 //!     l: 1024,
 //!     epsilon: 128,
@@ -44,7 +41,7 @@
 //! // 1. Setup: prover prepares the paillier keys
 //!
 //! let private_key: fast_paillier::DecryptionKey =
-//!     fast_paillier::DecryptionKey::generate(&mut rng)?;
+//!     pregenerated::prover_decryption_key();
 //! let key = private_key.encryption_key();
 //!
 //! // 2. Setup: prover has some plaintext and encrypts it

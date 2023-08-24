@@ -29,11 +29,19 @@
 //! ## Example
 //!
 //! ```rust
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use paillier_zk::{paillier_affine_operation_in_range as p, IntegerExt};
 //! use rug::{Integer, Complete};
 //! use generic_ec::{Point, curves::Secp256k1 as E};
+//! # mod pregenerated {
+//! #     use super::*;
+//! #     paillier_zk::load_pregenerated_data!(
+//! #         verifier_aux: p::Aux,
+//! #         someone_encryption_key0: fast_paillier::EncryptionKey,
+//! #         someone_encryption_key1: fast_paillier::EncryptionKey,
+//! #     );
+//! # }
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Prover and verifier have a shared protocol state
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
@@ -42,17 +50,7 @@
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
-//! let (rsa_modulo, s, t) = {
-//!     // define ring-pedersen parameters
-//! # let p = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! # let q = fast_paillier::utils::generate_safe_prime(&mut rng, 1024);
-//! # let rsa_modulo = p * q;
-//! # let (s, t) = (Integer::from(123), Integer::from(321));
-//! # assert_eq!(s.clone().gcd(&rsa_modulo), *Integer::ONE);
-//! # assert_eq!(t.clone().gcd(&rsa_modulo), *Integer::ONE);
-//! # (rsa_modulo, s, t)
-//! };
-//! let aux = p::Aux { s, t, rsa_modulo };
+//! let aux: p::Aux = pregenerated::verifier_aux();
 //! let security = p::SecurityParams {
 //!     l_x: 256,
 //!     l_y: 848,
@@ -62,19 +60,17 @@
 //!
 //! // 1. Setup: prover prepares the paillier keys
 //!
-//! // this key is used to decrypt C and D, and also Y in the affine operation
-//! let private_key0: fast_paillier::DecryptionKey =
-//!     fast_paillier::DecryptionKey::generate(&mut rng)?;
-//! let key0 = private_key0.encryption_key();
-//! // this key is used to decrypt Y in this ZK-protocol
-//! let private_key1: fast_paillier::DecryptionKey =
-//!     fast_paillier::DecryptionKey::generate(&mut rng)?;
-//! let key1 = private_key1.encryption_key();
+//! // C and D are encrypted by this key
+//! let key0: fast_paillier::EncryptionKey = pregenerated::someone_encryption_key0();
+//! // Y is encrypted using this key
+//! let key1: fast_paillier::EncryptionKey = pregenerated::someone_encryption_key1();
+//!
+//! // C is some number encrypted using key0. Neither of parties
+//! // need to know the plaintext
+//! let ciphertext_c = Integer::gen_inversible(&key0.nn(), &mut rng);
 //!
 //! // 2. Setup: prover prepares all plaintexts
 //!
-//! // C in paper
-//! let ciphertext_c = Integer::gen_inversible(&key0.nn(), &mut rng);
 //! // x in paper
 //! let plaintext_x = Integer::from_rng_pm(
 //!     &(Integer::ONE << security.l_x).complete(),
@@ -151,7 +147,7 @@
 //!     &commitment,
 //!     &security,
 //!     &proof,
-//! );
+//! )?;
 //! #
 //! # Ok(()) }
 //! ```

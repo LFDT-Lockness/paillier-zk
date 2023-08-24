@@ -6,14 +6,14 @@
 //! without disclosing p and q.
 //!
 //! ## Example
-//! ```
+//! ```rust
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use rug::{Integer, Complete};
 //! let mut rng = rand_core::OsRng;
 //!
 //! // 0. Prover P derives two Blum primes and makes a Paillier-Blum modulus
-//! let p = let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
-//! let q = let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+//! let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+//! let q = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
 //! let n = (&p * &q).complete();
 //!
 //! // 1. P computes a non-interactive proof that `n` is a Paillier-Blum modulus:
