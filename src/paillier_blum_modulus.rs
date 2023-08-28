@@ -140,22 +140,26 @@ pub mod interactive {
         Commitment { ref w }: &Commitment,
         challenge: &Challenge<M>,
     ) -> Result<Proof<M>, Error> {
-        let sqrt = |x| blum_sqrt(&x, p, q, n);
+        let blum_sqrt = |x| blum_sqrt(&x, p, q, n);
         let phi = (p - 1u8).complete() * (q - 1u8).complete();
         let n_inverse = n.invert_ref(&phi).ok_or(ErrorReason::Invert)?.into();
 
-        let points = challenge.ys.clone().map(|y| {
-            let z = y.pow_mod_ref(&n_inverse, n)?.into();
-            let (a, b, y_) = find_residue(&y, w, p, q, n);
-            let x = sqrt(sqrt(y_));
-            Some(ProofPoint { x, a, b, z })
-        });
-        if points.iter().any(Option::is_none) {
-            return Err(ErrorReason::ModPow.into());
-        }
-        // we checked that all points are `Some(_)`. Have to do this trick as array::try_map is
-        // not yet in stable
-        let points = points.map(Option::unwrap);
+        // We do an extra allocation as workaround while `array::try_map` is not stable
+        let points = challenge
+            .ys
+            .iter()
+            .map(|y| {
+                let z = y
+                    .pow_mod_ref(&n_inverse, n)
+                    .ok_or(ErrorReason::ModPow)?
+                    .into();
+                let (a, b, y_) = find_residue(y, w, p, q, n).ok_or(ErrorReason::FindResidue)?;
+                let x = blum_sqrt(blum_sqrt(y_));
+                Ok(ProofPoint { x, a, b, z })
+            })
+            .collect::<Result<Vec<_>, ErrorReason>>()?
+            .try_into()
+            .map_err(|_| ErrorReason::Length)?;
         Ok(Proof { points })
     }
 

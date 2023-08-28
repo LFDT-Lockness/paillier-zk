@@ -31,12 +31,16 @@ pub struct Error(#[from] ErrorReason);
 enum ErrorReason {
     #[error("couldn't evaluate modpow")]
     ModPow,
+    #[error("couldn't find residue")]
+    FindResidue,
     #[error("couldn't encrypt a message")]
     Encryption,
     #[error("can't find multiplicative inverse")]
     Invert,
     #[error("paillier error")]
     Paillier(#[source] fast_paillier::Error),
+    #[error("bug: vec has unexpected length")]
+    Length,
 }
 
 impl From<BadExponent> for Error {

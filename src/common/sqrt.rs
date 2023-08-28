@@ -30,31 +30,31 @@ pub fn blum_sqrt(x: &Integer, p: &Integer, q: &Integer, n: &Integer) -> Integer 
 /// - `n = pq`, p and q are Blum primes
 /// - `jacobi(w, n) = -1`, that is w is quadratic non-residue in Zn with jacobi
 /// symbol of -1
-/// If these don't hold, the y' might not exist. In this case, returns `y' = 0`
+/// If these don't hold, the y' might not exist. In this case, returns `None`
 pub fn find_residue(
     y: &Integer,
     w: &Integer,
     p: &Integer,
     q: &Integer,
     n: &Integer,
-) -> (bool, bool, Integer) {
-    for (a, b) in TWO_BOOLS {
-        let y = if b {
-            (w * y).complete().modulo(n)
-        } else {
-            y.clone()
-        };
-        let y = if a { n - y } else { y };
-        let jp = jacobi(&y.modulo(p), p);
-        let jq = jacobi(&y.modulo(q), q);
-        if jp == 1 && jq == 1 {
-            return (a, b, y);
-        }
+) -> Option<(bool, bool, Integer)> {
+    let jp = jacobi(&y.modulo(p), p);
+    let jq = jacobi(&y.modulo(q), q);
+    match (jp, jq) {
+        (1, 1) => return Some((false, false, y.clone())),
+        (-1, -1) => return Some((true, false, (n - y).complete())),
+        _ => (),
     }
-    (false, false, Integer::ZERO)
-}
 
-const TWO_BOOLS: [(bool, bool); 4] = [(false, false), (true, false), (false, true), (true, true)];
+    let y = (y * w).complete().modulo(n);
+    let jp = jacobi(&y.modulo(p), p);
+    let jq = jacobi(&y.modulo(q), q);
+    match (jp, jq) {
+        (1, 1) => Some((false, true, y)),
+        (-1, -1) => Some((true, true, n - y)),
+        _ => None,
+    }
+}
 
 /// Find a quadratic non-residue in Zn. Does so by generating a random number
 /// and checking its jacobi symbol. The return value is guaranteed to have
