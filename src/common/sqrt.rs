@@ -38,8 +38,8 @@ pub fn find_residue(
     q: &Integer,
     n: &Integer,
 ) -> Option<(bool, bool, Integer)> {
-    let jp = jacobi(&y.modulo(p), p);
-    let jq = jacobi(&y.modulo(q), q);
+    let jp = y.modulo(p).jacobi(p);
+    let jq = y.modulo(q).jacobi(q);
     match (jp, jq) {
         (1, 1) => return Some((false, false, y.clone())),
         (-1, -1) => return Some((true, false, (n - y).complete())),
@@ -47,8 +47,8 @@ pub fn find_residue(
     }
 
     let y = (y * w).complete().modulo(n);
-    let jp = jacobi(&y.modulo(p), p);
-    let jq = jacobi(&y.modulo(q), q);
+    let jp = y.modulo(p).jacobi(p);
+    let jq = y.modulo(q).jacobi(q);
     match (jp, jq) {
         (1, 1) => Some((false, true, y)),
         (-1, -1) => Some((true, true, n - y)),
@@ -64,118 +64,8 @@ pub fn sample_non_residue_in<R: RngCore>(n: &Integer, rng: &mut R) -> Integer {
         let w = n
             .clone()
             .random_below(&mut fast_paillier::utils::external_rand(rng));
-        if jacobi(&w, n) == -1 {
+        if w.jacobi(n) == -1 {
             break w;
-        }
-    }
-}
-
-/// Compute jacobi symbol of a over n
-///
-/// Requires odd `n >= 3`, and `0 <= a < n`. If it doesn't hold, function panics if debug asserts are enabled,
-/// or returns 0 otherwise.
-///
-/// Implementation is taken from [Handbook of Applied cryptography][book], p. 73, Algorithm 2.149
-///
-/// [book]: https://cacr.uwaterloo.ca/hac/about/chap2.pdf
-#[inline(always)]
-pub fn jacobi(a: &Integer, n: &Integer) -> isize {
-    // Validate inputs
-    if !(n.is_odd() && *n >= 3 && Integer::ZERO <= *a && a < n) {
-        debug_assert!(false, "invalid inputs: a = {a}, n = {n}");
-        return 0;
-    }
-
-    jacobi_inner(1, a, n)
-}
-
-/// Computes jacobi symbol of `a` over `n` multiplied at `mult`
-///
-/// `mult` is a small modification over original algorithm defined in the book, it helps to keep
-/// function in tail recursion form, which ensures that recursion is optimized out
-#[allow(clippy::if_same_then_else, clippy::identity_op)]
-fn jacobi_inner(mult: isize, a: &Integer, n: &Integer) -> isize {
-    // Step 1
-    if a.cmp0().is_eq() {
-        return 0;
-    }
-    // Step 2
-    if a == Integer::ONE {
-        return mult * 1;
-    }
-
-    // Step 3. Find a1, e such that a = 2^e * a1 where a1 is odd
-    let mut a1 = a.clone();
-    let mut e = 0_u32;
-    while a1.is_even() {
-        e += 1;
-        a1 >>= 1;
-    }
-    debug_assert_eq!(*a, (&a1 << e).complete());
-
-    // Step 4
-    let n_mod_8 = n.mod_u(8);
-    let mut s = if e % 2 == 0 {
-        // if e is even, s = 1
-        1
-    } else if n_mod_8 == 1 || n_mod_8 == 7 {
-        // if n = 1 or 7 (mod 8), s = 1
-        1
-    } else if n_mod_8 == 3 || n_mod_8 == 5 {
-        // if n = 3 or 5 (mod 8), s = -1
-        -1
-    } else {
-        unreachable!()
-    };
-
-    // Step 5
-    if n.mod_u(4) == 3 && a1.mod_u(4) == 3 {
-        s = -s
-    }
-
-    // Step 6
-    let n1 = n.modulo(&a1);
-
-    // Step 7
-    if a1 == *Integer::ONE {
-        mult * s
-    } else {
-        jacobi_inner(mult * s, &n1, &a1)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use rug::Complete;
-
-    use crate::common::test::generate_blum_prime;
-    use crate::IntegerExt;
-
-    #[test]
-    fn jacobi_and_sqrt() {
-        let mut rng = rand_dev::DevRng::new();
-        // Create a blum modulus for the calculations to make sense
-        let p = generate_blum_prime(&mut rng, 128);
-        let q = generate_blum_prime(&mut rng, 128);
-        let n = (&p * &q).complete();
-
-        for _ in 0..100 {
-            let x = n
-                .random_below_ref(&mut fast_paillier::utils::external_rand(&mut rng))
-                .into();
-            let root = super::blum_sqrt(&x, &p, &q, &n);
-            let x_ = root.square().modulo(&n);
-
-            let jp = super::jacobi(&x.modulo(&p), &p);
-            let jq = super::jacobi(&x.modulo(&q), &q);
-            let j = super::jacobi(&x, &n);
-            assert_eq!(jp * jq, j);
-
-            if jp == 1 && jq == 1 {
-                assert_eq!(x_, x);
-            } else {
-                assert_ne!(x_, x);
-            }
         }
     }
 }
