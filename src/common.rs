@@ -105,7 +105,10 @@ pub trait IntegerExt: Sized {
     /// Returns `self mod n`
     fn modulo(&self, n: &Self) -> Self;
 
-    /// Returns `self smod n` in `{-n/2, .., n/2}`
+    /// Returns `self smod n`
+    ///
+    /// For odd `n`, result is in `{-n/2, .., n/2}`. For even `n`, result is in
+    /// `{-n/2, .., n/2 - 1}`
     fn signed_modulo(&self, n: &Self) -> Self;
 }
 
