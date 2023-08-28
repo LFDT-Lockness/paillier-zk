@@ -121,7 +121,7 @@ pub mod interactive {
     use rand_core::RngCore;
     use rug::{Complete, Integer};
 
-    use crate::common::sqrt::{blum_sqrt, find_residue, sample_non_residue_in};
+    use crate::common::sqrt::{blum_sqrt, find_residue, sample_neg_jacobi};
     use crate::{Error, ErrorReason, IntegerExt, InvalidProof, InvalidProofReason};
 
     use super::{Challenge, Commitment, Data, PrivateData, Proof, ProofPoint};
@@ -129,7 +129,7 @@ pub mod interactive {
     /// Create random commitment
     pub fn commit<R: RngCore>(Data { ref n }: &Data, rng: &mut R) -> Commitment {
         Commitment {
-            w: sample_non_residue_in(n, rng),
+            w: sample_neg_jacobi(n, rng),
         }
     }
 

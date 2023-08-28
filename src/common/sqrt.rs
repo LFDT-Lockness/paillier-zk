@@ -56,10 +56,8 @@ pub fn find_residue(
     }
 }
 
-/// Find a quadratic non-residue in Zn. Does so by generating a random number
-/// and checking its jacobi symbol. The return value is guaranteed to have
-/// jacobi symbol of -1
-pub fn sample_non_residue_in<R: RngCore>(n: &Integer, rng: &mut R) -> Integer {
+/// Finds a element in Zn that has jacobi symbol of -1
+pub fn sample_neg_jacobi<R: RngCore>(n: &Integer, rng: &mut R) -> Integer {
     loop {
         let w = n
             .clone()
