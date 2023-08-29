@@ -67,7 +67,7 @@
 //!
 //! // C is some number encrypted using key0. Neither of parties
 //! // need to know the plaintext
-//! let ciphertext_c = Integer::gen_inversible(&key0.nn(), &mut rng);
+//! let ciphertext_c = Integer::gen_invertible(&key0.nn(), &mut rng);
 //!
 //! // 2. Setup: prover prepares all plaintexts
 //!
@@ -283,8 +283,8 @@ pub mod interactive {
 
         let alpha = Integer::from_rng_pm(&two_to_l_e, &mut rng);
         let beta = Integer::from_rng_pm(&two_to_l_prime_e, &mut rng);
-        let r = Integer::gen_inversible(data.key0.n(), &mut rng);
-        let r_y = Integer::gen_inversible(data.key1.n(), &mut rng);
+        let r = Integer::gen_invertible(data.key0.n(), &mut rng);
+        let r_y = Integer::gen_invertible(data.key1.n(), &mut rng);
         let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
         let delta = Integer::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
         let m = Integer::from_rng_pm(&hat_n_at_two_to_l, &mut rng);

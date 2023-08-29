@@ -18,7 +18,7 @@ fn main() -> Result<()> {
 
         let (s, t) = {
             let phi_n = (p.clone() - 1u8) * (q.clone() - 1u8);
-            let r = Integer::gen_inversible(&n, &mut rng);
+            let r = Integer::gen_invertible(&n, &mut rng);
             let lambda = phi_n.random_below(&mut fast_paillier::utils::external_rand(&mut rng));
 
             let t = r.square().modulo(&n);

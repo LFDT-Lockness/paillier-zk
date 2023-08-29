@@ -194,7 +194,7 @@ pub mod interactive {
 
         let alpha = Integer::from_rng_pm(&two_to_l_plus_e, rng);
         let mu = Integer::from_rng_pm(&hat_n_at_two_to_l, rng);
-        let r = Integer::gen_inversible(data.key.n(), rng);
+        let r = Integer::gen_invertible(data.key.n(), rng);
         let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_plus_e, rng);
 
         let s = aux

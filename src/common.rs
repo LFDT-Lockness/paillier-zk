@@ -85,7 +85,7 @@ pub struct PaillierError;
 
 pub trait IntegerExt: Sized {
     /// Generate element in Zm*. Does so by trial.
-    fn gen_inversible<R: rand_core::RngCore>(modulo: &Self, rng: &mut R) -> Self;
+    fn gen_invertible<R: rand_core::RngCore>(modulo: &Self, rng: &mut R) -> Self;
 
     /// Compute l^le * r^re modulo self
     fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent>;
@@ -113,7 +113,7 @@ pub trait IntegerExt: Sized {
 }
 
 impl IntegerExt for Integer {
-    fn gen_inversible<R: rand_core::RngCore>(modulo: &Integer, rng: &mut R) -> Self {
+    fn gen_invertible<R: rand_core::RngCore>(modulo: &Integer, rng: &mut R) -> Self {
         fast_paillier::utils::sample_in_mult_group(rng, modulo)
     }
 
@@ -210,7 +210,7 @@ pub mod test {
 
         let (s, t) = {
             let phi_n = (p.clone() - 1u8) * (q.clone() - 1u8);
-            let r = Integer::gen_inversible(&n, rng);
+            let r = Integer::gen_invertible(&n, rng);
             let lambda = phi_n.random_below(&mut fast_paillier::utils::external_rand(rng));
 
             let t = r.square().modulo(&n);
