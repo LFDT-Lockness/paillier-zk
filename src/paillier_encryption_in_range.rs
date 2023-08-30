@@ -5,80 +5,93 @@
 //!
 //! A party P has `key`, `pkey` - public and private keys in paillier
 //! cryptosystem. P also has `plaintext`, `nonce`, and
-//! `ciphertext = key.encrypt(plaintext, nonce)`.
+//! `ciphertext = key.encrypt_with(plaintext, nonce)`.
 //!
-//! P wants to prove that `plaintext` is at most `L` bits, without disclosing
+//! P wants to prove that `plaintext` is at most `l` bits, without disclosing
 //! it, the `pkey`, and `nonce`
 
 //! ## Example
 //!
-//! ``` no_run
-//! # use paillier_zk::unknown_order::BigNumber;
+//! ```
+//! use paillier_zk::{paillier_encryption_in_range as p, IntegerExt};
+//! use rug::{Integer, Complete};
+//! # mod pregenerated {
+//! #     use super::*;
+//! #     paillier_zk::load_pregenerated_data!(
+//! #         verifier_aux: p::Aux,
+//! #         prover_decryption_key: fast_paillier::DecryptionKey,
+//! #     );
+//! # }
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use paillier_zk::paillier_encryption_in_range as p;
-//! use generic_ec::hash_to_curve::Tag;
+//!
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
 //!
+//! let mut rng = rand_core::OsRng;
+//!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
-//! let p = BigNumber::prime(1024);
-//! let q = BigNumber::prime(1024);
-//! let rsa_modulo = p * q;
-//! let s: BigNumber = 123.into();
-//! let t: BigNumber = 321.into();
-//! assert_eq!(s.gcd(&rsa_modulo), 1.into());
-//! assert_eq!(t.gcd(&rsa_modulo), 1.into());
-//! let security_prime = BigNumber::prime(256);
-//!
-//! let aux = p::Aux { s, t, rsa_modulo };
-//!
-//! // 1. Setup: prover prepares the paillier keys
-//!
-//! let private_key = libpaillier::DecryptionKey::random().unwrap();
-//! let key = libpaillier::EncryptionKey::from(&private_key);
-//!
-//! // 2. Setup: prover has some plaintext and encrypts it
-//!
-//! let plaintext: BigNumber = 228.into();
-//! let (ciphertext, nonce) = key.encrypt(plaintext.to_bytes(), None).unwrap();
-//!
-//! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
-//!
+//! let aux: p::Aux = pregenerated::verifier_aux();
 //! let security = p::SecurityParams {
 //!     l: 1024,
 //!     epsilon: 128,
-//!     q: security_prime,
+//!     q: (Integer::ONE << 128_u32).into(),
 //! };
 //!
-//! let mut rng = rand_core::OsRng::default();
+//! // 1. Setup: prover prepares the paillier keys
+//!
+//! let private_key: fast_paillier::DecryptionKey =
+//!     pregenerated::prover_decryption_key();
+//! let key = private_key.encryption_key();
+//!
+//! // 2. Setup: prover has some plaintext and encrypts it
+//!
+//! let plaintext = Integer::from_rng_pm(&(Integer::ONE << security.l).complete(), &mut rng);
+//! let (ciphertext, nonce) = key.encrypt_with_random(&mut rng, &plaintext)?;
+//!
+//! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
+//!
 //! let data = p::Data { key, ciphertext };
 //! let pdata = p::PrivateData { plaintext, nonce };
-//! let (commitment, proof) =
-//!     p::non_interactive::prove(shared_state_prover, &aux, &data, &pdata, &security, &mut rng)?;
+//! let (commitment, proof) = p::non_interactive::prove(
+//!     shared_state_prover,
+//!     &aux,
+//!     &data,
+//!     &pdata,
+//!     &security,
+//!     &mut rng,
+//! )?;
 //!
 //! // 4. Prover sends this data to verifier
 //!
-//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof) { todo!() }
-//! # fn recv() -> (p::Data, p::Commitment, p::Proof) { todo!() }
+//! # fn send(_: &p::Data, _: &p::Commitment, _: &p::Proof) {  }
 //! send(&data, &commitment, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
+//! # let recv = || (data, commitment, proof);
 //! let (data, commitment, proof) = recv();
-//! p::non_interactive::verify(shared_state_verifier, &aux, &data, &commitment, &security, &proof);
+//! p::non_interactive::verify(
+//!     shared_state_verifier,
+//!     &aux,
+//!     &data,
+//!     &commitment,
+//!     &security,
+//!     &proof,
+//! );
 //! # Ok(()) }
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use libpaillier::{Ciphertext, EncryptionKey, Nonce};
+use fast_paillier::{Ciphertext, EncryptionKey, Nonce};
+use rug::Integer;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+pub use crate::common::Aux;
 pub use crate::common::InvalidProof;
-use crate::unknown_order::BigNumber;
 
 /// Security parameters for proof. Choosing the values is a tradeoff between
 /// speed and chance of rejecting a valid proof or accepting an invalid proof
@@ -91,7 +104,7 @@ pub struct SecurityParams {
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
-    pub q: BigNumber,
+    pub q: Integer,
 }
 
 /// Public data that both parties know
@@ -108,7 +121,7 @@ pub struct Data {
 #[derive(Clone)]
 pub struct PrivateData {
     /// k in paper, plaintext of K
-    pub plaintext: BigNumber,
+    pub plaintext: Integer,
     /// rho in paper, nonce of encryption k -> K
     pub nonce: Nonce,
 }
@@ -118,24 +131,24 @@ pub struct PrivateData {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
-    pub s: BigNumber,
-    pub a: BigNumber,
-    pub c: BigNumber,
+    pub s: Integer,
+    pub a: Integer,
+    pub c: Integer,
 }
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
 /// the interactive protocol.
 #[derive(Clone)]
 pub struct PrivateCommitment {
-    pub alpha: BigNumber,
-    pub mu: BigNumber,
-    pub r: BigNumber,
-    pub gamma: BigNumber,
+    pub alpha: Integer,
+    pub mu: Integer,
+    pub r: Integer,
+    pub gamma: Integer,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
 /// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
-pub type Challenge = BigNumber;
+pub type Challenge = Integer;
 
 // As described in cggmp21 at page 33
 /// The ZK proof. Computed by [`interactive::prove`] or
@@ -143,25 +156,24 @@ pub type Challenge = BigNumber;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
-    pub z1: BigNumber,
-    pub z2: BigNumber,
-    pub z3: BigNumber,
+    pub z1: Integer,
+    pub z2: Integer,
+    pub z3: Integer,
 }
-
-pub use crate::common::Aux;
 
 /// The interactive version of the ZK proof. Should be completed in 3 rounds:
 /// prover commits to data, verifier responds with a random challenge, and
 /// prover gives proof with commitment and challenge.
 pub mod interactive {
-    use crate::{
-        common::{fail_if, fail_if_ne, InvalidProofReason, SafePaillierEncryptionExt},
-        unknown_order::BigNumber,
-        Error,
-    };
     use rand_core::RngCore;
+    use rug::{Complete, Integer};
 
-    use crate::common::{BigNumberExt, InvalidProof};
+    use crate::{
+        common::{fail_if, fail_if_ne, InvalidProofReason},
+        BadExponent, Error,
+    };
+
+    use crate::common::{IntegerExt, InvalidProof};
 
     use super::{
         Aux, Challenge, Commitment, Data, PrivateCommitment, PrivateData, Proof, SecurityParams,
@@ -175,15 +187,15 @@ pub mod interactive {
         security: &SecurityParams,
         rng: &mut R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
-        let two_to_l_plus_e = BigNumber::one() << (security.l + security.epsilon);
-        let hat_n_at_two_to_l = (BigNumber::one() << security.l) * &aux.rsa_modulo;
+        let two_to_l_plus_e = (Integer::ONE << (security.l + security.epsilon)).complete();
+        let hat_n_at_two_to_l = (Integer::ONE << security.l).complete() * &aux.rsa_modulo;
         let hat_n_at_two_to_l_plus_e =
-            (BigNumber::one() << (security.l + security.epsilon)) * &aux.rsa_modulo;
+            (Integer::ONE << (security.l + security.epsilon)).complete() * &aux.rsa_modulo;
 
-        let alpha = BigNumber::from_rng_pm(&two_to_l_plus_e, rng);
-        let mu = BigNumber::from_rng_pm(&hat_n_at_two_to_l, rng);
-        let r = BigNumber::gen_inversible(data.key.n(), rng);
-        let gamma = BigNumber::from_rng_pm(&hat_n_at_two_to_l_plus_e, rng);
+        let alpha = Integer::from_rng_pm(&two_to_l_plus_e, rng);
+        let mu = Integer::from_rng_pm(&hat_n_at_two_to_l, rng);
+        let r = Integer::gen_invertible(data.key.n(), rng);
+        let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_plus_e, rng);
 
         let s = aux
             .rsa_modulo
@@ -209,11 +221,14 @@ pub mod interactive {
         private_commitment: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
-        let z1 = &private_commitment.alpha + (challenge * &pdata.plaintext);
-        let z2 = private_commitment
-            .r
-            .modmul(&pdata.nonce.powmod(challenge, data.key.n())?, data.key.n());
-        let z3 = &private_commitment.gamma + (challenge * &private_commitment.mu);
+        let z1 = (&private_commitment.alpha + (challenge * &pdata.plaintext)).complete();
+        let nonce_to_challenge_mod_n: Integer = pdata
+            .nonce
+            .pow_mod_ref(challenge, data.key.n())
+            .ok_or(BadExponent)?
+            .into();
+        let z2 = (&private_commitment.r * nonce_to_challenge_mod_n).modulo(data.key.n());
+        let z3 = (&private_commitment.gamma + (challenge * &private_commitment.mu)).complete();
         Ok(Proof { z1, z2, z3 })
     }
 
@@ -229,15 +244,23 @@ pub mod interactive {
         {
             fail_if_ne(
                 InvalidProofReason::EqualityCheck(1),
-                data.ciphertext.gcd(data.key.n()),
-                BigNumber::one(),
+                &data.ciphertext.gcd_ref(data.key.n()).complete(),
+                Integer::ONE,
             )?;
         }
         {
-            let lhs = data.key.encrypt_with(&proof.z1, &proof.z2)?;
+            let lhs = data
+                .key
+                .encrypt_with(&proof.z1, &proof.z2)
+                .map_err(|_| InvalidProofReason::PaillierEnc)?;
             let rhs = {
-                let e_at_k = data.key.omul(challenge, &data.ciphertext)?;
-                data.key.oadd(&commitment.a, &e_at_k)?
+                let e_at_k = data
+                    .key
+                    .omul(challenge, &data.ciphertext)
+                    .map_err(|_| InvalidProofReason::PaillierOp)?;
+                data.key
+                    .oadd(&commitment.a, &e_at_k)
+                    .map_err(|_| InvalidProofReason::PaillierOp)?
             };
             fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
@@ -246,12 +269,9 @@ pub mod interactive {
             let lhs = aux
                 .rsa_modulo
                 .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?;
-            let rhs = aux.rsa_modulo.combine(
-                &commitment.c,
-                &BigNumber::one(),
-                &commitment.s,
-                challenge,
-            )?;
+            let rhs =
+                aux.rsa_modulo
+                    .combine(&commitment.c, Integer::ONE, &commitment.s, challenge)?;
             fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
 
@@ -259,7 +279,7 @@ pub mod interactive {
             InvalidProofReason::RangeCheck(4),
             proof
                 .z1
-                .is_in_pm(&(BigNumber::one() << (security.l + security.epsilon))),
+                .is_in_pm(&(Integer::ONE << (security.l + security.epsilon)).complete()),
         )?;
 
         Ok(())
@@ -269,15 +289,15 @@ pub mod interactive {
     ///
     /// `security` parameter is used to generate challenge in correct range
     pub fn challenge<R: RngCore>(security: &SecurityParams, rng: &mut R) -> Challenge {
-        BigNumber::from_rng_pm(&security.q, rng)
+        Integer::from_rng_pm(&security.q, rng)
     }
 }
 
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
+    use digest::{typenum::U32, Digest};
     use rand_core::RngCore;
-    use sha2::{digest::typenum::U32, Digest};
 
     use crate::{Error, InvalidProof};
 
@@ -315,17 +335,18 @@ pub mod non_interactive {
     where
         D: Digest,
     {
+        let order = rug::integer::Order::Msf;
         let shared_state = shared_state.finalize();
         let hash = |d: D| {
             d.chain_update(&shared_state)
-                .chain_update(aux.s.to_bytes())
-                .chain_update(aux.t.to_bytes())
-                .chain_update(aux.rsa_modulo.to_bytes())
-                .chain_update(data.key.to_bytes())
-                .chain_update(data.ciphertext.to_bytes())
-                .chain_update(commitment.s.to_bytes())
-                .chain_update(commitment.a.to_bytes())
-                .chain_update(commitment.c.to_bytes())
+                .chain_update(aux.s.to_digits(order))
+                .chain_update(aux.t.to_digits(order))
+                .chain_update(aux.rsa_modulo.to_digits(order))
+                .chain_update(data.key.n().to_digits(order))
+                .chain_update(data.ciphertext.to_digits(order))
+                .chain_update(commitment.s.to_digits(order))
+                .chain_update(commitment.a.to_digits(order))
+                .chain_update(commitment.c.to_digits(order))
                 .finalize()
         };
         let mut rng = crate::common::rng::HashRng::new(hash);
@@ -351,19 +372,19 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use crate::common::{InvalidProofReason, SafePaillierEncryptionExt};
-    use crate::unknown_order::BigNumber;
-    use crate::BigNumberExt;
+    use rug::{Complete, Integer};
 
-    fn run_with<R: rand_core::RngCore>(
+    use crate::common::{IntegerExt, InvalidProofReason};
+
+    fn run_with<R: rand_core::RngCore + rand_core::CryptoRng>(
         mut rng: &mut R,
         security: super::SecurityParams,
-        plaintext: BigNumber,
+        plaintext: Integer,
     ) -> Result<(), crate::common::InvalidProof> {
         let aux = crate::common::test::aux(&mut rng);
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
-        let key = libpaillier::EncryptionKey::from(&private_key);
-        let (ciphertext, nonce) = key.encrypt_with_random(&plaintext, &mut rng).unwrap();
+        let key = private_key.encryption_key();
+        let (ciphertext, nonce) = key.encrypt_with_random(&mut rng, &plaintext).unwrap();
         let data = super::Data { key, ciphertext };
         let pdata = super::PrivateData { plaintext, nonce };
 
@@ -386,9 +407,9 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
-            q: (BigNumber::one() << 128) - 1,
+            q: (Integer::ONE << 128_u32).complete() - 1,
         };
-        let plaintext = BigNumber::from_rng_pm(&(BigNumber::one() << security.l), &mut rng);
+        let plaintext = Integer::from_rng_pm(&(Integer::ONE << security.l).complete(), &mut rng);
         let r = run_with(&mut rng, security, plaintext);
         match r {
             Ok(()) => (),
@@ -401,9 +422,9 @@ mod test {
         let security = super::SecurityParams {
             l: 1024,
             epsilon: 256,
-            q: (BigNumber::one() << 128) - 1,
+            q: (Integer::ONE << 128_u32).complete() - 1,
         };
-        let plaintext = (BigNumber::one() << (security.l + security.epsilon)) + 1;
+        let plaintext = (Integer::ONE << (security.l + security.epsilon)).complete() + 1;
         let r = run_with(&mut rng, security, plaintext);
         match r.map_err(|e| e.reason()) {
             Ok(()) => panic!("proof should not pass"),

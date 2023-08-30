@@ -10,46 +10,43 @@
 //!
 //! ## Example
 //!
-//! ```no_run
-//! # use paillier_zk::unknown_order::BigNumber;
-//! # fn sqrt(x: &BigNumber) -> BigNumber { todo!() }
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! ```rust
+//! use rug::{Integer, Complete};
 //! use paillier_zk::no_small_factor::non_interactive as p;
+//! # mod pregenerated {
+//! #     use super::*;
+//! #     paillier_zk::load_pregenerated_data!(
+//! #         verifier_aux: p::Aux,
+//! #     );
+//! # }
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let shared_state_prover = sha2::Sha256::default();
 //! let shared_state_verifier = sha2::Sha256::default();
-//! let mut rng = rand_core::OsRng::default();
+//! let mut rng = rand_core::OsRng;
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters, and
 //! // agree on the level of security
 //!
-//! let p = BigNumber::prime(1024);
-//! let q = BigNumber::prime(1024);
-//! let rsa_modulo = p * q;
-//! let s: BigNumber = 123.into();
-//! let t: BigNumber = 321.into();
-//! assert_eq!(s.gcd(&rsa_modulo), 1.into());
-//! assert_eq!(t.gcd(&rsa_modulo), 1.into());
-//!
-//! let aux = p::Aux { s, t, rsa_modulo };
-//!
+//! let aux: p::Aux = pregenerated::verifier_aux();
 //! let security = p::SecurityParams {
 //!     l: 4,
 //!     epsilon: 128,
-//!     q: BigNumber::prime_from_rng(128, &mut rng),
+//!     q: (Integer::ONE << 128_u32).complete(),
 //! };
 //!
 //! // 1. Prover prepares the data to obtain proof about
 //!
-//! let p = BigNumber::prime_from_rng(256, &mut rng);
-//! let q = BigNumber::prime_from_rng(256, &mut rng);
-//! let n = &p * &q;
-//! let n_root = sqrt(&n);
+//! let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+//! let q = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
+//! let n = (&p * &q).complete();
+//! let n_root = n.sqrt_ref().complete();
 //! let data = p::Data {
 //!     n: &n,
 //!     n_root: &n_root,
 //! };
 //!
-//! // 2. Prover computes a non-interactive proof that both factors are small
+//! // 2. Prover computes a non-interactive proof that both factors are large enough
 //!
 //! let proof = p::prove(
 //!     shared_state_prover,
@@ -62,20 +59,20 @@
 //!
 //! // 4. Prover sends this data to verifier
 //!
-//! # fn send(_: &BigNumber, _: &p::Proof) { todo!() }
-//! # fn recv() -> (BigNumber, p::Proof) { todo!() }
+//! # fn send(_: &Integer, _: &p::Proof) {  }
 //! send(data.n, &proof);
 //!
 //! // 5. Verifier receives the data and the proof and verifies it
 //!
+//! # let recv = || (data.n, proof);
 //! let (n, proof) = recv();
-//! let n_root = sqrt(&n);
+//! let n_root = n.sqrt_ref().complete();;
 //! let data = p::Data {
 //!     n: &n,
 //!     n_root: &n_root,
 //! };
-//! p::verify(shared_state_verifier, &aux, data, &security, &proof);
-//! Ok(()) }
+//! p::verify(shared_state_verifier, &aux, data, &security, &proof)?;
+//! # Ok(()) }
 //! ```
 //!
 //! If the verification succeeded, verifier can continue communication with prover
@@ -83,9 +80,9 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::unknown_order::BigNumber;
+use rug::Integer;
 
-pub use crate::common::InvalidProof;
+pub use crate::common::{Aux, InvalidProof};
 
 /// Security parameters for proof. Choosing the values is a tradeoff between
 /// speed and chance of rejecting a valid proof or accepting an invalid proof
@@ -98,23 +95,23 @@ pub struct SecurityParams {
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
-    pub q: BigNumber,
+    pub q: Integer,
 }
 
 /// Public data that both parties know
 #[derive(Debug, Clone, Copy)]
 pub struct Data<'a> {
     /// N0 - rsa modulus
-    pub n: &'a BigNumber,
+    pub n: &'a Integer,
     /// A number close to square root of n
-    pub n_root: &'a BigNumber,
+    pub n_root: &'a Integer,
 }
 
 /// Private data of prover
 #[derive(Debug, Clone, Copy)]
 pub struct PrivateData<'a> {
-    pub p: &'a BigNumber,
-    pub q: &'a BigNumber,
+    pub p: &'a Integer,
+    pub q: &'a Integer,
 }
 
 /// Prover's data accompanying the commitment. Kept as state between rounds in
@@ -122,50 +119,49 @@ pub struct PrivateData<'a> {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PrivateCommitment {
-    pub alpha: BigNumber,
-    pub beta: BigNumber,
-    pub mu: BigNumber,
-    pub nu: BigNumber,
-    pub r: BigNumber,
-    pub x: BigNumber,
-    pub y: BigNumber,
+    pub alpha: Integer,
+    pub beta: Integer,
+    pub mu: Integer,
+    pub nu: Integer,
+    pub r: Integer,
+    pub x: Integer,
+    pub y: Integer,
 }
 
 /// Prover's first message, obtained by [`interactive::commit`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
-    pub p: BigNumber,
-    pub q: BigNumber,
-    pub a: BigNumber,
-    pub b: BigNumber,
-    pub t: BigNumber,
-    pub sigma: BigNumber,
+    pub p: Integer,
+    pub q: Integer,
+    pub a: Integer,
+    pub b: Integer,
+    pub t: Integer,
+    pub sigma: Integer,
 }
 
 /// Verifier's challenge to prover. Can be obtained deterministically by
 /// [`non_interactive::challenge`] or randomly by [`interactive::challenge`]
-pub type Challenge = BigNumber;
+pub type Challenge = Integer;
 
 /// The ZK proof, computed by [`interactive::prove`]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proof {
-    pub z1: BigNumber,
-    pub z2: BigNumber,
-    pub w1: BigNumber,
-    pub w2: BigNumber,
-    pub v: BigNumber,
+    pub z1: Integer,
+    pub z2: Integer,
+    pub w1: Integer,
+    pub w2: Integer,
+    pub v: Integer,
 }
 
-pub use crate::common::Aux;
-
+/// Interactive version of the proof
 pub mod interactive {
     use rand_core::RngCore;
+    use rug::{Complete, Integer};
 
     use crate::{
-        common::{fail_if, fail_if_ne, BigNumberExt, InvalidProofReason},
-        unknown_order::BigNumber,
+        common::{fail_if, fail_if_ne, IntegerExt, InvalidProofReason},
         Error,
     };
 
@@ -182,21 +178,21 @@ pub mod interactive {
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
-        let two_to_l = BigNumber::from(1) << security.l;
-        let two_to_l_plus_e = BigNumber::from(1) << (security.l + security.epsilon);
-        let n_root_modulo = &two_to_l_plus_e * data.n_root;
-        let l_n_circ_modulo = &two_to_l * &aux.rsa_modulo;
-        let l_e_n_circ_modulo = &two_to_l_plus_e * &aux.rsa_modulo;
-        let n_n_circ = &aux.rsa_modulo * data.n;
+        let two_to_l = (Integer::ONE << security.l).complete();
+        let two_to_l_plus_e = (Integer::ONE << (security.l + security.epsilon)).complete();
+        let n_root_modulo = (&two_to_l_plus_e * data.n_root).complete();
+        let l_n_circ_modulo = (&two_to_l * &aux.rsa_modulo).complete();
+        let l_e_n_circ_modulo = (&two_to_l_plus_e * &aux.rsa_modulo).complete();
+        let n_n_circ = (&aux.rsa_modulo * data.n).complete();
 
-        let alpha = BigNumber::from_rng_pm(&n_root_modulo, &mut rng);
-        let beta = BigNumber::from_rng_pm(&n_root_modulo, &mut rng);
-        let mu = BigNumber::from_rng_pm(&l_n_circ_modulo, &mut rng);
-        let nu = BigNumber::from_rng_pm(&l_n_circ_modulo, &mut rng);
-        let sigma = BigNumber::from_rng_pm(&(&two_to_l * &n_n_circ), &mut rng);
-        let r = BigNumber::from_rng_pm(&(&two_to_l_plus_e * &n_n_circ), &mut rng);
-        let x = BigNumber::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
-        let y = BigNumber::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
+        let alpha = Integer::from_rng_pm(&n_root_modulo, &mut rng);
+        let beta = Integer::from_rng_pm(&n_root_modulo, &mut rng);
+        let mu = Integer::from_rng_pm(&l_n_circ_modulo, &mut rng);
+        let nu = Integer::from_rng_pm(&l_n_circ_modulo, &mut rng);
+        let sigma = Integer::from_rng_pm(&(&two_to_l * &n_n_circ).complete(), &mut rng);
+        let r = Integer::from_rng_pm(&(&two_to_l_plus_e * &n_n_circ).complete(), &mut rng);
+        let x = Integer::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
+        let y = Integer::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
 
         let p = aux.rsa_modulo.combine(&aux.s, pdata.p, &aux.t, &mu)?;
         let q = aux.rsa_modulo.combine(&aux.s, pdata.q, &aux.t, &nu)?;
@@ -228,7 +224,7 @@ pub mod interactive {
     ///
     /// `security` parameter is used to generate challenge in correct range
     pub fn challenge<R: RngCore>(security: &SecurityParams, rng: &mut R) -> Challenge {
-        BigNumber::from_rng_pm(&security.q, rng)
+        Integer::from_rng_pm(&security.q, rng)
     }
 
     /// Compute proof for given data and prior protocol values
@@ -238,13 +234,13 @@ pub mod interactive {
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
-        let sigma_circ = &comm.sigma - &pcomm.nu * pdata.p;
+        let sigma_circ = (&comm.sigma - &pcomm.nu * pdata.p).complete();
 
         Ok(Proof {
-            z1: &pcomm.alpha + challenge * pdata.p,
-            z2: &pcomm.beta + challenge * pdata.q,
-            w1: &pcomm.x + challenge * &pcomm.mu,
-            w2: &pcomm.y + challenge * &pcomm.nu,
+            z1: (&pcomm.alpha + challenge * pdata.p).complete(),
+            z2: (&pcomm.beta + challenge * pdata.q).complete(),
+            w1: (&pcomm.x + challenge * &pcomm.mu).complete(),
+            w2: (&pcomm.y + challenge * &pcomm.nu).complete(),
             v: &pcomm.r + challenge * sigma_circ,
         })
     }
@@ -258,15 +254,14 @@ pub mod interactive {
         challenge: &Challenge,
         proof: &Proof,
     ) -> Result<(), InvalidProof> {
-        let one = BigNumber::one();
         // check 1
         {
             let lhs = aux
                 .rsa_modulo
                 .combine(&aux.s, &proof.z1, &aux.t, &proof.w1)?;
-            let rhs = aux
-                .rsa_modulo
-                .combine(&commitment.a, &one, &commitment.p, challenge)?;
+            let rhs =
+                aux.rsa_modulo
+                    .combine(&commitment.a, Integer::ONE, &commitment.p, challenge)?;
             fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;
         }
         // check 2
@@ -274,9 +269,9 @@ pub mod interactive {
             let lhs = aux
                 .rsa_modulo
                 .combine(&aux.s, &proof.z2, &aux.t, &proof.w2)?;
-            let rhs = aux
-                .rsa_modulo
-                .combine(&commitment.b, &one, &commitment.q, challenge)?;
+            let rhs =
+                aux.rsa_modulo
+                    .combine(&commitment.b, Integer::ONE, &commitment.q, challenge)?;
             fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         // check 3
@@ -287,10 +282,12 @@ pub mod interactive {
             let lhs = aux
                 .rsa_modulo
                 .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
-            let rhs = aux.rsa_modulo.combine(&commitment.t, &one, &r, challenge)?;
+            let rhs = aux
+                .rsa_modulo
+                .combine(&commitment.t, Integer::ONE, &r, challenge)?;
             fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
-        let range = (BigNumber::from(1) << (security.l + security.epsilon)) * data.n_root;
+        let range = (Integer::from(1) << (security.l + security.epsilon)) * data.n_root;
         // range check for z1
         fail_if(InvalidProofReason::RangeCheck(1), proof.z1.is_in_pm(&range))?;
         // range check for z2
@@ -300,9 +297,10 @@ pub mod interactive {
     }
 }
 
+/// Non-interactive version of the proof
 pub mod non_interactive {
+    use digest::{typenum::U32, Digest};
     use rand_core::RngCore;
-    use sha2::{digest::typenum::U32, Digest};
 
     pub use crate::{Error, InvalidProof};
 
@@ -350,18 +348,19 @@ pub mod non_interactive {
     {
         let shared_state = shared_state.finalize();
         let hash = |d: D| {
+            let order = rug::integer::Order::Msf;
             d.chain_update(&shared_state)
-                .chain_update(aux.s.to_bytes())
-                .chain_update(aux.t.to_bytes())
-                .chain_update(aux.rsa_modulo.to_bytes())
-                .chain_update(data.n.to_bytes())
-                .chain_update(data.n_root.to_bytes())
-                .chain_update(commitment.p.to_bytes())
-                .chain_update(commitment.q.to_bytes())
-                .chain_update(commitment.a.to_bytes())
-                .chain_update(commitment.b.to_bytes())
-                .chain_update(commitment.t.to_bytes())
-                .chain_update(commitment.sigma.to_bytes())
+                .chain_update(aux.s.to_digits::<u8>(order))
+                .chain_update(aux.t.to_digits::<u8>(order))
+                .chain_update(aux.rsa_modulo.to_digits::<u8>(order))
+                .chain_update(data.n.to_digits::<u8>(order))
+                .chain_update(data.n_root.to_digits::<u8>(order))
+                .chain_update(commitment.p.to_digits::<u8>(order))
+                .chain_update(commitment.q.to_digits::<u8>(order))
+                .chain_update(commitment.a.to_digits::<u8>(order))
+                .chain_update(commitment.b.to_digits::<u8>(order))
+                .chain_update(commitment.t.to_digits::<u8>(order))
+                .chain_update(commitment.sigma.to_digits::<u8>(order))
                 .finalize()
         };
         let mut rng = crate::common::rng::HashRng::new(hash);
@@ -393,8 +392,10 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
+    use rug::{Complete, Integer};
+
+    use crate::common::test::generate_blum_prime;
     use crate::common::InvalidProofReason;
-    use crate::unknown_order::BigNumber;
 
     // If q > 2^epsilon, the proof will never pass. We can make l however small
     // we wish though, provided the statement we want to prove holds
@@ -402,10 +403,10 @@ mod test {
     #[test]
     fn passing() {
         let mut rng = rand_dev::DevRng::new();
-        let p = BigNumber::prime_from_rng(256, &mut rng);
-        let q = BigNumber::prime_from_rng(256, &mut rng);
-        let n = &p * &q;
-        let n_root = sqrt(&n);
+        let p = generate_blum_prime(&mut rng, 256);
+        let q = generate_blum_prime(&mut rng, 256);
+        let n = (&p * &q).complete();
+        let n_root = n.sqrt_ref().complete();
         let data = super::Data {
             n: &n,
             n_root: &n_root,
@@ -413,7 +414,7 @@ mod test {
         let security = super::SecurityParams {
             l: 64,
             epsilon: 128,
-            q: BigNumber::one() << 128,
+            q: (Integer::ONE << 128_u32).complete(),
         };
         let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
@@ -436,10 +437,10 @@ mod test {
     #[test]
     fn failing() {
         let mut rng = rand_dev::DevRng::new();
-        let p = BigNumber::prime_from_rng(128, &mut rng);
-        let q = BigNumber::prime_from_rng(384, &mut rng);
-        let n = &p * &q;
-        let n_root = sqrt(&n);
+        let p = generate_blum_prime(&mut rng, 128);
+        let q = generate_blum_prime(&mut rng, 384);
+        let n = (&p * &q).complete();
+        let n_root = n.sqrt_ref().complete();
         let data = super::Data {
             n: &n,
             n_root: &n_root,
@@ -447,7 +448,7 @@ mod test {
         let security = super::SecurityParams {
             l: 4,
             epsilon: 128,
-            q: BigNumber::one() << 128,
+            q: (Integer::ONE << 128_u32).complete(),
         };
         let aux = crate::common::test::aux(&mut rng);
         let shared_state = sha2::Sha256::default();
@@ -470,37 +471,14 @@ mod test {
 
     #[test]
     fn test_sqrt() {
-        assert_eq!(sqrt(&BigNumber::from(1)), BigNumber::from(1));
-        assert_eq!(sqrt(&BigNumber::from(2)), BigNumber::from(1));
-        assert_eq!(sqrt(&BigNumber::from(3)), BigNumber::from(1));
-        assert_eq!(sqrt(&BigNumber::from(4)), BigNumber::from(2));
-        assert_eq!(sqrt(&BigNumber::from(5)), BigNumber::from(2));
-        assert_eq!(sqrt(&BigNumber::from(6)), BigNumber::from(2));
-        assert_eq!(sqrt(&BigNumber::from(7)), BigNumber::from(2));
-        assert_eq!(sqrt(&BigNumber::from(8)), BigNumber::from(2));
-        assert_eq!(sqrt(&BigNumber::from(9)), BigNumber::from(3));
-    }
-
-    /// Binary search for square root
-    fn sqrt(x: &BigNumber) -> BigNumber {
-        let mut low = BigNumber::one();
-        let mut high = x.clone();
-        let mut count = 1000;
-        while low < &high - 1 {
-            let mid = (&high + &low) / 2;
-            let test: BigNumber = &mid * &mid;
-            match test.cmp(x) {
-                std::cmp::Ordering::Equal => return mid,
-                std::cmp::Ordering::Less => {
-                    low = mid;
-                }
-                std::cmp::Ordering::Greater => {
-                    high = mid;
-                }
-            }
-            count -= 1;
-            assert_ne!(count, 0);
-        }
-        low
+        assert_eq!(Integer::from(1).sqrt(), Integer::from(1));
+        assert_eq!(Integer::from(2).sqrt(), Integer::from(1));
+        assert_eq!(Integer::from(3).sqrt(), Integer::from(1));
+        assert_eq!(Integer::from(4).sqrt(), Integer::from(2));
+        assert_eq!(Integer::from(5).sqrt(), Integer::from(2));
+        assert_eq!(Integer::from(6).sqrt(), Integer::from(2));
+        assert_eq!(Integer::from(7).sqrt(), Integer::from(2));
+        assert_eq!(Integer::from(8).sqrt(), Integer::from(2));
+        assert_eq!(Integer::from(9).sqrt(), Integer::from(3));
     }
 }

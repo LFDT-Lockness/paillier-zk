@@ -20,13 +20,17 @@ jobs:
         cache-on-failure: "true"
     - uses: webfactory/ssh-agent@v0.7.0
       with:
-        ssh-private-key: ${{ secrets.GENERIC_EC_KEY }}
+        ssh-private-key: |
+          ${{ secrets.GENERIC_EC_KEY }}
+          ${{ secrets.FAST_PAILLIER_KEY }}
     - name: Build with serde support
       run: cargo build --release --features serde
     - name: Build
       run: cargo build --release
     - name: Run tests
-      run: cargo test --release
+      run: cargo test --release --lib
+    - name: Run doc tests
+      run: cargo test --doc --features __internal_doctest
     - name: Check formatting
       run: cargo fmt --all -- --check
     - name: Run clippy
