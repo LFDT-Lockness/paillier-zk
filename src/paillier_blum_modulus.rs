@@ -10,6 +10,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use rug::{Integer, Complete};
 //! let mut rng = rand_core::OsRng;
+//! # let mut rng = rand_dev::DevRng::new();
 //!
 //! // 0. Prover P derives two Blum primes and makes a Paillier-Blum modulus
 //! let p = fast_paillier::utils::generate_safe_prime(&mut rng, 256);
@@ -122,7 +123,7 @@ pub mod interactive {
     use rug::{Complete, Integer};
 
     use crate::common::sqrt::{blum_sqrt, find_residue, sample_neg_jacobi};
-    use crate::{Error, ErrorReason, IntegerExt, InvalidProof, InvalidProofReason};
+    use crate::{Error, ErrorReason, InvalidProof, InvalidProofReason};
 
     use super::{Challenge, Commitment, Data, PrivateData, Proof, ProofPoint};
 

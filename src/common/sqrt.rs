@@ -1,8 +1,6 @@
 use rand_core::RngCore;
 use rug::{Complete, Integer};
 
-use crate::IntegerExt;
-
 /// Find principal square root in a Blum modulus quotient ring.
 ///
 /// Pre-requisites:
@@ -38,8 +36,8 @@ pub fn find_residue(
     q: &Integer,
     n: &Integer,
 ) -> Option<(bool, bool, Integer)> {
-    let jp = y.modulo(p).jacobi(p);
-    let jq = y.modulo(q).jacobi(q);
+    let jp = y.modulo_ref(p).complete().jacobi(p);
+    let jq = y.modulo_ref(q).complete().jacobi(q);
     match (jp, jq) {
         (1, 1) => return Some((false, false, y.clone())),
         (-1, -1) => return Some((true, false, (n - y).complete())),
@@ -47,8 +45,8 @@ pub fn find_residue(
     }
 
     let y = (y * w).complete().modulo(n);
-    let jp = y.modulo(p).jacobi(p);
-    let jq = y.modulo(q).jacobi(q);
+    let jp = y.modulo_ref(p).complete().jacobi(p);
+    let jq = y.modulo_ref(q).complete().jacobi(q);
     match (jp, jq) {
         (1, 1) => Some((false, true, y)),
         (-1, -1) => Some((true, true, n - y)),

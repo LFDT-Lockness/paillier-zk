@@ -102,9 +102,6 @@ pub trait IntegerExt: Sized {
     /// Checks whether `self` is in interval `[-range; range]`
     fn is_in_pm(&self, range: &Self) -> bool;
 
-    /// Returns `self mod n`
-    fn modulo(&self, n: &Self) -> Self;
-
     /// Returns `self smod n`
     ///
     /// For odd `n`, result is in `{-n/2, .., n/2}`. For even `n`, result is in
@@ -150,12 +147,8 @@ impl IntegerExt for Integer {
         minus_range <= *self && self <= range
     }
 
-    fn modulo(&self, n: &Self) -> Self {
-        fast_paillier::utils::IntegerExt::modulo(self, n)
-    }
-
     fn signed_modulo(&self, n: &Self) -> Self {
-        let self_mod_n = self.modulo(n);
+        let self_mod_n = self.modulo_ref(n).complete();
         let half_n = (n >> 1_u32).complete();
         if half_n.is_odd() && self_mod_n <= half_n || self_mod_n < half_n {
             self_mod_n
