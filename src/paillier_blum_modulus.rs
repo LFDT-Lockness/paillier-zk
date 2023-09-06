@@ -122,7 +122,7 @@ pub mod interactive {
     use rug::{Complete, Integer};
 
     use crate::common::sqrt::{blum_sqrt, find_residue, sample_neg_jacobi};
-    use crate::{Error, ErrorReason, IntegerExt, InvalidProof, InvalidProofReason};
+    use crate::{Error, ErrorReason, InvalidProof, InvalidProofReason};
 
     use super::{Challenge, Commitment, Data, PrivateData, Proof, ProofPoint};
 
