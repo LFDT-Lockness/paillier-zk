@@ -44,7 +44,7 @@
 //! let aux: p::Aux = pregenerated::verifier_aux();
 //! let security = p::SecurityParams {
 //!     l: 1024,
-//!     epsilon: 128,
+//!     epsilon: 300,
 //!     q: (Integer::ONE << 128_u32).complete(),
 //! };
 //!
