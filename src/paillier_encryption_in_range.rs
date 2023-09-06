@@ -28,6 +28,7 @@
 //! let shared_state_verifier = sha2::Sha256::default();
 //!
 //! let mut rng = rand_core::OsRng;
+//! # let mut rng = rand_dev::DevRng::new();
 //!
 //! // 0. Setup: prover and verifier share common Ring-Pedersen parameters:
 //!
