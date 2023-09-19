@@ -1,6 +1,8 @@
 pub mod rng;
 pub mod sqrt;
 
+use std::sync::Arc;
+
 use generic_ec::Scalar;
 use rug::{Complete, Integer};
 
@@ -14,6 +16,45 @@ pub struct Aux {
     pub t: Integer,
     /// N^ in paper
     pub rsa_modulo: Integer,
+    /// Precomuted table for computing `s^x t^y mod rsa_modulo` faster
+    ///
+    /// If absent, optimization is disabled.
+    ///
+    /// We wrap the table into [`Arc`] to make cloning cheaper. Note that during serialization/deserialization
+    /// process, serde may create some extra copies of the table.
+    pub multiexp: Option<Arc<crate::multiexp::MultiexpTable>>,
+}
+
+impl Aux {
+    pub fn combine(&self, x: &Integer, y: &Integer) -> Result<Integer, BadExponent> {
+        if let Some(table) = &self.multiexp {
+            match table.prod_exp(x, y) {
+                Some(res) => return Ok(res),
+                None if cfg!(debug_assertions) => {
+                    return Err(BadExponentReason::PrecompTable.into())
+                }
+                None => {
+                    // When debug assertions are disabled, we fallback to naive exponentiation
+                }
+            }
+        }
+
+        self.combine_naive(x, y)
+    }
+
+    fn combine_naive(&self, x: &Integer, y: &Integer) -> Result<Integer, BadExponent> {
+        let s_to_x: Integer = self
+            .s
+            .pow_mod_ref(x, &self.rsa_modulo)
+            .ok_or(BadExponentReason::Undefined)?
+            .into();
+        let t_to_y: Integer = self
+            .t
+            .pow_mod_ref(y, &self.rsa_modulo)
+            .ok_or(BadExponentReason::Undefined)?
+            .into();
+        Ok((s_to_x * t_to_y).modulo(&self.rsa_modulo))
+    }
 }
 
 /// Error indicating that proof is invalid
@@ -115,8 +156,14 @@ impl IntegerExt for Integer {
     }
 
     fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent> {
-        let l_to_le: Integer = l.pow_mod_ref(le, self).ok_or(BadExponent)?.into();
-        let r_to_re: Integer = r.pow_mod_ref(re, self).ok_or(BadExponent)?.into();
+        let l_to_le: Integer = l
+            .pow_mod_ref(le, self)
+            .ok_or(BadExponentReason::Undefined)?
+            .into();
+        let r_to_re: Integer = r
+            .pow_mod_ref(re, self)
+            .ok_or(BadExponentReason::Undefined)?
+            .into();
         Ok((l_to_le * r_to_re).modulo(self))
     }
 
@@ -162,8 +209,23 @@ impl IntegerExt for Integer {
 ///
 /// Returned by [`BigNumberExt::powmod`] and other functions that do exponentiation internally
 #[derive(Clone, Copy, Debug, thiserror::Error)]
-#[error("exponent is undefined")]
-pub struct BadExponent;
+#[error(transparent)]
+pub struct BadExponent(#[from] BadExponentReason);
+
+impl BadExponent {
+    /// Constructs an error that exponent is undefined
+    pub fn undefined() -> Self {
+        Self(BadExponentReason::Undefined)
+    }
+}
+
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+enum BadExponentReason {
+    #[error("exponent is undefined")]
+    Undefined,
+    #[error("multiexp error: precomputation table could not perform multiexponentiation")]
+    PrecompTable,
+}
 
 /// Returns `Err(err)` if `assertion` is false
 pub fn fail_if<E>(err: E, assertion: bool) -> Result<(), E> {
@@ -216,6 +278,7 @@ pub mod test {
             s,
             t,
             rsa_modulo: n,
+            multiexp: None,
         }
     }
 

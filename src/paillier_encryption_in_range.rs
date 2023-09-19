@@ -227,7 +227,7 @@ pub mod interactive {
         let nonce_to_challenge_mod_n: Integer = pdata
             .nonce
             .pow_mod_ref(challenge, data.key.n())
-            .ok_or(BadExponent)?
+            .ok_or(BadExponent::undefined())?
             .into();
         let z2 = (&private_commitment.r * nonce_to_challenge_mod_n).modulo(data.key.n());
         let z3 = (&private_commitment.gamma + (challenge * &private_commitment.mu)).complete();
