@@ -195,10 +195,10 @@ pub mod interactive {
         let x = Integer::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
         let y = Integer::from_rng_pm(&l_e_n_circ_modulo, &mut rng);
 
-        let p = aux.rsa_modulo.combine(&aux.s, pdata.p, &aux.t, &mu)?;
-        let q = aux.rsa_modulo.combine(&aux.s, pdata.q, &aux.t, &nu)?;
-        let a = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &x)?;
-        let b = aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &y)?;
+        let p = aux.combine(pdata.p, &mu)?;
+        let q = aux.combine(pdata.q, &nu)?;
+        let a = aux.combine(&alpha, &x)?;
+        let b = aux.combine(&beta, &y)?;
         let t = aux.rsa_modulo.combine(&q, &alpha, &aux.t, &r)?;
 
         let commitment = Commitment {
@@ -257,9 +257,7 @@ pub mod interactive {
     ) -> Result<(), InvalidProof> {
         // check 1
         {
-            let lhs = aux
-                .rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.w1)?;
+            let lhs = aux.combine(&proof.z1, &proof.w1)?;
             let rhs =
                 aux.rsa_modulo
                     .combine(&commitment.a, Integer::ONE, &commitment.p, challenge)?;
@@ -267,9 +265,7 @@ pub mod interactive {
         }
         // check 2
         {
-            let lhs = aux
-                .rsa_modulo
-                .combine(&aux.s, &proof.z2, &aux.t, &proof.w2)?;
+            let lhs = aux.combine(&proof.z2, &proof.w2)?;
             let rhs =
                 aux.rsa_modulo
                     .combine(&commitment.b, Integer::ONE, &commitment.q, challenge)?;
@@ -277,9 +273,7 @@ pub mod interactive {
         }
         // check 3
         {
-            let r = aux
-                .rsa_modulo
-                .combine(&aux.s, data.n, &aux.t, &commitment.sigma)?;
+            let r = aux.combine(data.n, &commitment.sigma)?;
             let lhs = aux
                 .rsa_modulo
                 .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;

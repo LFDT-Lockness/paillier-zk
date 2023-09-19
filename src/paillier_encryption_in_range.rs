@@ -199,11 +199,9 @@ pub mod interactive {
         let r = Integer::gen_invertible(data.key.n(), rng);
         let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_plus_e, rng);
 
-        let s = aux
-            .rsa_modulo
-            .combine(&aux.s, pdata.plaintext, &aux.t, &mu)?;
+        let s = aux.combine(pdata.plaintext, &mu)?;
         let a = data.key.encrypt_with(&alpha, &r)?;
-        let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
+        let c = aux.combine(&alpha, &gamma)?;
 
         Ok((
             Commitment { s, a, c },
@@ -268,9 +266,7 @@ pub mod interactive {
         }
 
         {
-            let lhs = aux
-                .rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?;
+            let lhs = aux.combine(&proof.z1, &proof.z3)?;
             let rhs =
                 aux.rsa_modulo
                     .combine(&commitment.c, Integer::ONE, &commitment.s, challenge)?;
