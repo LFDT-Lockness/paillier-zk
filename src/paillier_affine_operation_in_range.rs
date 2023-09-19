@@ -299,10 +299,10 @@ pub mod interactive {
             a,
             b_x: Point::<C>::generator() * alpha.to_scalar(),
             b_y: data.key1.encrypt_with(&beta, &r_y)?,
-            e: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
-            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &m)?,
-            f: aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &delta)?,
-            t: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
+            e: aux.combine(&alpha, &gamma)?,
+            s: aux.combine(&pdata.x, &m)?,
+            f: aux.combine(&beta, &delta)?,
+            t: aux.combine(&pdata.y, &mu)?,
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -398,15 +398,13 @@ pub mod interactive {
         }
         fail_if_ne(
             InvalidProofReason::EqualityCheck(4),
-            aux.rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?,
+            aux.combine(&proof.z1, &proof.z3)?,
             aux.rsa_modulo
                 .combine(&commitment.e, Integer::ONE, &commitment.s, challenge)?,
         )?;
         fail_if_ne(
             InvalidProofReason::EqualityCheck(5),
-            aux.rsa_modulo
-                .combine(&aux.s, &proof.z2, &aux.t, &proof.z4)?,
+            aux.combine(&proof.z2, &proof.z4)?,
             aux.rsa_modulo
                 .combine(&commitment.f, Integer::ONE, &commitment.t, challenge)?,
         )?;

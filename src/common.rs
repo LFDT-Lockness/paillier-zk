@@ -39,21 +39,8 @@ impl Aux {
             }
         }
 
-        self.combine_naive(x, y)
-    }
-
-    fn combine_naive(&self, x: &Integer, y: &Integer) -> Result<Integer, BadExponent> {
-        let s_to_x: Integer = self
-            .s
-            .pow_mod_ref(x, &self.rsa_modulo)
-            .ok_or(BadExponentReason::Undefined)?
-            .into();
-        let t_to_y: Integer = self
-            .t
-            .pow_mod_ref(y, &self.rsa_modulo)
-            .ok_or(BadExponentReason::Undefined)?
-            .into();
-        Ok((s_to_x * t_to_y).modulo(&self.rsa_modulo))
+        // Naive exponentiation when optimizations are not enabled
+        self.rsa_modulo.combine(&self.s, x, &self.t, y)
     }
 }
 

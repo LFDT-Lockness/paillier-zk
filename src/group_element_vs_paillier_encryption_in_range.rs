@@ -208,10 +208,10 @@ pub mod interactive {
         let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
 
         let commitment = Commitment {
-            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &mu)?,
+            s: aux.combine(&pdata.x, &mu)?,
             a: data.key0.encrypt_with(&alpha, &r)?,
             y: data.b * alpha.to_scalar(),
-            d: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
+            d: aux.combine(&alpha, &gamma)?,
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -270,9 +270,7 @@ pub mod interactive {
             fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         {
-            let lhs = aux
-                .rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?;
+            let lhs = aux.combine(&proof.z1, &proof.z3)?;
             let rhs =
                 aux.rsa_modulo
                     .combine(&commitment.d, Integer::ONE, &commitment.s, challenge)?;
