@@ -123,7 +123,7 @@ pub mod interactive {
     use rug::{Complete, Integer};
 
     use crate::common::sqrt::{blum_sqrt, find_residue, sample_neg_jacobi};
-    use crate::{Error, ErrorReason, InvalidProof, InvalidProofReason};
+    use crate::{BadExponent, Error, ErrorReason, InvalidProof, InvalidProofReason};
 
     use super::{Challenge, Commitment, Data, PrivateData, Proof, ProofPoint};
 
@@ -152,7 +152,7 @@ pub mod interactive {
             .map(|y| {
                 let z = y
                     .pow_mod_ref(&n_inverse, n)
-                    .ok_or(ErrorReason::ModPow)?
+                    .ok_or(BadExponent::undefined())?
                     .into();
                 let (a, b, y_) = find_residue(y, w, p, q, n).ok_or(ErrorReason::FindResidue)?;
                 let x = blum_sqrt(blum_sqrt(y_));
