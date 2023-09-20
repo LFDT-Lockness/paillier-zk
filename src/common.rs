@@ -31,7 +31,11 @@ impl Aux {
             match table.prod_exp(x, y) {
                 Some(res) => return Ok(res),
                 None if cfg!(debug_assertions) => {
-                    return Err(BadExponentReason::PrecompTable.into())
+                    return Err(BadExponentReason::ExpSize {
+                        exp_size: (x.significant_bits(), y.significant_bits()),
+                        max_exp_size: table.max_exponents_size(),
+                    }
+                    .into())
                 }
                 None => {
                     // When debug assertions are disabled, we fallback to naive exponentiation
@@ -210,8 +214,11 @@ impl BadExponent {
 enum BadExponentReason {
     #[error("exponent is undefined")]
     Undefined,
-    #[error("multiexp error: precomputation table could not perform multiexponentiation")]
-    PrecompTable,
+    #[error("multiexp error: exponent size is too large (exponents size: {exp_size:?}, max exponent size: {max_exp_size:?})")]
+    ExpSize {
+        exp_size: (u32, u32),
+        max_exp_size: (usize, usize),
+    },
 }
 
 /// Returns `Err(err)` if `assertion` is false
@@ -332,5 +339,54 @@ mod _test {
         assert_eq!(Integer::from(1).signed_modulo(&n), 1);
         assert_eq!(Integer::from(2).signed_modulo(&n), -2);
         assert_eq!(Integer::from(3).signed_modulo(&n), -1);
+    }
+
+    #[test]
+    fn multiexp() {
+        let mut rng = rand_dev::DevRng::new();
+        let mut aux = super::test::aux(&mut rng);
+        let table = std::sync::Arc::new(
+            crate::multiexp::MultiexpTable::build(&aux.s, &aux.t, 512, 448, aux.rsa_modulo.clone())
+                .unwrap(),
+        );
+        let (x_bits, y_bits) = table.max_exponents_size();
+        aux.multiexp = Some(table);
+
+        // Corner case: upper bound
+        let x_max = (Integer::ONE.clone() << x_bits) - 1;
+        let y_max = (Integer::ONE.clone() << y_bits) - 1;
+        let actual = aux.combine(&x_max, &y_max).unwrap();
+        let expected = aux
+            .rsa_modulo
+            .combine(&aux.s, &x_max, &aux.t, &y_max)
+            .unwrap();
+        assert_eq!(actual, expected);
+
+        // Corner case: lower bound
+        let x_min = -x_max.clone();
+        let y_min = -y_max.clone();
+        let actual = aux.combine(&x_min, &y_min).unwrap();
+        let expected = aux
+            .rsa_modulo
+            .combine(&aux.s, &x_min, &aux.t, &y_min)
+            .unwrap();
+        assert_eq!(actual, expected);
+
+        // Random integers within the range
+        let mut rng = fast_paillier::utils::external_rand(&mut rng);
+        for _ in 0..100 {
+            let x = (x_max.clone() + 1u8).random_below(&mut rng);
+            let y = (y_max.clone() + 1u8).random_below(&mut rng);
+
+            let x = if rng.bits(1) == 1 { x } else { -x };
+            let y = if rng.bits(1) == 1 { y } else { -y };
+
+            println!("x: {x}");
+            println!("y: {y}");
+
+            let actual = aux.combine(&x, &y).unwrap();
+            let expected = aux.rsa_modulo.combine(&aux.s, &x, &aux.t, &y).unwrap();
+            assert_eq!(actual, expected);
+        }
     }
 }
