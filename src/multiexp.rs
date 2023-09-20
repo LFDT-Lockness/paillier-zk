@@ -51,10 +51,10 @@ impl MultiexpTable {
         }
 
         // smallest negative value possible for `x`
-        let ell_x = -(Integer::ONE.clone() << x_bits) + 1;
+        let ell_x = -(Integer::ONE.clone() << (k_x * 8)) + 1;
         let s_to_ell_x = s.pow_mod_ref(&ell_x, &N)?.into();
         // smallest negative value possible for `y`
-        let ell_y = -(Integer::ONE.clone() << y_bits) + 1;
+        let ell_y = -(Integer::ONE.clone() << (k_y * 8)) + 1;
         let t_to_ell_y = t.pow_mod_ref(&ell_y, &N)?.into();
 
         Some(Self {
@@ -126,6 +126,14 @@ impl MultiexpTable {
         }
 
         Some(res)
+    }
+
+    /// Returns max size of exponents (in bits) that can be computed
+    ///
+    /// Max exponent size is guaranteed to be equal or greater than `x_bits` and `y_bits`
+    /// provided in [MultiexpTable::build]
+    pub fn max_exponents_size(&self) -> (usize, usize) {
+        (self.s.len() * 8, self.t.len() * 8)
     }
 
     /// Estimates size of the table in RAM in bytes
