@@ -155,7 +155,7 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use fast_paillier::{Ciphertext, EncryptionKey, Nonce};
+use fast_paillier::{AnyEncryptionKey, Ciphertext, Nonce};
 use generic_ec::{Curve, Point};
 use rug::Integer;
 
@@ -181,33 +181,32 @@ pub struct SecurityParams {
 
 /// Public data that both parties know
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
-pub struct Data<C: Curve> {
+pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
-    pub key0: EncryptionKey,
+    pub key0: &'a dyn AnyEncryptionKey,
     /// N1 in paper, public key that y -> Y was encrypted on
-    pub key1: EncryptionKey,
+    pub key1: &'a dyn AnyEncryptionKey,
     /// C or C0 in paper, some data encrypted on N0
-    pub c: Ciphertext,
+    pub c: &'a Ciphertext,
     /// D or C in paper, result of affine transformation of C0 with x and y
-    pub d: Integer,
+    pub d: &'a Integer,
     /// Y in paper, y encrypted on N1
-    pub y: Ciphertext,
+    pub y: &'a Ciphertext,
     /// X in paper, obtained as g^x
-    pub x: Point<C>,
+    pub x: &'a Point<C>,
 }
 
 /// Private data of prover
 #[derive(Clone)]
-pub struct PrivateData {
+pub struct PrivateData<'a> {
     /// x or epsilon in paper, preimage of X
-    pub x: Integer,
+    pub x: &'a Integer,
     /// y or delta in paper, preimage of Y
-    pub y: Integer,
+    pub y: &'a Integer,
     /// rho in paper, nonce in encryption of y for additive action
-    pub nonce: Nonce,
+    pub nonce: &'a Nonce,
     /// rho_y in paper, nonce in encryption of y to obtain Y
-    pub nonce_y: Nonce,
+    pub nonce_y: &'a Nonce,
 }
 
 // As described in cggmp21 at page 35
@@ -325,8 +324,8 @@ pub mod interactive {
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
         Ok(Proof {
-            z1: (&pcomm.alpha + challenge * &pdata.x).complete(),
-            z2: (&pcomm.beta + challenge * &pdata.y).complete(),
+            z1: (&pcomm.alpha + challenge * pdata.x).complete(),
+            z2: (&pcomm.beta + challenge * pdata.y).complete(),
             z3: (&pcomm.gamma + challenge * &pcomm.m).complete(),
             z4: (&pcomm.delta + challenge * &pcomm.mu).complete(),
             w: data
@@ -560,18 +559,18 @@ mod test {
         let d = ek0.oadd(&x_at_c, &y_enc_ek0).unwrap();
 
         let data = super::Data {
-            key0: ek0,
-            key1: ek1,
-            c,
-            d,
-            y: y_enc_ek1,
-            x: x.to_scalar::<C>() * Point::generator(),
+            key0: &ek0,
+            key1: &ek1,
+            c: &c,
+            d: &d,
+            y: &y_enc_ek1,
+            x: &(x.to_scalar::<C>() * Point::generator()),
         };
         let pdata = super::PrivateData {
-            x,
-            y,
-            nonce: rho,
-            nonce_y: rho_y,
+            x: &x,
+            y: &y,
+            nonce: &rho,
+            nonce_y: &rho_y,
         };
 
         let aux = crate::common::test::aux(rng);
