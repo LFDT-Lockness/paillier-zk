@@ -291,7 +291,7 @@ pub mod interactive {
         let mu = Integer::from_rng_pm(&hat_n_at_two_to_l, &mut rng);
 
         let beta_enc_key0 = data.key0.encrypt_with(&beta, &r)?;
-        let alpha_at_c = data.key0.omul(&alpha, &data.c)?;
+        let alpha_at_c = data.key0.omul(&alpha, data.c)?;
         let a = data.key0.oadd(&alpha_at_c, &beta_enc_key0)?;
 
         let commitment = Commitment {
@@ -299,9 +299,9 @@ pub mod interactive {
             b_x: Point::<C>::generator() * alpha.to_scalar(),
             b_y: data.key1.encrypt_with(&beta, &r_y)?,
             e: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
-            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &m)?,
+            s: aux.rsa_modulo.combine(&aux.s, pdata.x, &aux.t, &m)?,
             f: aux.rsa_modulo.combine(&aux.s, &beta, &aux.t, &delta)?,
-            t: aux.rsa_modulo.combine(&aux.s, &pdata.y, &aux.t, &mu)?,
+            t: aux.rsa_modulo.combine(&aux.s, pdata.y, &aux.t, &mu)?,
         };
         let private_commitment = PrivateCommitment {
             alpha,
@@ -331,11 +331,11 @@ pub mod interactive {
             w: data
                 .key0
                 .n()
-                .combine(&pcomm.r, Integer::ONE, &pdata.nonce, challenge)?,
+                .combine(&pcomm.r, Integer::ONE, pdata.nonce, challenge)?,
             w_y: data
                 .key1
                 .n()
-                .combine(&pcomm.r_y, Integer::ONE, &pdata.nonce_y, challenge)?,
+                .combine(&pcomm.r_y, Integer::ONE, pdata.nonce_y, challenge)?,
         })
     }
 
@@ -353,7 +353,7 @@ pub mod interactive {
             let lhs = {
                 let z1_at_c = data
                     .key0
-                    .omul(&proof.z1, &data.c)
+                    .omul(&proof.z1, data.c)
                     .map_err(|_| InvalidProofReason::PaillierOp)?;
                 let enc = data
                     .key0
@@ -366,7 +366,7 @@ pub mod interactive {
             let rhs = {
                 let e_at_d = data
                     .key0
-                    .omul(challenge, &data.d)
+                    .omul(challenge, data.d)
                     .map_err(|_| InvalidProofReason::PaillierOp)?;
                 data.key0
                     .oadd(&commitment.a, &e_at_d)
@@ -387,7 +387,7 @@ pub mod interactive {
             let rhs = {
                 let e_at_y = data
                     .key1
-                    .omul(challenge, &data.y)
+                    .omul(challenge, data.y)
                     .map_err(|_| InvalidProofReason::PaillierOp)?;
                 data.key1
                     .oadd(&commitment.b_y, &e_at_y)

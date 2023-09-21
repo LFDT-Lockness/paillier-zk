@@ -201,7 +201,7 @@ pub mod interactive {
 
         let s = aux
             .rsa_modulo
-            .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)?;
+            .combine(&aux.s, pdata.plaintext, &aux.t, &mu)?;
         let a = data.key.encrypt_with(&alpha, &r)?;
         let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
 
@@ -258,7 +258,7 @@ pub mod interactive {
             let rhs = {
                 let e_at_k = data
                     .key
-                    .omul(challenge, &data.ciphertext)
+                    .omul(challenge, data.ciphertext)
                     .map_err(|_| InvalidProofReason::PaillierOp)?;
                 data.key
                     .oadd(&commitment.a, &e_at_k)

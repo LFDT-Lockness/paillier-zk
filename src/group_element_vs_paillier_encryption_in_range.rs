@@ -211,7 +211,7 @@ pub mod interactive {
         let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
 
         let commitment = Commitment {
-            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &mu)?,
+            s: aux.rsa_modulo.combine(&aux.s, pdata.x, &aux.t, &mu)?,
             a: data.key0.encrypt_with(&alpha, &r)?,
             y: data.b * alpha.to_scalar(),
             d: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
@@ -237,7 +237,7 @@ pub mod interactive {
             z2: data
                 .key0
                 .n()
-                .combine(&pcomm.r, Integer::ONE, &pdata.nonce, challenge)?,
+                .combine(&pcomm.r, Integer::ONE, pdata.nonce, challenge)?,
             z3: (&pcomm.gamma + challenge * &pcomm.mu).complete(),
         })
     }
@@ -259,7 +259,7 @@ pub mod interactive {
             let rhs = {
                 let e_at_c = data
                     .key0
-                    .omul(challenge, &data.c)
+                    .omul(challenge, data.c)
                     .map_err(|_| InvalidProofReason::PaillierOp)?;
                 data.key0
                     .oadd(&commitment.a, &e_at_c)
