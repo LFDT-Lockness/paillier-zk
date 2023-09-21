@@ -545,8 +545,8 @@ mod test {
     {
         let dk0 = random_key(rng).unwrap();
         let dk1 = random_key(rng).unwrap();
-        let ek0 = dk0.encryption_key();
-        let ek1 = dk1.encryption_key();
+        let ek0 = dk0.encryption_key().clone();
+        let ek1 = dk1.encryption_key().clone();
 
         let (c, _) = {
             let plaintext = Integer::from_rng_pm(ek0.half_n(), rng);

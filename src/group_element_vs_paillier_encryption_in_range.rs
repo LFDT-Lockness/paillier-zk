@@ -405,7 +405,7 @@ mod test {
         Scalar<C>: FromHash,
     {
         let private_key0 = random_key(&mut rng).unwrap();
-        let key0 = private_key0.encryption_key();
+        let key0 = private_key0.encryption_key().clone();
 
         let (ciphertext, nonce) = key0.encrypt_with_random(&mut rng, &plaintext).unwrap();
         let b = Point::<C>::generator() * Scalar::random(&mut rng);
