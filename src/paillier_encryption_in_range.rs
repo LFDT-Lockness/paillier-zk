@@ -52,13 +52,15 @@
 //!
 //! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
 //!
-//! let data = p::Data { key, ciphertext };
-//! let pdata = p::PrivateData { plaintext, nonce };
+//! let data = p::Data { key, ciphertext: &ciphertext };
 //! let (commitment, proof) = p::non_interactive::prove(
 //!     shared_state_prover,
 //!     &aux,
-//!     &data,
-//!     &pdata,
+//!     data,
+//!     p::PrivateData {
+//!         plaintext: &plaintext,
+//!         nonce: &nonce,
+//!     },
 //!     &security,
 //!     &mut rng,
 //! )?;
@@ -75,7 +77,7 @@
 //! p::non_interactive::verify(
 //!     shared_state_verifier,
 //!     &aux,
-//!     &data,
+//!     data,
 //!     &commitment,
 //!     &security,
 //!     &proof,
@@ -85,7 +87,7 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use fast_paillier::{Ciphertext, EncryptionKey, Nonce};
+use fast_paillier::{AnyEncryptionKey, Ciphertext, Nonce};
 use rug::Integer;
 
 #[cfg(feature = "serde")]
@@ -109,22 +111,21 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Data {
+#[derive(Debug, Clone, Copy)]
+pub struct Data<'a> {
     /// N0 in paper, public key that k -> K was encrypted on
-    pub key: EncryptionKey,
+    pub key: &'a dyn AnyEncryptionKey,
     /// K in paper
-    pub ciphertext: Ciphertext,
+    pub ciphertext: &'a Ciphertext,
 }
 
 /// Private data of prover
-#[derive(Clone)]
-pub struct PrivateData {
+#[derive(Clone, Copy)]
+pub struct PrivateData<'a> {
     /// k in paper, plaintext of K
-    pub plaintext: Integer,
+    pub plaintext: &'a Integer,
     /// rho in paper, nonce of encryption k -> K
-    pub nonce: Nonce,
+    pub nonce: &'a Nonce,
 }
 
 // As described in cggmp21 at page 33
@@ -183,8 +184,8 @@ pub mod interactive {
     /// Create random commitment
     pub fn commit<R: RngCore>(
         aux: &Aux,
-        data: &Data,
-        pdata: &PrivateData,
+        data: Data,
+        pdata: PrivateData,
         security: &SecurityParams,
         rng: &mut R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
@@ -200,7 +201,7 @@ pub mod interactive {
 
         let s = aux
             .rsa_modulo
-            .combine(&aux.s, &pdata.plaintext, &aux.t, &mu)?;
+            .combine(&aux.s, pdata.plaintext, &aux.t, &mu)?;
         let a = data.key.encrypt_with(&alpha, &r)?;
         let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
 
@@ -217,12 +218,12 @@ pub mod interactive {
 
     /// Compute proof for given data and prior protocol values
     pub fn prove(
-        data: &Data,
-        pdata: &PrivateData,
+        data: Data,
+        pdata: PrivateData,
         private_commitment: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
-        let z1 = (&private_commitment.alpha + (challenge * &pdata.plaintext)).complete();
+        let z1 = (&private_commitment.alpha + (challenge * pdata.plaintext)).complete();
         let nonce_to_challenge_mod_n: Integer = pdata
             .nonce
             .pow_mod_ref(challenge, data.key.n())
@@ -236,7 +237,7 @@ pub mod interactive {
     /// Verify the proof
     pub fn verify(
         aux: &Aux,
-        data: &Data,
+        data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
         challenge: &Challenge,
@@ -257,7 +258,7 @@ pub mod interactive {
             let rhs = {
                 let e_at_k = data
                     .key
-                    .omul(challenge, &data.ciphertext)
+                    .omul(challenge, data.ciphertext)
                     .map_err(|_| InvalidProofReason::PaillierOp)?;
                 data.key
                     .oadd(&commitment.a, &e_at_k)
@@ -311,8 +312,8 @@ pub mod non_interactive {
     pub fn prove<D, R: RngCore>(
         shared_state: D,
         aux: &Aux,
-        data: &Data,
-        pdata: &PrivateData,
+        data: Data,
+        pdata: PrivateData,
         security: &SecurityParams,
         rng: &mut R,
     ) -> Result<(Commitment, Proof), Error>
@@ -329,7 +330,7 @@ pub mod non_interactive {
     pub fn challenge<D>(
         shared_state: D,
         aux: &Aux,
-        data: &Data,
+        data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
     ) -> Challenge
@@ -358,7 +359,7 @@ pub mod non_interactive {
     pub fn verify<D>(
         shared_state: D,
         aux: &Aux,
-        data: &Data,
+        data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
         proof: &Proof,
@@ -386,20 +387,20 @@ mod test {
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = private_key.encryption_key();
         let (ciphertext, nonce) = key.encrypt_with_random(&mut rng, &plaintext).unwrap();
-        let data = super::Data { key, ciphertext };
-        let pdata = super::PrivateData { plaintext, nonce };
+        let data = super::Data {
+            key,
+            ciphertext: &ciphertext,
+        };
+        let pdata = super::PrivateData {
+            plaintext: &plaintext,
+            nonce: &nonce,
+        };
 
         let shared_state = sha2::Sha256::default();
-        let (commitment, proof) = super::non_interactive::prove(
-            shared_state.clone(),
-            &aux,
-            &data,
-            &pdata,
-            &security,
-            rng,
-        )
-        .unwrap();
-        super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
+        let (commitment, proof) =
+            super::non_interactive::prove(shared_state.clone(), &aux, data, pdata, &security, rng)
+                .unwrap();
+        super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
     }
 
     #[test]

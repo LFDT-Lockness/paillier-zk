@@ -62,14 +62,18 @@
 //!
 //! // 3. Prover computes a non-interactive proof that plaintext is at most `l` bits:
 //!
-//! let data = p::Data { key0, c: C, x: X, b: Point::<E>::generator().into() };
-//! let pdata = p::PrivateData { x, nonce };
+//! let data = p::Data {
+//!     key0,
+//!     c: &C,
+//!     x: &X,
+//!     b: &Point::<E>::generator().into(),
+//! };
 //! let (commitment, proof) =
 //!     p::non_interactive::prove(
 //!         shared_state_prover,
 //!         &aux,
-//!         &data,
-//!         &pdata,
+//!         data,
+//!         p::PrivateData { x: &x, nonce: &nonce },
 //!         &security,
 //!         &mut rng,
 //!     )?;
@@ -86,7 +90,7 @@
 //! p::non_interactive::verify(
 //!     shared_state_verifier,
 //!     &aux,
-//!     &data,
+//!     data,
 //!     &commitment,
 //!     &security,
 //!     &proof,
@@ -96,7 +100,7 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use fast_paillier::{Ciphertext, EncryptionKey, Nonce};
+use fast_paillier::{AnyEncryptionKey, Ciphertext, Nonce};
 use generic_ec::{Curve, Point};
 use rug::Integer;
 
@@ -119,26 +123,25 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
-pub struct Data<C: Curve> {
+#[derive(Debug, Clone, Copy)]
+pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
-    pub key0: EncryptionKey,
+    pub key0: &'a dyn AnyEncryptionKey,
     /// C in paper, logarithm of X encrypted on N0
-    pub c: Ciphertext,
+    pub c: &'a Ciphertext,
     /// A basepoint, generator in group
-    pub b: Point<C>,
+    pub b: &'a Point<C>,
     /// X in paper, exponent of plaintext of C
-    pub x: Point<C>,
+    pub x: &'a Point<C>,
 }
 
 /// Private data of prover
-#[derive(Clone)]
-pub struct PrivateData {
+#[derive(Clone, Copy)]
+pub struct PrivateData<'a> {
     /// x in paper, logarithm of X and plaintext of C
-    pub x: Integer,
+    pub x: &'a Integer,
     /// rho in paper, nonce in encryption x -> C
-    pub nonce: Nonce,
+    pub nonce: &'a Nonce,
 }
 
 /// Prover's first message, obtained by [`interactive::commit`]
@@ -193,8 +196,8 @@ pub mod interactive {
     /// Create random commitment
     pub fn commit<C: Curve, R: RngCore>(
         aux: &Aux,
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
@@ -208,7 +211,7 @@ pub mod interactive {
         let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_e, &mut rng);
 
         let commitment = Commitment {
-            s: aux.rsa_modulo.combine(&aux.s, &pdata.x, &aux.t, &mu)?,
+            s: aux.rsa_modulo.combine(&aux.s, pdata.x, &aux.t, &mu)?,
             a: data.key0.encrypt_with(&alpha, &r)?,
             y: data.b * alpha.to_scalar(),
             d: aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?,
@@ -224,17 +227,17 @@ pub mod interactive {
 
     /// Compute proof for given data and prior protocol values
     pub fn prove<C: Curve>(
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
         Ok(Proof {
-            z1: (&pcomm.alpha + challenge * &pdata.x).complete(),
+            z1: (&pcomm.alpha + challenge * pdata.x).complete(),
             z2: data
                 .key0
                 .n()
-                .combine(&pcomm.r, Integer::ONE, &pdata.nonce, challenge)?,
+                .combine(&pcomm.r, Integer::ONE, pdata.nonce, challenge)?,
             z3: (&pcomm.gamma + challenge * &pcomm.mu).complete(),
         })
     }
@@ -242,7 +245,7 @@ pub mod interactive {
     /// Verify the proof
     pub fn verify<C: Curve>(
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
         challenge: &Challenge,
@@ -256,7 +259,7 @@ pub mod interactive {
             let rhs = {
                 let e_at_c = data
                     .key0
-                    .omul(challenge, &data.c)
+                    .omul(challenge, data.c)
                     .map_err(|_| InvalidProofReason::PaillierOp)?;
                 data.key0
                     .oadd(&commitment.a, &e_at_c)
@@ -317,8 +320,8 @@ pub mod non_interactive {
     pub fn prove<C: Curve, R: RngCore, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         security: &SecurityParams,
         rng: &mut R,
     ) -> Result<(Commitment<C>, Proof), Error>
@@ -336,7 +339,7 @@ pub mod non_interactive {
     pub fn verify<C: Curve, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
         proof: &Proof,
@@ -354,7 +357,7 @@ pub mod non_interactive {
     pub fn challenge<C: Curve, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
     ) -> Challenge
@@ -405,21 +408,21 @@ mod test {
         Scalar<C>: FromHash,
     {
         let private_key0 = random_key(&mut rng).unwrap();
-        let key0 = private_key0.encryption_key();
+        let key0 = private_key0.encryption_key().clone();
 
         let (ciphertext, nonce) = key0.encrypt_with_random(&mut rng, &plaintext).unwrap();
         let b = Point::<C>::generator() * Scalar::random(&mut rng);
         let x = b * plaintext.to_scalar();
 
         let data = super::Data {
-            key0,
-            c: ciphertext,
-            x,
-            b,
+            key0: &key0,
+            c: &ciphertext,
+            x: &x,
+            b: &b,
         };
         let pdata = super::PrivateData {
-            x: plaintext,
-            nonce,
+            x: &plaintext,
+            nonce: &nonce,
         };
 
         let aux = crate::common::test::aux(&mut rng);
@@ -429,14 +432,14 @@ mod test {
         let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
-            &data,
-            &pdata,
+            data,
+            pdata,
             &security,
             &mut rng,
         )
         .unwrap();
 
-        super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
+        super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
     }
 
     fn passing_test<C: Curve>()
