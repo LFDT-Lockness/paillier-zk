@@ -85,7 +85,7 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use fast_paillier::{Ciphertext, EncryptionKey, Nonce};
+use fast_paillier::{AnyEncryptionKey, Ciphertext, Nonce};
 use rug::Integer;
 
 #[cfg(feature = "serde")]
@@ -110,21 +110,20 @@ pub struct SecurityParams {
 
 /// Public data that both parties know
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Data {
+pub struct Data<'a> {
     /// N0 in paper, public key that k -> K was encrypted on
-    pub key: EncryptionKey,
+    pub key: &'a dyn AnyEncryptionKey,
     /// K in paper
-    pub ciphertext: Ciphertext,
+    pub ciphertext: &'a Ciphertext,
 }
 
 /// Private data of prover
 #[derive(Clone)]
-pub struct PrivateData {
+pub struct PrivateData<'a> {
     /// k in paper, plaintext of K
-    pub plaintext: Integer,
+    pub plaintext: &'a Integer,
     /// rho in paper, nonce of encryption k -> K
-    pub nonce: Nonce,
+    pub nonce: &'a Nonce,
 }
 
 // As described in cggmp21 at page 33
@@ -222,7 +221,7 @@ pub mod interactive {
         private_commitment: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
-        let z1 = (&private_commitment.alpha + (challenge * &pdata.plaintext)).complete();
+        let z1 = (&private_commitment.alpha + (challenge * pdata.plaintext)).complete();
         let nonce_to_challenge_mod_n: Integer = pdata
             .nonce
             .pow_mod_ref(challenge, data.key.n())
@@ -386,8 +385,14 @@ mod test {
         let private_key = crate::common::test::random_key(&mut rng).unwrap();
         let key = private_key.encryption_key();
         let (ciphertext, nonce) = key.encrypt_with_random(&mut rng, &plaintext).unwrap();
-        let data = super::Data { key, ciphertext };
-        let pdata = super::PrivateData { plaintext, nonce };
+        let data = super::Data {
+            key,
+            ciphertext: &ciphertext,
+        };
+        let pdata = super::PrivateData {
+            plaintext: &plaintext,
+            nonce: &nonce,
+        };
 
         let shared_state = sha2::Sha256::default();
         let (commitment, proof) = super::non_interactive::prove(
