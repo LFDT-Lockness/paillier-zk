@@ -96,7 +96,7 @@
 //!
 //! If the verification succeeded, verifier can continue communication with prover
 
-use fast_paillier::{Ciphertext, EncryptionKey, Nonce};
+use fast_paillier::{AnyEncryptionKey, Ciphertext, Nonce};
 use generic_ec::{Curve, Point};
 use rug::Integer;
 
@@ -120,25 +120,24 @@ pub struct SecurityParams {
 
 /// Public data that both parties know
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
-pub struct Data<C: Curve> {
+pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
-    pub key0: EncryptionKey,
+    pub key0: &'a dyn AnyEncryptionKey,
     /// C in paper, logarithm of X encrypted on N0
-    pub c: Ciphertext,
+    pub c: &'a Ciphertext,
     /// A basepoint, generator in group
-    pub b: Point<C>,
+    pub b: &'a Point<C>,
     /// X in paper, exponent of plaintext of C
-    pub x: Point<C>,
+    pub x: &'a Point<C>,
 }
 
 /// Private data of prover
 #[derive(Clone)]
-pub struct PrivateData {
+pub struct PrivateData<'a> {
     /// x in paper, logarithm of X and plaintext of C
-    pub x: Integer,
+    pub x: &'a Integer,
     /// rho in paper, nonce in encryption x -> C
-    pub nonce: Nonce,
+    pub nonce: &'a Nonce,
 }
 
 /// Prover's first message, obtained by [`interactive::commit`]
@@ -230,7 +229,7 @@ pub mod interactive {
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
         Ok(Proof {
-            z1: (&pcomm.alpha + challenge * &pdata.x).complete(),
+            z1: (&pcomm.alpha + challenge * pdata.x).complete(),
             z2: data
                 .key0
                 .n()
@@ -412,14 +411,14 @@ mod test {
         let x = b * plaintext.to_scalar();
 
         let data = super::Data {
-            key0,
-            c: ciphertext,
-            x,
-            b,
+            key0: &key0,
+            c: &ciphertext,
+            x: &x,
+            b: &b,
         };
         let pdata = super::PrivateData {
-            x: plaintext,
-            nonce,
+            x: &plaintext,
+            nonce: &nonce,
         };
 
         let aux = crate::common::test::aux(&mut rng);
