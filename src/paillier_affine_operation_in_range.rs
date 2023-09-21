@@ -108,25 +108,25 @@
 //! //    plaintext_y are at most `l_x` and `l_y` bits
 //!
 //! let data = p::Data {
-//!     key0,
-//!     key1,
-//!     c: ciphertext_c,
-//!     d: ciphertext_d,
-//!     x: ciphertext_x,
-//!     y: ciphertext_y,
+//!     key0: &key0,
+//!     key1: &key1,
+//!     c: &ciphertext_c,
+//!     d: &ciphertext_d,
+//!     x: &ciphertext_x,
+//!     y: &ciphertext_y,
 //! };
 //! let pdata = p::PrivateData {
-//!     x: plaintext_x,
-//!     y: plaintext_y,
-//!     nonce,
-//!     nonce_y,
+//!     x: &plaintext_x,
+//!     y: &plaintext_y,
+//!     nonce: &nonce,
+//!     nonce_y: &nonce_y,
 //! };
 //! let (commitment, proof) =
 //!     p::non_interactive::prove(
 //!         shared_state_prover,
 //!         &aux,
-//!         &data,
-//!         &pdata,
+//!         data,
+//!         pdata,
 //!         &security,
 //!         &mut rng,
 //!     )?;
@@ -144,7 +144,7 @@
 //! let r = p::non_interactive::verify(
 //!     shared_state_verifier,
 //!     &aux,
-//!     &data,
+//!     data,
 //!     &commitment,
 //!     &security,
 //!     &proof,
@@ -180,7 +180,7 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
     pub key0: &'a dyn AnyEncryptionKey,
@@ -197,7 +197,7 @@ pub struct Data<'a, C: Curve> {
 }
 
 /// Private data of prover
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PrivateData<'a> {
     /// x or epsilon in paper, preimage of X
     pub x: &'a Integer,
@@ -270,8 +270,8 @@ pub mod interactive {
     /// Create random commitment
     pub fn commit<C: Curve, R: RngCore>(
         aux: &Aux,
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
@@ -318,8 +318,8 @@ pub mod interactive {
 
     /// Compute proof for given data and prior protocol values
     pub fn prove<C: Curve>(
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
@@ -342,7 +342,7 @@ pub mod interactive {
     /// Verify the proof
     pub fn verify<C: Curve>(
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
         challenge: &Challenge,
@@ -451,8 +451,8 @@ pub mod non_interactive {
     pub fn prove<C: Curve, R: RngCore, D>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         security: &SecurityParams,
         rng: R,
     ) -> Result<(Commitment<C>, Proof), Error>
@@ -470,7 +470,7 @@ pub mod non_interactive {
     pub fn verify<C: Curve, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
         proof: &Proof,
@@ -487,7 +487,7 @@ pub mod non_interactive {
     pub fn challenge<C: Curve, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
     ) -> Challenge
@@ -577,16 +577,10 @@ mod test {
 
         let shared_state = sha2::Sha256::default();
 
-        let (commitment, proof) = super::non_interactive::prove(
-            shared_state.clone(),
-            &aux,
-            &data,
-            &pdata,
-            &security,
-            rng,
-        )
-        .unwrap();
-        super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
+        let (commitment, proof) =
+            super::non_interactive::prove(shared_state.clone(), &aux, data, pdata, &security, rng)
+                .unwrap();
+        super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
     }
 
     fn passing_test<C: Curve>()

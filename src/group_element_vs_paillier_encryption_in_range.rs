@@ -62,14 +62,18 @@
 //!
 //! // 3. Prover computes a non-interactive proof that plaintext is at most `l` bits:
 //!
-//! let data = p::Data { key0, c: C, x: X, b: Point::<E>::generator().into() };
-//! let pdata = p::PrivateData { x, nonce };
+//! let data = p::Data {
+//!     key0,
+//!     c: &C,
+//!     x: &X,
+//!     b: &Point::<E>::generator().into(),
+//! };
 //! let (commitment, proof) =
 //!     p::non_interactive::prove(
 //!         shared_state_prover,
 //!         &aux,
-//!         &data,
-//!         &pdata,
+//!         data,
+//!         p::PrivateData { x: &x, nonce: &nonce },
 //!         &security,
 //!         &mut rng,
 //!     )?;
@@ -86,7 +90,7 @@
 //! p::non_interactive::verify(
 //!     shared_state_verifier,
 //!     &aux,
-//!     &data,
+//!     data,
 //!     &commitment,
 //!     &security,
 //!     &proof,
@@ -119,7 +123,7 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
     pub key0: &'a dyn AnyEncryptionKey,
@@ -132,7 +136,7 @@ pub struct Data<'a, C: Curve> {
 }
 
 /// Private data of prover
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PrivateData<'a> {
     /// x in paper, logarithm of X and plaintext of C
     pub x: &'a Integer,
@@ -192,8 +196,8 @@ pub mod interactive {
     /// Create random commitment
     pub fn commit<C: Curve, R: RngCore>(
         aux: &Aux,
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         security: &SecurityParams,
         mut rng: R,
     ) -> Result<(Commitment<C>, PrivateCommitment), Error> {
@@ -223,8 +227,8 @@ pub mod interactive {
 
     /// Compute proof for given data and prior protocol values
     pub fn prove<C: Curve>(
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         pcomm: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
@@ -241,7 +245,7 @@ pub mod interactive {
     /// Verify the proof
     pub fn verify<C: Curve>(
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
         challenge: &Challenge,
@@ -316,8 +320,8 @@ pub mod non_interactive {
     pub fn prove<C: Curve, R: RngCore, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
-        pdata: &PrivateData,
+        data: Data<C>,
+        pdata: PrivateData,
         security: &SecurityParams,
         rng: &mut R,
     ) -> Result<(Commitment<C>, Proof), Error>
@@ -335,7 +339,7 @@ pub mod non_interactive {
     pub fn verify<C: Curve, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
         proof: &Proof,
@@ -353,7 +357,7 @@ pub mod non_interactive {
     pub fn challenge<C: Curve, D: Digest>(
         shared_state: D,
         aux: &Aux,
-        data: &Data<C>,
+        data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
     ) -> Challenge
@@ -428,14 +432,14 @@ mod test {
         let (commitment, proof) = super::non_interactive::prove(
             shared_state.clone(),
             &aux,
-            &data,
-            &pdata,
+            data,
+            pdata,
             &security,
             &mut rng,
         )
         .unwrap();
 
-        super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
+        super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
     }
 
     fn passing_test<C: Curve>()

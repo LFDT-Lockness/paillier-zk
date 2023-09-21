@@ -52,13 +52,15 @@
 //!
 //! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
 //!
-//! let data = p::Data { key, ciphertext };
-//! let pdata = p::PrivateData { plaintext, nonce };
+//! let data = p::Data { key, ciphertext: &ciphertext };
 //! let (commitment, proof) = p::non_interactive::prove(
 //!     shared_state_prover,
 //!     &aux,
-//!     &data,
-//!     &pdata,
+//!     data,
+//!     p::PrivateData {
+//!         plaintext: &plaintext,
+//!         nonce: &nonce,
+//!     },
 //!     &security,
 //!     &mut rng,
 //! )?;
@@ -75,7 +77,7 @@
 //! p::non_interactive::verify(
 //!     shared_state_verifier,
 //!     &aux,
-//!     &data,
+//!     data,
 //!     &commitment,
 //!     &security,
 //!     &proof,
@@ -109,7 +111,7 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Data<'a> {
     /// N0 in paper, public key that k -> K was encrypted on
     pub key: &'a dyn AnyEncryptionKey,
@@ -118,7 +120,7 @@ pub struct Data<'a> {
 }
 
 /// Private data of prover
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct PrivateData<'a> {
     /// k in paper, plaintext of K
     pub plaintext: &'a Integer,
@@ -182,8 +184,8 @@ pub mod interactive {
     /// Create random commitment
     pub fn commit<R: RngCore>(
         aux: &Aux,
-        data: &Data,
-        pdata: &PrivateData,
+        data: Data,
+        pdata: PrivateData,
         security: &SecurityParams,
         rng: &mut R,
     ) -> Result<(Commitment, PrivateCommitment), Error> {
@@ -216,8 +218,8 @@ pub mod interactive {
 
     /// Compute proof for given data and prior protocol values
     pub fn prove(
-        data: &Data,
-        pdata: &PrivateData,
+        data: Data,
+        pdata: PrivateData,
         private_commitment: &PrivateCommitment,
         challenge: &Challenge,
     ) -> Result<Proof, Error> {
@@ -235,7 +237,7 @@ pub mod interactive {
     /// Verify the proof
     pub fn verify(
         aux: &Aux,
-        data: &Data,
+        data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
         challenge: &Challenge,
@@ -310,8 +312,8 @@ pub mod non_interactive {
     pub fn prove<D, R: RngCore>(
         shared_state: D,
         aux: &Aux,
-        data: &Data,
-        pdata: &PrivateData,
+        data: Data,
+        pdata: PrivateData,
         security: &SecurityParams,
         rng: &mut R,
     ) -> Result<(Commitment, Proof), Error>
@@ -328,7 +330,7 @@ pub mod non_interactive {
     pub fn challenge<D>(
         shared_state: D,
         aux: &Aux,
-        data: &Data,
+        data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
     ) -> Challenge
@@ -357,7 +359,7 @@ pub mod non_interactive {
     pub fn verify<D>(
         shared_state: D,
         aux: &Aux,
-        data: &Data,
+        data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
         proof: &Proof,
@@ -395,16 +397,10 @@ mod test {
         };
 
         let shared_state = sha2::Sha256::default();
-        let (commitment, proof) = super::non_interactive::prove(
-            shared_state.clone(),
-            &aux,
-            &data,
-            &pdata,
-            &security,
-            rng,
-        )
-        .unwrap();
-        super::non_interactive::verify(shared_state, &aux, &data, &commitment, &security, &proof)
+        let (commitment, proof) =
+            super::non_interactive::prove(shared_state.clone(), &aux, data, pdata, &security, rng)
+                .unwrap();
+        super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
     }
 
     #[test]
