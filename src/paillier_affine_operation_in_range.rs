@@ -435,7 +435,7 @@ pub mod interactive {
 /// see the documentation of parent module.
 pub mod non_interactive {
     use digest::{typenum::U32, Digest};
-    use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
+    use generic_ec::Curve;
     use rand_core::RngCore;
 
     use crate::{Error, InvalidProof};
@@ -455,7 +455,6 @@ pub mod non_interactive {
         rng: R,
     ) -> Result<(Commitment<C>, Proof), Error>
     where
-        Scalar<C>: FromHash,
         D: Digest<OutputSize = U32>,
     {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
@@ -474,7 +473,6 @@ pub mod non_interactive {
         proof: &Proof,
     ) -> Result<(), InvalidProof>
     where
-        Scalar<C>: generic_ec::hash_to_curve::FromHash,
         D: Digest<OutputSize = U32>,
     {
         let challenge = challenge(shared_state, aux, data, commitment, security);
@@ -524,8 +522,7 @@ pub mod non_interactive {
 
 #[cfg(test)]
 mod test {
-    use generic_ec::Point;
-    use generic_ec::{hash_to_curve::FromHash, Curve, Scalar};
+    use generic_ec::{Curve, Point};
     use rug::{Complete, Integer};
 
     use crate::common::test::random_key;
@@ -536,10 +533,7 @@ mod test {
         security: super::SecurityParams,
         x: Integer,
         y: Integer,
-    ) -> Result<(), crate::common::InvalidProof>
-    where
-        Scalar<C>: FromHash,
-    {
+    ) -> Result<(), crate::common::InvalidProof> {
         let dk0 = random_key(rng).unwrap();
         let dk1 = random_key(rng).unwrap();
         let ek0 = dk0.encryption_key().clone();
@@ -581,10 +575,7 @@ mod test {
         super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
     }
 
-    fn passing_test<C: Curve>()
-    where
-        Scalar<C>: FromHash,
-    {
+    fn passing_test<C: Curve>() {
         let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l_x: 1024,
@@ -597,10 +588,7 @@ mod test {
         run::<_, C>(&mut rng, security, x, y).expect("proof failed");
     }
 
-    fn failing_on_additive<C: Curve>()
-    where
-        Scalar<C>: FromHash,
-    {
+    fn failing_on_additive<C: Curve>() {
         let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l_x: 1024,
@@ -617,10 +605,7 @@ mod test {
         }
     }
 
-    fn failing_on_multiplicative<C: Curve>()
-    where
-        Scalar<C>: FromHash,
-    {
+    fn failing_on_multiplicative<C: Curve>() {
         let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l_x: 1024,
