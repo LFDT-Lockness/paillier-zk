@@ -199,11 +199,9 @@ pub mod interactive {
         let r = Integer::gen_invertible(data.key.n(), rng);
         let gamma = Integer::from_rng_pm(&hat_n_at_two_to_l_plus_e, rng);
 
-        let s = aux
-            .rsa_modulo
-            .combine(&aux.s, pdata.plaintext, &aux.t, &mu)?;
+        let s = aux.combine(pdata.plaintext, &mu)?;
         let a = data.key.encrypt_with(&alpha, &r)?;
-        let c = aux.rsa_modulo.combine(&aux.s, &alpha, &aux.t, &gamma)?;
+        let c = aux.combine(&alpha, &gamma)?;
 
         Ok((
             Commitment { s, a, c },
@@ -227,7 +225,7 @@ pub mod interactive {
         let nonce_to_challenge_mod_n: Integer = pdata
             .nonce
             .pow_mod_ref(challenge, data.key.n())
-            .ok_or(BadExponent)?
+            .ok_or(BadExponent::undefined())?
             .into();
         let z2 = (&private_commitment.r * nonce_to_challenge_mod_n).modulo(data.key.n());
         let z3 = (&private_commitment.gamma + (challenge * &private_commitment.mu)).complete();
@@ -268,9 +266,7 @@ pub mod interactive {
         }
 
         {
-            let lhs = aux
-                .rsa_modulo
-                .combine(&aux.s, &proof.z1, &aux.t, &proof.z3)?;
+            let lhs = aux.combine(&proof.z1, &proof.z3)?;
             let rhs =
                 aux.rsa_modulo
                     .combine(&commitment.c, Integer::ONE, &commitment.s, challenge)?;

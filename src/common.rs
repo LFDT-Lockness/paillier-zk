@@ -1,6 +1,8 @@
 pub mod rng;
 pub mod sqrt;
 
+use std::sync::Arc;
+
 use generic_ec::Scalar;
 use rug::{Complete, Integer};
 
@@ -14,6 +16,36 @@ pub struct Aux {
     pub t: Integer,
     /// N^ in paper
     pub rsa_modulo: Integer,
+    /// Precomuted table for computing `s^x t^y mod rsa_modulo` faster
+    ///
+    /// If absent, optimization is disabled.
+    ///
+    /// We wrap the table into [`Arc`] to make cloning cheaper. Note that during serialization/deserialization
+    /// process, serde may create some extra copies of the table.
+    pub multiexp: Option<Arc<crate::multiexp::MultiexpTable>>,
+}
+
+impl Aux {
+    pub fn combine(&self, x: &Integer, y: &Integer) -> Result<Integer, BadExponent> {
+        if let Some(table) = &self.multiexp {
+            match table.prod_exp(x, y) {
+                Some(res) => return Ok(res),
+                None if cfg!(debug_assertions) => {
+                    return Err(BadExponentReason::ExpSize {
+                        exp_size: (x.significant_bits(), y.significant_bits()),
+                        max_exp_size: table.max_exponents_size(),
+                    }
+                    .into())
+                }
+                None => {
+                    // When debug assertions are disabled, we fallback to naive exponentiation
+                }
+            }
+        }
+
+        // Naive exponentiation when optimizations are not enabled
+        self.rsa_modulo.combine(&self.s, x, &self.t, y)
+    }
 }
 
 /// Error indicating that proof is invalid
@@ -115,8 +147,14 @@ impl IntegerExt for Integer {
     }
 
     fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent> {
-        let l_to_le: Integer = l.pow_mod_ref(le, self).ok_or(BadExponent)?.into();
-        let r_to_re: Integer = r.pow_mod_ref(re, self).ok_or(BadExponent)?.into();
+        let l_to_le: Integer = l
+            .pow_mod_ref(le, self)
+            .ok_or_else(BadExponent::undefined)?
+            .into();
+        let r_to_re: Integer = r
+            .pow_mod_ref(re, self)
+            .ok_or_else(BadExponent::undefined)?
+            .into();
         Ok((l_to_le * r_to_re).modulo(self))
     }
 
@@ -162,8 +200,26 @@ impl IntegerExt for Integer {
 ///
 /// Returned by [`BigNumberExt::powmod`] and other functions that do exponentiation internally
 #[derive(Clone, Copy, Debug, thiserror::Error)]
-#[error("exponent is undefined")]
-pub struct BadExponent;
+#[error(transparent)]
+pub struct BadExponent(#[from] BadExponentReason);
+
+impl BadExponent {
+    /// Constructs an error that exponent is undefined
+    pub fn undefined() -> Self {
+        Self(BadExponentReason::Undefined)
+    }
+}
+
+#[derive(Clone, Copy, Debug, thiserror::Error)]
+enum BadExponentReason {
+    #[error("exponent is undefined")]
+    Undefined,
+    #[error("multiexp error: exponent size is too large (exponents size: {exp_size:?}, max exponent size: {max_exp_size:?})")]
+    ExpSize {
+        exp_size: (u32, u32),
+        max_exp_size: (usize, usize),
+    },
+}
 
 /// Returns `Err(err)` if `assertion` is false
 pub fn fail_if<E>(err: E, assertion: bool) -> Result<(), E> {
@@ -216,6 +272,7 @@ pub mod test {
             s,
             t,
             rsa_modulo: n,
+            multiexp: None,
         }
     }
 
@@ -282,5 +339,54 @@ mod _test {
         assert_eq!(Integer::from(1).signed_modulo(&n), 1);
         assert_eq!(Integer::from(2).signed_modulo(&n), -2);
         assert_eq!(Integer::from(3).signed_modulo(&n), -1);
+    }
+
+    #[test]
+    fn multiexp() {
+        let mut rng = rand_dev::DevRng::new();
+        let mut aux = super::test::aux(&mut rng);
+        let table = std::sync::Arc::new(
+            crate::multiexp::MultiexpTable::build(&aux.s, &aux.t, 512, 448, aux.rsa_modulo.clone())
+                .unwrap(),
+        );
+        let (x_bits, y_bits) = table.max_exponents_size();
+        aux.multiexp = Some(table);
+
+        // Corner case: upper bound
+        let x_max = (Integer::ONE.clone() << x_bits) - 1;
+        let y_max = (Integer::ONE.clone() << y_bits) - 1;
+        let actual = aux.combine(&x_max, &y_max).unwrap();
+        let expected = aux
+            .rsa_modulo
+            .combine(&aux.s, &x_max, &aux.t, &y_max)
+            .unwrap();
+        assert_eq!(actual, expected);
+
+        // Corner case: lower bound
+        let x_min = -x_max.clone();
+        let y_min = -y_max.clone();
+        let actual = aux.combine(&x_min, &y_min).unwrap();
+        let expected = aux
+            .rsa_modulo
+            .combine(&aux.s, &x_min, &aux.t, &y_min)
+            .unwrap();
+        assert_eq!(actual, expected);
+
+        // Random integers within the range
+        let mut rng = fast_paillier::utils::external_rand(&mut rng);
+        for _ in 0..100 {
+            let x = (x_max.clone() + 1u8).random_below(&mut rng);
+            let y = (y_max.clone() + 1u8).random_below(&mut rng);
+
+            let x = if rng.bits(1) == 1 { x } else { -x };
+            let y = if rng.bits(1) == 1 { y } else { -y };
+
+            println!("x: {x}");
+            println!("y: {y}");
+
+            let actual = aux.combine(&x, &y).unwrap();
+            let expected = aux.rsa_modulo.combine(&aux.s, &x, &aux.t, &y).unwrap();
+            assert_eq!(actual, expected);
+        }
     }
 }
