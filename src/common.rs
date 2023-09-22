@@ -149,11 +149,11 @@ impl IntegerExt for Integer {
     fn combine(&self, l: &Self, le: &Self, r: &Self, re: &Self) -> Result<Self, BadExponent> {
         let l_to_le: Integer = l
             .pow_mod_ref(le, self)
-            .ok_or(BadExponentReason::Undefined)?
+            .ok_or_else(BadExponent::undefined)?
             .into();
         let r_to_re: Integer = r
             .pow_mod_ref(re, self)
-            .ok_or(BadExponentReason::Undefined)?
+            .ok_or_else(BadExponent::undefined)?
             .into();
         Ok((l_to_le * r_to_re).modulo(self))
     }
