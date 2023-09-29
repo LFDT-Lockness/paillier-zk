@@ -4,28 +4,31 @@ use digest::Digest;
 /// salted with an internal counter. The counter is prepended to conserve
 /// entropy.
 ///
+/// Useful when you want to deterministically but securely generate elliptic
+/// curve points and scalars from some data
+///
 /// Having u64 counter means that the period of the sequence is 2^64 times
 /// `Digest::OutputSize` bytes
 pub struct HashRng<F, D: Digest> {
-    hash: F,
+    hasher: F,
     counter: u64,
     buffer: digest::Output<D>,
     offset: usize,
 }
 
 impl<F, D: Digest> HashRng<F, D> {
-    /// Create the RNG from the hash finalization function. Use it like this:
+    /// Create RNG from a function that will update and finalize a digest. Use it like this:
     /// ```ignore
     /// HashRng::new(|d| d.chain_update("my_values").finalize())
     /// ```
-    pub fn new(hash: F) -> Self
+    pub fn new(hasher: F) -> Self
     where
         F: Fn(D) -> digest::Output<D>,
     {
         let d: D = D::new().chain_update(0u64.to_le_bytes());
-        let buffer: digest::Output<D> = hash(d);
+        let buffer: digest::Output<D> = hasher(d);
         HashRng {
-            hash,
+            hasher,
             counter: 1,
             offset: 0,
             buffer,
@@ -42,7 +45,7 @@ where
         const SIZE: usize = std::mem::size_of::<u32>();
         // NOTE: careful with SIZE usage, otherwise it panics
         if self.offset + SIZE > self.buffer.len() {
-            self.buffer = (self.hash)(D::new().chain_update(self.counter.to_le_bytes()));
+            self.buffer = (self.hasher)(D::new().chain_update(self.counter.to_le_bytes()));
             self.counter = self.counter.wrapping_add(1);
             self.offset = 0;
         }
@@ -74,8 +77,8 @@ mod test {
 
     #[test]
     fn generate_bytes() {
-        let hash = |d: sha2::Sha256| d.chain_update("foobar").finalize();
-        let mut rng = super::HashRng::new(hash);
+        let hasher = |d: sha2::Sha256| d.chain_update("foobar").finalize();
+        let mut rng = super::HashRng::new(hasher);
 
         // Check that it doesn't panic for any window size
         for _ in 0..100 {
