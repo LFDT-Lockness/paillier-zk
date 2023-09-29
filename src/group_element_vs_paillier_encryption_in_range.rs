@@ -274,9 +274,8 @@ pub mod interactive {
         }
         {
             let lhs = aux.combine(&proof.z1, &proof.z3)?;
-            let rhs =
-                aux.rsa_modulo
-                    .combine(&commitment.d, Integer::ONE, &commitment.s, challenge)?;
+            let s_to_e = aux.pow_mod(&commitment.s, challenge)?;
+            let rhs = (&commitment.d * s_to_e).modulo(&aux.rsa_modulo);
             fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
         fail_if(

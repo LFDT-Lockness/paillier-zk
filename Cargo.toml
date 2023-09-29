@@ -9,7 +9,7 @@ edition = "2021"
 generic-ec = { git = "https://github.com/dfns-labs/generic-ec", branch = "m" }
 rand_core = { version = "0.6", default-features = false }
 digest = "0.10"
-fast-paillier = { git = "https://github.com/dfns-labs/fast-paillier", branch = "m" }
+fast-paillier = { git = "https://github.com/dfns-labs/fast-paillier", branch = "crt-omul" }
 rug = { version = "1.21", default-features = false, features = ["integer", "rand"] }
 
 thiserror = "1"

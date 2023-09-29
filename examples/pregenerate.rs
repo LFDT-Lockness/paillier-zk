@@ -32,6 +32,7 @@ fn main() -> Result<()> {
             t,
             rsa_modulo: n,
             multiexp: None,
+            crt: None,
         };
 
         let aux_json = serde_json::to_vec_pretty(&aux).context("serialzie aux")?;

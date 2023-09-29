@@ -7,7 +7,10 @@ use generic_ec::Scalar;
 use rug::{Complete, Integer};
 
 /// Auxiliary data known to both prover and verifier
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "__internal_doctest",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Clone, Debug)]
 pub struct Aux {
     /// ring-pedersen parameter
@@ -19,13 +22,14 @@ pub struct Aux {
     /// Precomuted table for computing `s^x t^y mod rsa_modulo` faster
     ///
     /// If absent, optimization is disabled.
-    ///
-    /// We wrap the table into [`Arc`] to make cloning cheaper. Note that during serialization/deserialization
-    /// process, serde may create some extra copies of the table.
+    #[cfg_attr(feature = "__internal_doctest", serde(skip))]
     pub multiexp: Option<Arc<crate::multiexp::MultiexpTable>>,
+    #[cfg_attr(feature = "__internal_doctest", serde(skip))]
+    pub crt: Option<fast_paillier::utils::CrtExp>,
 }
 
 impl Aux {
+    /// Returns `s^x t^y mod rsa_modulo`
     pub fn combine(&self, x: &Integer, y: &Integer) -> Result<Integer, BadExponent> {
         if let Some(table) = &self.multiexp {
             match table.prod_exp(x, y) {
@@ -45,6 +49,20 @@ impl Aux {
 
         // Naive exponentiation when optimizations are not enabled
         self.rsa_modulo.combine(&self.s, x, &self.t, y)
+    }
+
+    /// Returns `x^e mod rsa_modulo`
+    pub fn pow_mod(&self, x: &Integer, e: &Integer) -> Result<Integer, BadExponent> {
+        match &self.crt {
+            Some(crt) => {
+                let e = crt.prepare_exponent(e);
+                crt.exp(x, &e).ok_or_else(BadExponent::undefined)
+            }
+            None => Ok(x
+                .pow_mod_ref(e, &self.rsa_modulo)
+                .ok_or_else(BadExponent::undefined)?
+                .into()),
+        }
     }
 }
 
@@ -273,6 +291,7 @@ pub mod test {
             t,
             rsa_modulo: n,
             multiexp: None,
+            crt: None,
         }
     }
 

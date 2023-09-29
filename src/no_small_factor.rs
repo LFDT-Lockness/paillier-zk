@@ -258,25 +258,23 @@ pub mod interactive {
         // check 1
         {
             let lhs = aux.combine(&proof.z1, &proof.w1)?;
-            let rhs =
-                aux.rsa_modulo
-                    .combine(&commitment.a, Integer::ONE, &commitment.p, challenge)?;
+            let p_to_e = aux.pow_mod(&commitment.p, challenge)?;
+            let rhs = (&commitment.a * p_to_e).modulo(&aux.rsa_modulo);
             fail_if_ne(InvalidProofReason::EqualityCheck(1), lhs, rhs)?;
         }
         // check 2
         {
             let lhs = aux.combine(&proof.z2, &proof.w2)?;
-            let rhs =
-                aux.rsa_modulo
-                    .combine(&commitment.b, Integer::ONE, &commitment.q, challenge)?;
+            let q_to_e = aux.pow_mod(&commitment.q, challenge)?;
+            let rhs = (&commitment.b * q_to_e).modulo(&aux.rsa_modulo);
             fail_if_ne(InvalidProofReason::EqualityCheck(2), lhs, rhs)?;
         }
         // check 3
         {
             let r = aux.combine(data.n, &commitment.sigma)?;
-            let lhs = aux
-                .rsa_modulo
-                .combine(&commitment.q, &proof.z1, &aux.t, &proof.v)?;
+            let q_to_z1 = aux.pow_mod(&commitment.q, &proof.z1)?;
+            let t_to_v = aux.pow_mod(&aux.t, &proof.v)?;
+            let lhs = (q_to_z1 * t_to_v).modulo(&aux.rsa_modulo);
             let rhs = aux
                 .rsa_modulo
                 .combine(&commitment.t, Integer::ONE, &r, challenge)?;
