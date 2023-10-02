@@ -395,18 +395,18 @@ pub mod interactive {
             };
             fail_if_ne(InvalidProofReason::EqualityCheck(3), lhs, rhs)?;
         }
-        fail_if_ne(
-            InvalidProofReason::EqualityCheck(4),
-            aux.combine(&proof.z1, &proof.z3)?,
-            aux.rsa_modulo
-                .combine(&commitment.e, Integer::ONE, &commitment.s, challenge)?,
-        )?;
-        fail_if_ne(
-            InvalidProofReason::EqualityCheck(5),
-            aux.combine(&proof.z2, &proof.z4)?,
-            aux.rsa_modulo
-                .combine(&commitment.f, Integer::ONE, &commitment.t, challenge)?,
-        )?;
+        {
+            let lhs = aux.combine(&proof.z1, &proof.z3)?;
+            let s_to_e = aux.pow_mod(&commitment.s, challenge)?;
+            let rhs = (&commitment.e * s_to_e).modulo(&aux.rsa_modulo);
+            fail_if_ne(InvalidProofReason::EqualityCheck(4), lhs, rhs)?;
+        }
+        {
+            let lhs = aux.combine(&proof.z2, &proof.z4)?;
+            let t_to_e = aux.pow_mod(&commitment.t, challenge)?;
+            let rhs = (&commitment.f * t_to_e).modulo(&aux.rsa_modulo);
+            fail_if_ne(InvalidProofReason::EqualityCheck(5), lhs, rhs)?;
+        }
         fail_if(
             InvalidProofReason::RangeCheck(6),
             proof

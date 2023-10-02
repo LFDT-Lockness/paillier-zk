@@ -256,7 +256,7 @@ dependencies = [
 [[package]]
 name = "fast-paillier"
 version = "0.1.0"
-source = "git+https://github.com/dfns-labs/fast-paillier?branch=m#2fcc31352601616b1c1bdf7eeae3dcbc5a9afaa8"
+source = "git+https://github.com/dfns-labs/fast-paillier?branch=crt-omul#48c5d13ab0ea0dab48c4161b45e95bda45b2e725"
 dependencies = [
  "bytemuck",
  "rand_core",
