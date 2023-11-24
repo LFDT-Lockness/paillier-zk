@@ -1,8 +1,6 @@
 name: Rust
 
 on:
-  push:
-    branches: [ "m" ]
   pull_request:
     branches: [ "*" ]
 
@@ -18,11 +16,6 @@ jobs:
     - uses: Swatinem/rust-cache@v2
       with:
         cache-on-failure: "true"
-    - uses: webfactory/ssh-agent@v0.7.0
-      with:
-        ssh-private-key: |
-          ${{ secrets.GENERIC_EC_KEY }}
-          ${{ secrets.FAST_PAILLIER_KEY }}
     - name: Build with serde support
       run: cargo build --release --features serde
     - name: Build
