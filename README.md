@@ -1,3 +1,7 @@
+![License](https://img.shields.io/crates/l/paillier-zk.svg)
+[![Docs](https://docs.rs/paillier-zk/badge.svg)](https://docs.rs/paillier-zk)
+[![Crates io](https://img.shields.io/crates/v/paillier-zk.svg)](https://crates.io/crates/paillier-zk)
+
 # paillier-zk
 
 This crate provides ZK-proofs for some properties about paillier encryption.
