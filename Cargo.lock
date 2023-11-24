@@ -256,7 +256,8 @@ dependencies = [
 [[package]]
 name = "fast-paillier"
 version = "0.1.0"
-source = "git+https://github.com/dfns-labs/fast-paillier?branch=crt-omul#48c5d13ab0ea0dab48c4161b45e95bda45b2e725"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8da6ffbfab3f6dc72b28f6f33dc76705c1a56b2c119680c936d239990beb5ae6"
 dependencies = [
  "bytemuck",
  "rand_core",

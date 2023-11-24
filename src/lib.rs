@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 #![deny(clippy::disallowed_methods)]
 
 use thiserror::Error;
