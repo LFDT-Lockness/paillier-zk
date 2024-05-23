@@ -314,7 +314,7 @@ pub mod non_interactive {
     /// deriving determenistic challenge.
     ///
     /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-    pub fn prove<C: Curve, R: RngCore, D: Digest>(
+    pub fn prove<C: Curve, R: RngCore, D>(
         shared_state: D,
         aux: &Aux,
         data: Data<C>,
@@ -332,7 +332,7 @@ pub mod non_interactive {
     }
 
     /// Verify the proof, deriving challenge independently from same data
-    pub fn verify<C: Curve, D: Digest>(
+    pub fn verify<C: Curve, D>(
         shared_state: D,
         aux: &Aux,
         data: Data<C>,
@@ -355,10 +355,7 @@ pub mod non_interactive {
         data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
-    ) -> Challenge
-    where
-        D: Digest,
-    {
+    ) -> Challenge {
         let shared_state = shared_state.finalize();
         let hash = |d: D| {
             let order = rug::integer::Order::Msf;
