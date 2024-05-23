@@ -1,5 +1,9 @@
 #![doc = include_str!("../README.md")]
 #![deny(clippy::disallowed_methods)]
+#![cfg_attr(
+    not(test),
+    deny(clippy::panic, clippy::unwrap_used, clippy::expect_used)
+)]
 
 use thiserror::Error;
 

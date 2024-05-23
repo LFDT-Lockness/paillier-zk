@@ -464,7 +464,7 @@ pub mod non_interactive {
     }
 
     /// Verify the proof, deriving challenge independently from same data
-    pub fn verify<C: Curve, D: Digest>(
+    pub fn verify<C: Curve, D>(
         shared_state: D,
         aux: &Aux,
         data: Data<C>,
@@ -480,7 +480,7 @@ pub mod non_interactive {
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
-    pub fn challenge<C: Curve, D: Digest>(
+    pub fn challenge<C: Curve, D>(
         shared_state: D,
         aux: &Aux,
         data: Data<C>,
