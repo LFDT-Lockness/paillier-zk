@@ -225,12 +225,29 @@ impl generic_ec::core::IntegerEncoding for Scalar {
         self.0.to_le_bytes()
     }
 
-    fn from_be_bytes(bytes: &Self::Bytes) -> Self {
-        u64::from_be_bytes(*bytes).into()
+    fn from_be_bytes_mod_order(bytes: &[u8]) -> Self {
+        use generic_ec::core::{Additive, Multiplicative};
+
+        let scalar_0x100 = Scalar::from(0x100);
+        bytes
+            .iter()
+            .map(|i| Scalar::from(u64::from(*i)))
+            .fold(Scalar::default(), |acc, i| {
+                Scalar::add(&Scalar::mul(&acc, &scalar_0x100), &i)
+            })
     }
 
-    fn from_le_bytes(bytes: &Self::Bytes) -> Self {
-        u64::from_le_bytes(*bytes).into()
+    fn from_le_bytes_mod_order(bytes: &[u8]) -> Self {
+        use generic_ec::core::{Additive, Multiplicative};
+
+        let scalar_0x100 = Scalar::from(0x100);
+        bytes
+            .iter()
+            .rev()
+            .map(|i| Scalar::from(u64::from(*i)))
+            .fold(Scalar::default(), |acc, i| {
+                Scalar::add(&Scalar::mul(&acc, &scalar_0x100), &i)
+            })
     }
 
     fn from_be_bytes_exact(bytes: &Self::Bytes) -> Option<Self> {
@@ -253,38 +270,4 @@ impl generic_ec::Curve for C {
     type UncompressedPointArray = [u8; 8];
     type ScalarArray = [u8; 8];
     type CoordinateArray = [u8; 8];
-}
-
-impl generic_ec::core::hash_to_curve::HashToCurve for C {
-    fn hash_to_curve(
-        tag: generic_ec::hash_to_curve::Tag,
-        msgs: &[&[u8]],
-    ) -> Result<Self::Point, generic_ec::core::Error> {
-        use sha2::Digest;
-        let mut digest = sha2::Sha256::new();
-        digest.update(tag.as_bytes());
-        for msg in msgs {
-            digest.update(msg);
-        }
-        let bytes = digest.finalize();
-        let bytes = bytes.as_slice()[0..8].try_into().unwrap();
-        let x = u64::from_be_bytes(bytes) % MODULO;
-        Ok(MillionRing(x))
-    }
-
-    fn hash_to_scalar(
-        tag: generic_ec::hash_to_curve::Tag,
-        msgs: &[&[u8]],
-    ) -> Result<Self::Scalar, generic_ec::core::Error> {
-        use sha2::Digest;
-        let mut digest = sha2::Sha256::new();
-        digest.update(tag.as_bytes());
-        for msg in msgs {
-            digest.update(msg);
-        }
-        let bytes = digest.finalize();
-        let bytes = bytes.as_slice()[0..8].try_into().unwrap();
-        let x = u64::from_be_bytes(bytes);
-        Ok(Scalar(x))
-    }
 }
