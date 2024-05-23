@@ -7,16 +7,14 @@ changelog_file=CHANGELOG.md;
 git fetch origin "$m_branch:$m_branch" --depth=1
 
 changed=0;
-for log in */"$changelog_file"; do
-    dir=$(dirname "$log");
-    # check if version changed
-    if git diff "$m_branch" -- "$dir/Cargo.toml" | grep -q "^-version = "; then
-        # check if changelog updated
-        if git diff --exit-code --no-patch "$m_branch" -- "$log"; then
-            echo "$dir version changed, but $log is not updated"
-            changed=1;
-        fi
+dir=.;
+# check if version changed
+if git diff "$m_branch" -- "Cargo.toml" | grep -q "^-version = "; then
+    # check if changelog updated
+    if git diff --exit-code --no-patch "$m_branch" -- "CHANGELOG.md"; then
+        echo "$dir version changed, but CHANGELOG.md is not updated"
+        changed=1;
     fi
-done
+fi
 
 exit "$changed";
