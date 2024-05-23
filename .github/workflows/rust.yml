@@ -59,7 +59,16 @@ jobs:
       with:
         cache-on-failure: "true"
     - name: Run clippy
-      run: cargo clippy --lib --tests -- -D clippy::all
+      run: cargo clippy --lib -- -D clippy::all
+  clippy-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: "true"
+    - name: Run clippy
+      run: cargo clippy --tests -- -D clippy::all
   check-changelog:
     runs-on: ubuntu-latest
     steps:
