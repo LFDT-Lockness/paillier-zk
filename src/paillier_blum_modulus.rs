@@ -63,9 +63,10 @@ use rug::Integer;
 use serde::{Deserialize, Serialize};
 
 /// Public data that both parties know: the Paillier-Blum modulus
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Data {
+    #[udigest(with = crate::common::digest_integer)]
     pub n: Integer,
 }
 
@@ -77,9 +78,10 @@ pub struct PrivateData {
 }
 
 /// Prover's first message, obtained by [`interactive::commit`]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
+    #[udigest(with = crate::common::digest_integer)]
     pub w: Integer,
 }
 
@@ -226,8 +228,7 @@ pub mod interactive {
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
-    use digest::{typenum::U32, Digest};
-    use rand_core::RngCore;
+    use digest::Digest;
 
     use crate::{Error, InvalidProof};
 
@@ -237,57 +238,47 @@ pub mod non_interactive {
     /// deriving determenistic challenge.
     ///
     /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-    pub fn prove<const M: usize, R: RngCore, D>(
-        shared_state: D,
+    pub fn prove<const M: usize, D: Digest>(
+        shared_state: &impl udigest::Digestable,
         data: &Data,
         pdata: &PrivateData,
-        rng: &mut R,
-    ) -> Result<(Commitment, Proof<M>), Error>
-    where
-        D: Digest<OutputSize = U32> + Clone,
-    {
+        rng: &mut impl rand_core::RngCore,
+    ) -> Result<(Commitment, Proof<M>), Error> {
         let commitment = super::interactive::commit(data, rng);
-        let challenge = challenge(shared_state, data, &commitment);
+        let challenge = challenge::<M, D>(shared_state, data, &commitment);
         let proof = super::interactive::prove(data, pdata, &commitment, &challenge)?;
         Ok((commitment, proof))
     }
 
     /// Verify the proof, deriving challenge independently from same data
-    pub fn verify<const M: usize, D>(
-        shared_state: D,
+    pub fn verify<const M: usize, D: Digest>(
+        shared_state: &impl udigest::Digestable,
         data: &Data,
         commitment: &Commitment,
         proof: &Proof<M>,
-    ) -> Result<(), InvalidProof>
-    where
-        D: Digest<OutputSize = U32> + Clone,
-    {
-        let challenge = challenge(shared_state, data, commitment);
+    ) -> Result<(), InvalidProof> {
+        let challenge = challenge::<M, D>(shared_state, data, commitment);
         super::interactive::verify(data, commitment, &challenge, proof)
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
-    pub fn challenge<const M: usize, D>(
-        shared_state: D,
-        Data { ref n }: &Data,
+    pub fn challenge<const M: usize, D: Digest>(
+        shared_state: &impl udigest::Digestable,
+        data: &Data,
         commitment: &Commitment,
-    ) -> Challenge<M>
-    where
-        D: Digest,
-    {
-        let shared_state = shared_state.finalize();
-        let hash = |d: D| {
-            let order = rug::integer::Order::Msf;
-            d.chain_update(&shared_state)
-                .chain_update(n.to_digits::<u8>(order))
-                .chain_update(commitment.w.to_digits::<u8>(order))
-                .finalize()
-        };
-        let mut rng = crate::common::rng::HashRng::new(hash);
+    ) -> Challenge<M> {
+        let tag = "paillier_zk.blum_modulus.ni_challenge";
+        let seed = udigest::inline_struct!(tag {
+            shared_state: shared_state,
+            data: data,
+            commitment: commitment,
+        });
+        let mut rng = rand_hash::HashRng::<D, _>::from_seed(seed);
         // since we can't use Default and Integer isn't copy, we initialize
         // like this
         let ys = [(); M].map(|()| {
-            n.random_below_ref(&mut fast_paillier::utils::external_rand(&mut rng))
+            data.n
+                .random_below_ref(&mut fast_paillier::utils::external_rand(&mut rng))
                 .into()
         });
         Challenge { ys }
@@ -300,6 +291,8 @@ mod test {
 
     use crate::common::test::{generate_blum_prime, generate_prime};
 
+    type D = sha2::Sha256;
+
     #[test]
     fn passing() {
         let mut rng = rand_dev::DevRng::new();
@@ -308,15 +301,10 @@ mod test {
         let n = (&p * &q).complete();
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
-        let shared_state = sha2::Sha256::default();
-        let (commitment, proof) = super::non_interactive::prove::<65, _, _>(
-            shared_state.clone(),
-            &data,
-            &pdata,
-            &mut rng,
-        )
-        .unwrap();
-        let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
+        let shared_state = "shared state";
+        let (commitment, proof) =
+            super::non_interactive::prove::<65, D>(&shared_state, &data, &pdata, &mut rng).unwrap();
+        let r = super::non_interactive::verify::<65, D>(&shared_state, &data, &commitment, &proof);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{e:?}"),
@@ -337,15 +325,10 @@ mod test {
         let n = (&p * &q).complete();
         let data = super::Data { n };
         let pdata = super::PrivateData { p, q };
-        let shared_state = sha2::Sha256::default();
-        let (commitment, proof) = super::non_interactive::prove::<65, _, _>(
-            shared_state.clone(),
-            &data,
-            &pdata,
-            &mut rng,
-        )
-        .unwrap();
-        let r = super::non_interactive::verify(shared_state, &data, &commitment, &proof);
+        let shared_state = "shared state";
+        let (commitment, proof) =
+            super::non_interactive::prove::<65, D>(&shared_state, &data, &pdata, &mut rng).unwrap();
+        let r = super::non_interactive::verify::<65, D>(&shared_state, &data, &commitment, &proof);
         if r.is_ok() {
             panic!("proof should not pass");
         }

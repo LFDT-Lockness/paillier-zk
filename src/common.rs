@@ -1,4 +1,3 @@
-pub mod rng;
 pub mod sqrt;
 
 use std::sync::Arc;
@@ -62,6 +61,26 @@ impl Aux {
                 .pow_mod_ref(e, &self.rsa_modulo)
                 .ok_or_else(BadExponent::undefined)?
                 .into()),
+        }
+    }
+
+    /// Returns a stripped version of `Aux` that contains only public data which can be digested
+    /// via [`udigest::Digestable`]
+    pub fn digest_public_data<'a>(&'a self) -> impl udigest::Digestable + 'a {
+        #[derive(udigest::Digestable)]
+        #[udigest(tag = "paillier-zk.aux")]
+        struct PublicAux<'a> {
+            #[udigest(with = digest_integer)]
+            s: &'a Integer,
+            #[udigest(with = digest_integer)]
+            t: &'a Integer,
+            #[udigest(with = digest_integer)]
+            rsa_modulo: &'a Integer,
+        }
+        PublicAux {
+            s: &self.s,
+            t: &self.t,
+            rsa_modulo: &self.rsa_modulo,
         }
     }
 }
@@ -255,6 +274,36 @@ pub fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), E> {
     } else {
         Err(err)
     }
+}
+
+/// Digests an integer
+///
+/// To be used within `#[udigest(with = "...")]` attribute
+pub fn digest_integer<B: udigest::Buffer>(
+    value: &Integer,
+    encoder: udigest::encoding::EncodeValue<B>,
+) {
+    let digits = value.to_digits::<u8>(rug::integer::Order::Msf);
+    encoder.encode_leaf_value(digits)
+}
+
+/// Digests `usize`
+///
+/// To be used within `#[udigest(with = "...")]` attribute
+pub fn digest_usize<B: udigest::Buffer>(value: &usize, encoder: udigest::encoding::EncodeValue<B>) {
+    let bytes = value.to_be_bytes();
+    let significant_zeroes = bytes.iter().take_while(|b| **b == 0).count();
+    encoder.encode_leaf_value(&bytes[significant_zeroes..])
+}
+
+/// Digests any encryption key
+///
+/// To be used within `#[udigest(with = "...")]` attribute
+pub fn digest_encryption_key<B: udigest::Buffer>(
+    value: &&dyn fast_paillier::AnyEncryptionKey,
+    encoder: udigest::encoding::EncodeValue<B>,
+) {
+    digest_integer::<B>(value.n(), encoder)
 }
 
 /// A common logic shared across tests and doctests

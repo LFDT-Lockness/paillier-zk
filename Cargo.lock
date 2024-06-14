@@ -344,9 +344,9 @@ dependencies = [
 
 [[package]]
 name = "generic-ec"
-version = "0.3.0"
+version = "0.4.0-rc1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c35601473af37794b53e8c7dc4a540a659d8de54c957990e88715b4037597d1"
+checksum = "e6ef4f7b051beb359b783cf82f8905134897dda3f330fe4449aed450b39a0849"
 dependencies = [
  "curve25519-dalek",
  "generic-ec-core",
@@ -357,6 +357,7 @@ dependencies = [
  "serde",
  "serde_with 2.0.1",
  "subtle",
+ "udigest",
  "zeroize",
 ]
 
@@ -525,6 +526,7 @@ dependencies = [
  "generic-ec",
  "rand_core",
  "rand_dev",
+ "rand_hash",
  "rug",
  "serde",
  "serde_json",
@@ -532,6 +534,7 @@ dependencies = [
  "sha2",
  "subtle",
  "thiserror",
+ "udigest",
  "zeroize",
 ]
 
@@ -611,6 +614,17 @@ dependencies = [
  "hex",
  "rand_chacha",
  "rand_core",
+]
+
+[[package]]
+name = "rand_hash"
+version = "0.1.0-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a10e66766c8fa9418ab3028548aacd3862b0fb516956c0aff7ef9251fbfa2b5"
+dependencies = [
+ "digest",
+ "rand_core",
+ "udigest",
 ]
 
 [[package]]
@@ -829,6 +843,27 @@ name = "typenum"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
+
+[[package]]
+name = "udigest"
+version = "0.2.0-rc1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17a82a9dfcfded1cb1cca74e99193bd71f73c0d87fafb36a6883f2193d91a23e"
+dependencies = [
+ "digest",
+ "udigest-derive",
+]
+
+[[package]]
+name = "udigest-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b29f121da05aa0857e7b96cf2f8782bd4140911506518486d4a125b97d7d609"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
+]
 
 [[package]]
 name = "unicode-ident"

@@ -111,23 +111,29 @@ pub use crate::common::Aux;
 
 /// Security parameters for proof. Choosing the values is a tradeoff between
 /// speed and chance of rejecting a valid proof or accepting an invalid proof
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
     /// l in paper, bit size of +-plaintext
+    #[udigest(with = crate::common::digest_usize)]
     pub l: usize,
     /// Epsilon in paper, slackness parameter
+    #[udigest(with = crate::common::digest_usize)]
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
+    #[udigest(with = crate::common::digest_integer)]
     pub q: Integer,
 }
 
 /// Public data that both parties know
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, udigest::Digestable)]
+#[udigest(bound = "")]
 pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
+    #[udigest(with = crate::common::digest_encryption_key)]
     pub key0: &'a dyn AnyEncryptionKey,
     /// C in paper, logarithm of X encrypted on N0
+    #[udigest(with = crate::common::digest_integer)]
     pub c: &'a Ciphertext,
     /// A basepoint, generator in group
     pub b: &'a Point<C>,
@@ -145,12 +151,16 @@ pub struct PrivateData<'a> {
 }
 
 /// Prover's first message, obtained by [`interactive::commit`]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, udigest::Digestable)]
+#[udigest(bound = "")]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Commitment<C: Curve> {
+    #[udigest(with = crate::common::digest_integer)]
     pub s: Integer,
+    #[udigest(with = crate::common::digest_integer)]
     pub a: Ciphertext,
     pub y: Point<C>,
+    #[udigest(with = crate::common::digest_integer)]
     pub d: Integer,
 }
 
@@ -302,7 +312,7 @@ pub mod interactive {
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
-    use digest::{typenum::U32, Digest};
+    use digest::Digest;
     use generic_ec::Curve;
     use rand_core::RngCore;
 
@@ -314,70 +324,52 @@ pub mod non_interactive {
     /// deriving determenistic challenge.
     ///
     /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-    pub fn prove<C: Curve, R: RngCore, D>(
-        shared_state: D,
+    pub fn prove<C: Curve, D: Digest>(
+        shared_state: &impl udigest::Digestable,
         aux: &Aux,
         data: Data<C>,
         pdata: PrivateData,
         security: &SecurityParams,
-        rng: &mut R,
-    ) -> Result<(Commitment<C>, Proof), Error>
-    where
-        D: Digest<OutputSize = U32>,
-    {
+        rng: &mut impl RngCore,
+    ) -> Result<(Commitment<C>, Proof), Error> {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
-        let challenge = challenge(shared_state, aux, data, &comm, security);
+        let challenge = challenge::<C, D>(shared_state, aux, data, &comm, security);
         let proof = super::interactive::prove(data, pdata, &pcomm, &challenge)?;
         Ok((comm, proof))
     }
 
     /// Verify the proof, deriving challenge independently from same data
-    pub fn verify<C: Curve, D>(
-        shared_state: D,
+    pub fn verify<C: Curve, D: Digest>(
+        shared_state: &impl udigest::Digestable,
         aux: &Aux,
         data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
         proof: &Proof,
-    ) -> Result<(), InvalidProof>
-    where
-        D: Digest<OutputSize = U32>,
-    {
-        let challenge = challenge(shared_state, aux, data, commitment, security);
+    ) -> Result<(), InvalidProof> {
+        let challenge = challenge::<C, D>(shared_state, aux, data, commitment, security);
         super::interactive::verify(aux, data, commitment, security, &challenge, proof)
     }
 
     /// Internal function for deriving challenge from protocol values
     /// deterministically
     pub fn challenge<C: Curve, D: Digest>(
-        shared_state: D,
+        shared_state: &impl udigest::Digestable,
         aux: &Aux,
         data: Data<C>,
         commitment: &Commitment<C>,
         security: &SecurityParams,
     ) -> Challenge {
-        let shared_state = shared_state.finalize();
-        let hash = |d: D| {
-            let order = rug::integer::Order::Msf;
-            d.chain_update(&shared_state)
-                .chain_update(C::CURVE_NAME)
-                .chain_update(aux.s.to_digits::<u8>(order))
-                .chain_update(aux.t.to_digits::<u8>(order))
-                .chain_update(aux.rsa_modulo.to_digits::<u8>(order))
-                .chain_update((security.l as u64).to_le_bytes())
-                .chain_update((security.epsilon as u64).to_le_bytes())
-                .chain_update(data.key0.n().to_digits::<u8>(order))
-                .chain_update(data.c.to_digits::<u8>(order))
-                .chain_update(data.x.to_bytes(true))
-                .chain_update(data.b.to_bytes(true))
-                .chain_update(commitment.s.to_digits::<u8>(order))
-                .chain_update(commitment.a.to_digits::<u8>(order))
-                .chain_update(commitment.y.to_bytes(true))
-                .chain_update(commitment.d.to_digits::<u8>(order))
-                .finalize()
-        };
-
-        let mut rng = crate::common::rng::HashRng::new(hash);
+        let tag = "paillier-zk.group_element_vs_paillier_encryption_in_range.ni-challenge";
+        let aux = aux.digest_public_data();
+        let seed = udigest::inline_struct!(tag {
+            shared_state: shared_state,
+            aux: aux,
+            security: security,
+            data: data,
+            commitment: commitment,
+        });
+        let mut rng = rand_hash::HashRng::<D, _>::from_seed(seed);
         super::interactive::challenge(security, &mut rng)
     }
 }
@@ -386,11 +378,12 @@ pub mod non_interactive {
 mod test {
     use generic_ec::{Curve, Point, Scalar};
     use rug::{Complete, Integer};
+    use sha2::Digest;
 
     use crate::common::test::random_key;
     use crate::common::{IntegerExt, InvalidProofReason};
 
-    fn run<R: rand_core::RngCore + rand_core::CryptoRng, C: Curve>(
+    fn run<R: rand_core::RngCore + rand_core::CryptoRng, C: Curve, D: Digest>(
         mut rng: R,
         security: super::SecurityParams,
         plaintext: Integer,
@@ -415,10 +408,10 @@ mod test {
 
         let aux = crate::common::test::aux(&mut rng);
 
-        let shared_state = sha2::Sha256::default();
+        let shared_state = "shared state";
 
-        let (commitment, proof) = super::non_interactive::prove(
-            shared_state.clone(),
+        let (commitment, proof) = super::non_interactive::prove::<C, D>(
+            &shared_state,
             &aux,
             data,
             pdata,
@@ -427,10 +420,17 @@ mod test {
         )
         .unwrap();
 
-        super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
+        super::non_interactive::verify::<C, D>(
+            &shared_state,
+            &aux,
+            data,
+            &commitment,
+            &security,
+            &proof,
+        )
     }
 
-    fn passing_test<C: Curve>() {
+    fn passing_test<C: Curve, D: Digest>() {
         let mut rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
@@ -438,10 +438,10 @@ mod test {
             q: (Integer::ONE << 128_u32).complete(),
         };
         let plaintext = Integer::from_rng_pm(&(Integer::ONE << security.l).complete(), &mut rng);
-        run::<_, C>(rng, security, plaintext).expect("proof failed");
+        run::<_, C, D>(rng, security, plaintext).expect("proof failed");
     }
 
-    fn failing_test<C: Curve>() {
+    fn failing_test<C: Curve, D: Digest>() {
         let rng = rand_dev::DevRng::new();
         let security = super::SecurityParams {
             l: 1024,
@@ -449,7 +449,7 @@ mod test {
             q: (Integer::ONE << 128_u32).complete(),
         };
         let plaintext = (Integer::ONE << (security.l + security.epsilon + 1)).complete();
-        let r = run::<_, C>(rng, security, plaintext).expect_err("proof should not pass");
+        let r = run::<_, C, D>(rng, security, plaintext).expect_err("proof should not pass");
         match r.reason() {
             InvalidProofReason::RangeCheck(_) => (),
             e => panic!("proof should not fail with: {e:?}"),
@@ -458,19 +458,19 @@ mod test {
 
     #[test]
     fn passing_p256() {
-        passing_test::<generic_ec::curves::Secp256r1>()
+        passing_test::<generic_ec::curves::Secp256r1, sha2::Sha256>()
     }
     #[test]
     fn failing_p256() {
-        failing_test::<generic_ec::curves::Secp256r1>()
+        failing_test::<generic_ec::curves::Secp256r1, sha2::Sha256>()
     }
 
     #[test]
     fn passing_million() {
-        passing_test::<crate::curve::C>()
+        passing_test::<crate::curve::C, sha2::Sha256>()
     }
     #[test]
     fn failing_million() {
-        failing_test::<crate::curve::C>()
+        failing_test::<crate::curve::C, sha2::Sha256>()
     }
 }
