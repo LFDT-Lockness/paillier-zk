@@ -269,9 +269,9 @@ pub mod non_interactive {
     ) -> Challenge<M> {
         let tag = "paillier_zk.blum_modulus.ni_challenge";
         let seed = udigest::inline_struct!(tag {
-            shared_state: shared_state,
-            data: data,
-            commitment: commitment,
+            shared_state,
+            data,
+            commitment,
         });
         let mut rng = rand_hash::HashRng::<D, _>::from_seed(seed);
         // since we can't use Default and Integer isn't copy, we initialize

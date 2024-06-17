@@ -344,9 +344,8 @@ dependencies = [
 
 [[package]]
 name = "generic-ec"
-version = "0.4.0-rc1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6ef4f7b051beb359b783cf82f8905134897dda3f330fe4449aed450b39a0849"
+version = "0.4.0-rc2"
+source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#6133c1a8fc4c969c26ce76cd781e818bdc66cda1"
 dependencies = [
  "curve25519-dalek",
  "generic-ec-core",
@@ -364,8 +363,7 @@ dependencies = [
 [[package]]
 name = "generic-ec-core"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f156564cc8aa47456da807826b1a0aa9cf420474d9f41593ffbdde65133d4bea"
+source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#6133c1a8fc4c969c26ce76cd781e818bdc66cda1"
 dependencies = [
  "generic-array",
  "rand_core",
@@ -377,8 +375,7 @@ dependencies = [
 [[package]]
 name = "generic-ec-curves"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5926949b758d01801c7edd75357495fe54c5fc25580a193de4c994c94d22307"
+source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#6133c1a8fc4c969c26ce76cd781e818bdc66cda1"
 dependencies = [
  "curve25519-dalek",
  "elliptic-curve",
@@ -618,9 +615,8 @@ dependencies = [
 
 [[package]]
 name = "rand_hash"
-version = "0.1.0-rc1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a10e66766c8fa9418ab3028548aacd3862b0fb516956c0aff7ef9251fbfa2b5"
+version = "0.1.0-rc2"
+source = "git+https://github.com/dfns/rand_hash?branch=update-udigest#e9cdc9556f63a42979ae75c4886b5bd895cae45a"
 dependencies = [
  "digest",
  "rand_core",
@@ -846,9 +842,9 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
 name = "udigest"
-version = "0.2.0-rc1"
+version = "0.2.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17a82a9dfcfded1cb1cca74e99193bd71f73c0d87fafb36a6883f2193d91a23e"
+checksum = "cb72201819e09f9e182640b3def05b3a614a51d6119e311f35a207f0814d196c"
 dependencies = [
  "digest",
  "udigest-derive",

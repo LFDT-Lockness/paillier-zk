@@ -66,22 +66,13 @@ impl Aux {
 
     /// Returns a stripped version of `Aux` that contains only public data which can be digested
     /// via [`udigest::Digestable`]
-    pub fn digest_public_data<'a>(&'a self) -> impl udigest::Digestable + 'a {
-        #[derive(udigest::Digestable)]
-        #[udigest(tag = "paillier-zk.aux")]
-        struct PublicAux<'a> {
-            #[udigest(with = digest_integer)]
-            s: &'a Integer,
-            #[udigest(with = digest_integer)]
-            t: &'a Integer,
-            #[udigest(with = digest_integer)]
-            rsa_modulo: &'a Integer,
-        }
-        PublicAux {
-            s: &self.s,
-            t: &self.t,
-            rsa_modulo: &self.rsa_modulo,
-        }
+    pub fn digest_public_data(&self) -> impl udigest::Digestable {
+        let order = rug::integer::Order::Msf;
+        udigest::inline_struct!("paillier_zk.aux" {
+            s: udigest::Bytes(self.s.to_digits::<u8>(order)),
+            t: udigest::Bytes(self.t.to_digits::<u8>(order)),
+            rsa_modulo: udigest::Bytes(self.rsa_modulo.to_digits::<u8>(order)),
+        })
     }
 }
 

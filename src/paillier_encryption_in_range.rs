@@ -331,12 +331,11 @@ pub mod non_interactive {
         security: &SecurityParams,
     ) -> Challenge {
         let tag = "paillier_zk.encryption_in_range.ni_challenge";
-        let aux = aux.digest_public_data();
         let seed = udigest::inline_struct!(tag {
-            shared_state: shared_state,
-            aux: aux,
-            data: data,
-            commitment: commitment,
+            shared_state,
+            aux: aux.digest_public_data(),
+            data,
+            commitment,
         });
         let mut rng = rand_hash::HashRng::<D, _>::from_seed(seed);
         super::interactive::challenge(security, &mut rng)

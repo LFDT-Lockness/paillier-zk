@@ -344,13 +344,12 @@ pub mod non_interactive {
         security: &SecurityParams,
     ) -> Challenge {
         let tag = "paillier_zk.no_small_factor.ni_challenge";
-        let aux = aux.digest_public_data();
         let seed = udigest::inline_struct!(tag {
-            shared_state: shared_state,
-            security: security,
-            aux: aux,
-            data: data,
-            commitment: commitment,
+            shared_state,
+            security,
+            aux: aux.digest_public_data(),
+            data,
+            commitment,
         });
         let mut rng = rand_hash::HashRng::<D, _>::from_seed(&seed);
         super::interactive::challenge(security, &mut rng)
