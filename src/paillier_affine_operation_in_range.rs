@@ -170,13 +170,10 @@ pub use crate::common::{Aux, InvalidProof};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecurityParams {
     /// l in paper, bit size of +-x
-    #[udigest(with = crate::common::digest_usize)]
     pub l_x: usize,
     /// l' in paper, bit size of +-y
-    #[udigest(with = crate::common::digest_usize)]
     pub l_y: usize,
     /// Epsilon in paper, slackness parameter
-    #[udigest(with = crate::common::digest_usize)]
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
     #[udigest(with = crate::common::digest_integer)]

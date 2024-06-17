@@ -278,15 +278,6 @@ pub fn digest_integer<B: udigest::Buffer>(
     encoder.encode_leaf_value(digits)
 }
 
-/// Digests `usize`
-///
-/// To be used within `#[udigest(with = "...")]` attribute
-pub fn digest_usize<B: udigest::Buffer>(value: &usize, encoder: udigest::encoding::EncodeValue<B>) {
-    let bytes = value.to_be_bytes();
-    let significant_zeroes = bytes.iter().take_while(|b| **b == 0).count();
-    encoder.encode_leaf_value(&bytes[significant_zeroes..])
-}
-
 /// Digests any encryption key
 ///
 /// To be used within `#[udigest(with = "...")]` attribute

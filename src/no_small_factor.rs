@@ -92,10 +92,8 @@ pub use crate::common::{Aux, InvalidProof};
 pub struct SecurityParams {
     /// l in paper, security parameter for bit size of plaintext: it needs to
     /// differ from sqrt(n) not more than by 2^l
-    #[udigest(with = crate::common::digest_usize)]
     pub l: usize,
     /// Epsilon in paper, slackness parameter
-    #[udigest(with = crate::common::digest_usize)]
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
     #[udigest(with = crate::common::digest_integer)]
