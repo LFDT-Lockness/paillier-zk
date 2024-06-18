@@ -344,8 +344,8 @@ dependencies = [
 
 [[package]]
 name = "generic-ec"
-version = "0.4.0-rc3"
-source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#f073395cbe53411ee1ddf9ef40a1933e96c41804"
+version = "0.4.0-rc4"
+source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#8fbc75205c10dd9677fb67cf6eea67c6b44d836e"
 dependencies = [
  "curve25519-dalek",
  "generic-ec-core",
@@ -363,7 +363,7 @@ dependencies = [
 [[package]]
 name = "generic-ec-core"
 version = "0.2.0"
-source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#f073395cbe53411ee1ddf9ef40a1933e96c41804"
+source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#8fbc75205c10dd9677fb67cf6eea67c6b44d836e"
 dependencies = [
  "generic-array",
  "rand_core",
@@ -375,7 +375,7 @@ dependencies = [
 [[package]]
 name = "generic-ec-curves"
 version = "0.2.1"
-source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#f073395cbe53411ee1ddf9ef40a1933e96c41804"
+source = "git+https://github.com/dfns/generic-ec?branch=update-udigest#8fbc75205c10dd9677fb67cf6eea67c6b44d836e"
 dependencies = [
  "curve25519-dalek",
  "elliptic-curve",
@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "paillier-zk"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "digest",
@@ -615,8 +615,8 @@ dependencies = [
 
 [[package]]
 name = "rand_hash"
-version = "0.1.0-rc3"
-source = "git+https://github.com/dfns/rand_hash?branch=udigest-rc3#33085279024b2f7bee18006f94a0003476093cae"
+version = "0.1.0-rc4"
+source = "git+https://github.com/dfns/rand_hash?branch=udigest-rc3#dc3e204b60c15b06387186c284fef18f407ffbc2"
 dependencies = [
  "digest",
  "rand_core",
@@ -842,9 +842,8 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
 name = "udigest"
-version = "0.2.0-rc3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67b2a40ebb1d8b2663f015f96f04f4e427f27d51b7f0794f0f288d6e70e9ba68"
+version = "0.2.0-rc4"
+source = "git+https://github.com/dfns/udigest?branch=inline-struct-clone#3dfaf6f6c238b2e5fe9228043718f4a9f4c39afd"
 dependencies = [
  "digest",
  "udigest-derive",
@@ -853,8 +852,7 @@ dependencies = [
 [[package]]
 name = "udigest-derive"
 version = "0.2.0-rc3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f3fe8a0eee2001de3db47e112d711790ff25f052ae0be3a59991ccc2fab52eb"
+source = "git+https://github.com/dfns/udigest?branch=inline-struct-clone#3dfaf6f6c238b2e5fe9228043718f4a9f4c39afd"
 dependencies = [
  "proc-macro2",
  "quote",
