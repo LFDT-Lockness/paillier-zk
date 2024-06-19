@@ -24,8 +24,7 @@
 //! # }
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!
-//! let shared_state_prover = sha2::Sha256::default();
-//! let shared_state_verifier = sha2::Sha256::default();
+//! let shared_state = "some shared state";
 //!
 //! let mut rng = rand_core::OsRng;
 //! # let mut rng = rand_dev::DevRng::new();
@@ -53,8 +52,8 @@
 //! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
 //!
 //! let data = p::Data { key, ciphertext: &ciphertext };
-//! let (commitment, proof) = p::non_interactive::prove(
-//!     shared_state_prover,
+//! let (commitment, proof) = p::non_interactive::prove::<sha2::Sha256>(
+//!     &shared_state,
 //!     &aux,
 //!     data,
 //!     p::PrivateData {
@@ -74,8 +73,8 @@
 //!
 //! # let recv = || (data, commitment, proof);
 //! let (data, commitment, proof) = recv();
-//! p::non_interactive::verify(
-//!     shared_state_verifier,
+//! p::non_interactive::verify::<sha2::Sha256>(
+//!     &shared_state,
 //!     &aux,
 //!     data,
 //!     &commitment,

@@ -43,8 +43,7 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Prover and verifier have a shared protocol state
-//! let shared_state_prover = sha2::Sha256::default();
-//! let shared_state_verifier = sha2::Sha256::default();
+//! let shared_state = "some shared state";
 //!
 //! let mut rng = rand_core::OsRng;
 //! # let mut rng = rand_dev::DevRng::new();
@@ -122,8 +121,8 @@
 //!     nonce_y: &nonce_y,
 //! };
 //! let (commitment, proof) =
-//!     p::non_interactive::prove(
-//!         shared_state_prover,
+//!     p::non_interactive::prove::<E, sha2::Sha256>(
+//!         &shared_state,
 //!         &aux,
 //!         data,
 //!         pdata,
@@ -141,8 +140,8 @@
 //!
 //! # let recv = || (data, commitment, proof);
 //! let (data, commitment, proof) = recv();
-//! let r = p::non_interactive::verify(
-//!     shared_state_verifier,
+//! let r = p::non_interactive::verify::<E, sha2::Sha256>(
+//!     &shared_state,
 //!     &aux,
 //!     data,
 //!     &commitment,

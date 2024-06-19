@@ -23,15 +23,14 @@
 //! // Security parameter
 //! const SECURITY: usize = 33;
 //! // Verifier and prover share the same state
-//! let prover_shared_state = sha2::Sha256::default();
-//! let verifier_shared_state = sha2::Sha256::default();
+//! let shared_state = "some shared state";
 //!
 //! let data = p::Data { n };
 //! let pdata = p::PrivateData { p, q };
 //!
 //! let (commitment, proof) =
-//!     p::non_interactive::prove::<{SECURITY}, _, _>(
-//!         prover_shared_state,
+//!     p::non_interactive::prove::<{SECURITY}, sha2::Sha256>(
+//!         &shared_state,
 //!         &data,
 //!         &pdata,
 //!         &mut rng,
@@ -47,8 +46,8 @@
 //! # let recv = || (data, commitment, proof);
 //! let (data, commitment, proof) = recv();
 //!
-//! p::non_interactive::verify::<{SECURITY}, _>(
-//!     verifier_shared_state,
+//! p::non_interactive::verify::<{SECURITY}, sha2::Sha256>(
+//!     &shared_state,
 //!     &data,
 //!     &commitment,
 //!     &proof,

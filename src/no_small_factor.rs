@@ -21,8 +21,7 @@
 //! # }
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let shared_state_prover = sha2::Sha256::default();
-//! let shared_state_verifier = sha2::Sha256::default();
+//! let shared_state = "some shared state";
 //! let mut rng = rand_core::OsRng;
 //! # let mut rng = rand_dev::DevRng::new();
 //!
@@ -49,13 +48,13 @@
 //!
 //! // 2. Prover computes a non-interactive proof that both factors are large enough
 //!
-//! let proof = p::prove(
-//!     shared_state_prover,
+//! let proof = p::prove::<sha2::Sha256>(
+//!     &shared_state,
 //!     &aux,
 //!     data,
 //!     p::PrivateData { p: &p, q: &q },
 //!     &security,
-//!     rng,
+//!     &mut rng,
 //! )?;
 //!
 //! // 4. Prover sends this data to verifier
@@ -72,7 +71,7 @@
 //!     n: &n,
 //!     n_root: &n_root,
 //! };
-//! p::verify(shared_state_verifier, &aux, data, &security, &proof)?;
+//! p::verify::<sha2::Sha256>(&shared_state, &aux, data, &security, &proof)?;
 //! # Ok(()) }
 //! ```
 //!
