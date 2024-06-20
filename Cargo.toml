@@ -11,7 +11,7 @@ keywords = ["paillier", "zk-proofs", "zero-knowledge"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-generic-ec = { version = "0.4.0-rc4", features = ["udigest"] }
+generic-ec = { version = "0.4", features = ["udigest"] }
 rand_core = { version = "0.6", default-features = false }
 digest = "0.10"
 fast-paillier = "0.1"
@@ -22,12 +22,12 @@ thiserror = "1"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_with = { version = "3", default-features = false, features = ["macros"], optional = true }
 
-udigest = { version = "0.2.0-rc4", default-features = false, features = ["inline-struct", "derive"] }
-rand_hash = "0.1.0-rc4"
+udigest = { version = "0.2", default-features = false, features = ["inline-struct", "derive"] }
+rand_hash = "0.1"
 
 [dev-dependencies]
-generic-ec = { version = "0.4.0-rc4", features = ["udigest", "all-curves"] }
-rand_dev = { version = "0.1.0", default-features = false }
+generic-ec = { version = "0.4", features = ["udigest", "all-curves"] }
+rand_dev = { version = "0.1", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 
 subtle = { version = "2.4", default-features = false }
@@ -50,14 +50,3 @@ required-features = ["serde"]
 [package.metadata.docs.rs]
 all-features = true
 
-[patch.crates-io.generic-ec]
-git = "https://github.com/dfns/generic-ec"
-branch = "update-udigest"
-
-[patch.crates-io.rand_hash]
-git = "https://github.com/dfns/rand_hash"
-branch = "udigest-rc3"
-
-[patch.crates-io.udigest]
-git = "https://github.com/dfns/udigest"
-branch = "inline-struct-clone"
