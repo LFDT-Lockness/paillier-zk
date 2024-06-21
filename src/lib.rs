@@ -25,7 +25,7 @@ compile_error!("doctest require that `__internal_doctest` feature is turned on")
 pub mod _doctest;
 
 use common::InvalidProofReason;
-pub use common::{rng, BadExponent, IntegerExt, InvalidProof, PaillierError};
+pub use common::{BadExponent, IntegerExt, InvalidProof, PaillierError};
 pub use {fast_paillier, rug, rug::Integer};
 
 /// Library general error type

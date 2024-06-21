@@ -1,4 +1,3 @@
-pub mod rng;
 pub mod sqrt;
 
 use std::sync::Arc;
@@ -63,6 +62,17 @@ impl Aux {
                 .ok_or_else(BadExponent::undefined)?
                 .into()),
         }
+    }
+
+    /// Returns a stripped version of `Aux` that contains only public data which can be digested
+    /// via [`udigest::Digestable`]
+    pub fn digest_public_data(&self) -> impl udigest::Digestable {
+        let order = rug::integer::Order::Msf;
+        udigest::inline_struct!("paillier_zk.aux" {
+            s: udigest::Bytes(self.s.to_digits::<u8>(order)),
+            t: udigest::Bytes(self.t.to_digits::<u8>(order)),
+            rsa_modulo: udigest::Bytes(self.rsa_modulo.to_digits::<u8>(order)),
+        })
     }
 }
 
@@ -255,6 +265,27 @@ pub fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), E> {
     } else {
         Err(err)
     }
+}
+
+/// Digests an integer
+///
+/// To be used within `#[udigest(with = "...")]` attribute
+pub fn digest_integer<B: udigest::Buffer>(
+    value: &Integer,
+    encoder: udigest::encoding::EncodeValue<B>,
+) {
+    let digits = value.to_digits::<u8>(rug::integer::Order::Msf);
+    encoder.encode_leaf_value(digits)
+}
+
+/// Digests any encryption key
+///
+/// To be used within `#[udigest(with = "...")]` attribute
+pub fn digest_encryption_key<B: udigest::Buffer>(
+    value: &&dyn fast_paillier::AnyEncryptionKey,
+    encoder: udigest::encoding::EncodeValue<B>,
+) {
+    digest_integer::<B>(value.n(), encoder)
 }
 
 /// A common logic shared across tests and doctests

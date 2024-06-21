@@ -1,6 +1,6 @@
 [package]
 name = "paillier-zk"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "ZK-proofs for Paillier encryption scheme"
@@ -11,7 +11,7 @@ keywords = ["paillier", "zk-proofs", "zero-knowledge"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-generic-ec = "0.3"
+generic-ec = { version = "0.4", features = ["udigest"] }
 rand_core = { version = "0.6", default-features = false }
 digest = "0.10"
 fast-paillier = "0.1"
@@ -22,9 +22,12 @@ thiserror = "1"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_with = { version = "3", default-features = false, features = ["macros"], optional = true }
 
+udigest = { version = "0.2", default-features = false, features = ["inline-struct", "derive"] }
+rand_hash = "0.1"
+
 [dev-dependencies]
-generic-ec = { version = "0.3", features = ["all-curves"] }
-rand_dev = { version = "0.1.0", default-features = false }
+generic-ec = { version = "0.4", features = ["udigest", "all-curves"] }
+rand_dev = { version = "0.1", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 
 subtle = { version = "2.4", default-features = false }
@@ -46,3 +49,4 @@ required-features = ["serde"]
 
 [package.metadata.docs.rs]
 all-features = true
+

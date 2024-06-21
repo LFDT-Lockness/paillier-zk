@@ -1,3 +1,6 @@
+## v0.4.0
+* security fix: derive challenges for zero-knowledge proof unambiguously
+
 ## v0.3.0
 * Update `generic-ec` dep to v0.3 [#48]
 
