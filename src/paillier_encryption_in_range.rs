@@ -24,8 +24,7 @@
 //! # }
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!
-//! let shared_state_prover = sha2::Sha256::default();
-//! let shared_state_verifier = sha2::Sha256::default();
+//! let shared_state = "some shared state";
 //!
 //! let mut rng = rand_core::OsRng;
 //! # let mut rng = rand_dev::DevRng::new();
@@ -53,8 +52,8 @@
 //! // 3. Prover computes a non-interactive proof that plaintext is at most 1024 bits:
 //!
 //! let data = p::Data { key, ciphertext: &ciphertext };
-//! let (commitment, proof) = p::non_interactive::prove(
-//!     shared_state_prover,
+//! let (commitment, proof) = p::non_interactive::prove::<sha2::Sha256>(
+//!     &shared_state,
 //!     &aux,
 //!     data,
 //!     p::PrivateData {
@@ -74,8 +73,8 @@
 //!
 //! # let recv = || (data, commitment, proof);
 //! let (data, commitment, proof) = recv();
-//! p::non_interactive::verify(
-//!     shared_state_verifier,
+//! p::non_interactive::verify::<sha2::Sha256>(
+//!     &shared_state,
 //!     &aux,
 //!     data,
 //!     &commitment,
@@ -111,11 +110,13 @@ pub struct SecurityParams {
 }
 
 /// Public data that both parties know
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, udigest::Digestable)]
 pub struct Data<'a> {
     /// N0 in paper, public key that k -> K was encrypted on
+    #[udigest(with = crate::common::digest_encryption_key)]
     pub key: &'a dyn AnyEncryptionKey,
     /// K in paper
+    #[udigest(with = crate::common::digest_integer)]
     pub ciphertext: &'a Ciphertext,
 }
 
@@ -130,11 +131,14 @@ pub struct PrivateData<'a> {
 
 // As described in cggmp21 at page 33
 /// Prover's first message, obtained by [`interactive::commit`]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
+    #[udigest(with = crate::common::digest_integer)]
     pub s: Integer,
+    #[udigest(with = crate::common::digest_integer)]
     pub a: Integer,
+    #[udigest(with = crate::common::digest_integer)]
     pub c: Integer,
 }
 
@@ -293,8 +297,7 @@ pub mod interactive {
 /// The non-interactive version of proof. Completed in one round, for example
 /// see the documentation of parent module.
 pub mod non_interactive {
-    use digest::{typenum::U32, Digest};
-    use rand_core::RngCore;
+    use digest::Digest;
 
     use crate::{Error, InvalidProof};
 
@@ -304,65 +307,49 @@ pub mod non_interactive {
     /// deriving determenistic challenge.
     ///
     /// Obtained from the above interactive proof via Fiat-Shamir heuristic.
-    pub fn prove<D, R: RngCore>(
-        shared_state: D,
+    pub fn prove<D: Digest>(
+        shared_state: &impl udigest::Digestable,
         aux: &Aux,
         data: Data,
         pdata: PrivateData,
         security: &SecurityParams,
-        rng: &mut R,
-    ) -> Result<(Commitment, Proof), Error>
-    where
-        D: Digest<OutputSize = U32>,
-    {
+        rng: &mut impl rand_core::RngCore,
+    ) -> Result<(Commitment, Proof), Error> {
         let (comm, pcomm) = super::interactive::commit(aux, data, pdata, security, rng)?;
-        let challenge = challenge(shared_state, aux, data, &comm, security);
+        let challenge = challenge::<D>(shared_state, aux, data, &comm, security);
         let proof = super::interactive::prove(data, pdata, &pcomm, &challenge)?;
         Ok((comm, proof))
     }
 
     /// Deterministically compute challenge based on prior known values in protocol
-    pub fn challenge<D>(
-        shared_state: D,
+    pub fn challenge<D: Digest>(
+        shared_state: &impl udigest::Digestable,
         aux: &Aux,
         data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
-    ) -> Challenge
-    where
-        D: Digest,
-    {
-        let order = rug::integer::Order::Msf;
-        let shared_state = shared_state.finalize();
-        let hash = |d: D| {
-            d.chain_update(&shared_state)
-                .chain_update(aux.s.to_digits(order))
-                .chain_update(aux.t.to_digits(order))
-                .chain_update(aux.rsa_modulo.to_digits(order))
-                .chain_update(data.key.n().to_digits(order))
-                .chain_update(data.ciphertext.to_digits(order))
-                .chain_update(commitment.s.to_digits(order))
-                .chain_update(commitment.a.to_digits(order))
-                .chain_update(commitment.c.to_digits(order))
-                .finalize()
-        };
-        let mut rng = crate::common::rng::HashRng::new(hash);
+    ) -> Challenge {
+        let tag = "paillier_zk.encryption_in_range.ni_challenge";
+        let seed = udigest::inline_struct!(tag {
+            shared_state,
+            aux: aux.digest_public_data(),
+            data,
+            commitment,
+        });
+        let mut rng = rand_hash::HashRng::<D, _>::from_seed(seed);
         super::interactive::challenge(security, &mut rng)
     }
 
     /// Verify the proof, deriving challenge independently from same data
-    pub fn verify<D>(
-        shared_state: D,
+    pub fn verify<D: Digest>(
+        shared_state: &impl udigest::Digestable,
         aux: &Aux,
         data: Data,
         commitment: &Commitment,
         security: &SecurityParams,
         proof: &Proof,
-    ) -> Result<(), InvalidProof>
-    where
-        D: Digest<OutputSize = U32>,
-    {
-        let challenge = challenge(shared_state, aux, data, commitment, security);
+    ) -> Result<(), InvalidProof> {
+        let challenge = challenge::<D>(shared_state, aux, data, commitment, security);
         super::interactive::verify(aux, data, commitment, security, &challenge, proof)
     }
 }
@@ -370,11 +357,12 @@ pub mod non_interactive {
 #[cfg(test)]
 mod test {
     use rug::{Complete, Integer};
+    use sha2::Digest;
 
     use crate::common::{IntegerExt, InvalidProofReason};
 
-    fn run_with<R: rand_core::RngCore + rand_core::CryptoRng>(
-        mut rng: &mut R,
+    fn run_with<D: Digest>(
+        mut rng: &mut impl rand_core::CryptoRngCore,
         security: super::SecurityParams,
         plaintext: Integer,
     ) -> Result<(), crate::common::InvalidProof> {
@@ -391,11 +379,18 @@ mod test {
             nonce: &nonce,
         };
 
-        let shared_state = sha2::Sha256::default();
+        let shared_state = "shared state";
         let (commitment, proof) =
-            super::non_interactive::prove(shared_state.clone(), &aux, data, pdata, &security, rng)
+            super::non_interactive::prove::<D>(&shared_state, &aux, data, pdata, &security, rng)
                 .unwrap();
-        super::non_interactive::verify(shared_state, &aux, data, &commitment, &security, &proof)
+        super::non_interactive::verify::<D>(
+            &shared_state,
+            &aux,
+            data,
+            &commitment,
+            &security,
+            &proof,
+        )
     }
 
     #[test]
@@ -407,7 +402,7 @@ mod test {
             q: (Integer::ONE << 128_u32).complete() - 1,
         };
         let plaintext = Integer::from_rng_pm(&(Integer::ONE << security.l).complete(), &mut rng);
-        let r = run_with(&mut rng, security, plaintext);
+        let r = run_with::<sha2::Sha256>(&mut rng, security, plaintext);
         match r {
             Ok(()) => (),
             Err(e) => panic!("{e:?}"),
@@ -422,7 +417,7 @@ mod test {
             q: (Integer::ONE << 128_u32).complete() - 1,
         };
         let plaintext = (Integer::ONE << (security.l + security.epsilon)).complete() + 1;
-        let r = run_with(&mut rng, security, plaintext);
+        let r = run_with::<sha2::Sha256>(&mut rng, security, plaintext);
         match r.map_err(|e| e.reason()) {
             Ok(()) => panic!("proof should not pass"),
             Err(InvalidProofReason::RangeCheck(_)) => (),
