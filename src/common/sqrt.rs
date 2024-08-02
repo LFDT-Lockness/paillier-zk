@@ -6,6 +6,7 @@ use rug::{Complete, Integer};
 /// Pre-requisites:
 /// - x is a quadratic residue in Zn
 /// - `n = pq`, p and q are Blum primes
+///
 /// If these don't hold, the result is a bogus number in Zn
 pub fn blum_sqrt(x: &Integer, p: &Integer, q: &Integer, n: &Integer) -> Integer {
     // Exponent in pq Blum modulus to obtain the principal square root.
@@ -27,7 +28,8 @@ pub fn blum_sqrt(x: &Integer, p: &Integer, q: &Integer, n: &Integer) -> Integer 
 /// Pre-requisites:
 /// - `n = pq`, p and q are Blum primes
 /// - `jacobi(w, n) = -1`, that is w is quadratic non-residue in Zn with jacobi
-/// symbol of -1
+///   symbol of -1
+///
 /// If these don't hold, the y' might not exist. In this case, returns `None`
 pub fn find_residue(
     y: &Integer,
