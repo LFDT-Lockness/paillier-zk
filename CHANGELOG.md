@@ -1,3 +1,8 @@
+## v0.4.1
+* Prettify code by using `#[udigest(as = ...)]` attribute [#51]
+
+[#51]: https://github.com/dfns/paillier-zk/pull/51
+
 ## v0.4.0
 * security fix: derive challenges for zero-knowledge proof unambiguously
 
