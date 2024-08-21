@@ -846,9 +846,8 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
 name = "udigest"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a435a16abb7029ba807a45242367b087dd767e87e2e5ebc5f0e4189ea114a23"
+version = "0.2.1"
+source = "git+https://github.com/dfns/udigest?branch=udigest_as#3ed5e22a0d628a69d7a6f2ec5ad3403200435232"
 dependencies = [
  "digest",
  "udigest-derive",
@@ -856,9 +855,8 @@ dependencies = [
 
 [[package]]
 name = "udigest-derive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee6296c12e792dbc59565a58920d8d1842997ad5a72ddf2a51f70d70bd7af2ba"
+version = "0.3.0"
+source = "git+https://github.com/dfns/udigest?branch=udigest_as#3ed5e22a0d628a69d7a6f2ec5ad3403200435232"
 dependencies = [
  "proc-macro2",
  "quote",

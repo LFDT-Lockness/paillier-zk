@@ -267,25 +267,29 @@ pub fn fail_if_ne<T: PartialEq, E>(err: E, lhs: T, rhs: T) -> Result<(), E> {
     }
 }
 
-/// Digests an integer
-///
-/// To be used within `#[udigest(with = "...")]` attribute
-pub fn digest_integer<B: udigest::Buffer>(
-    value: &Integer,
-    encoder: udigest::encoding::EncodeValue<B>,
-) {
-    let digits = value.to_digits::<u8>(rug::integer::Order::Msf);
-    encoder.encode_leaf_value(digits)
-}
+pub mod encoding {
+    /// Digests a rug integer
+    pub struct Integer;
+    impl udigest::DigestAs<rug::Integer> for Integer {
+        fn digest_as<B: udigest::Buffer>(
+            value: &rug::Integer,
+            encoder: udigest::encoding::EncodeValue<B>,
+        ) {
+            let digits = value.to_digits::<u8>(rug::integer::Order::Msf);
+            encoder.encode_leaf_value(digits)
+        }
+    }
 
-/// Digests any encryption key
-///
-/// To be used within `#[udigest(with = "...")]` attribute
-pub fn digest_encryption_key<B: udigest::Buffer>(
-    value: &&dyn fast_paillier::AnyEncryptionKey,
-    encoder: udigest::encoding::EncodeValue<B>,
-) {
-    digest_integer::<B>(value.n(), encoder)
+    /// Digests any encryption key
+    pub struct AnyEncryptionKey;
+    impl udigest::DigestAs<&dyn fast_paillier::AnyEncryptionKey> for AnyEncryptionKey {
+        fn digest_as<B: udigest::Buffer>(
+            value: &&dyn fast_paillier::AnyEncryptionKey,
+            encoder: udigest::encoding::EncodeValue<B>,
+        ) {
+            Integer::digest_as(value.n(), encoder)
+        }
+    }
 }
 
 /// A common logic shared across tests and doctests

@@ -22,7 +22,7 @@ thiserror = "1"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_with = { version = "3", default-features = false, features = ["macros"], optional = true }
 
-udigest = { version = "0.2", default-features = false, features = ["inline-struct", "derive"] }
+udigest = { version = "0.2.1", default-features = false, features = ["inline-struct", "derive"] }
 rand_hash = "0.1"
 
 [dev-dependencies]
@@ -50,3 +50,10 @@ required-features = ["serde"]
 [package.metadata.docs.rs]
 all-features = true
 
+[patch.crates-io.udigest]
+git = "https://github.com/dfns/udigest"
+branch = "udigest_as"
+
+[patch.crates-io.udigest-derive]
+git = "https://github.com/dfns/udigest"
+branch = "udigest_as"

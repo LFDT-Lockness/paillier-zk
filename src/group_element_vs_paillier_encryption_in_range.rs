@@ -118,7 +118,7 @@ pub struct SecurityParams {
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub q: Integer,
 }
 
@@ -127,10 +127,10 @@ pub struct SecurityParams {
 #[udigest(bound = "")]
 pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
-    #[udigest(with = crate::common::digest_encryption_key)]
+    #[udigest(as = crate::common::encoding::AnyEncryptionKey)]
     pub key0: &'a dyn AnyEncryptionKey,
     /// C in paper, logarithm of X encrypted on N0
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = &crate::common::encoding::Integer)]
     pub c: &'a Ciphertext,
     /// A basepoint, generator in group
     pub b: &'a Point<C>,
@@ -152,12 +152,12 @@ pub struct PrivateData<'a> {
 #[udigest(bound = "")]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Commitment<C: Curve> {
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub s: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub a: Ciphertext,
     pub y: Point<C>,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub d: Integer,
 }
 
