@@ -95,7 +95,7 @@ pub struct SecurityParams {
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub q: Integer,
 }
 
@@ -103,10 +103,10 @@ pub struct SecurityParams {
 #[derive(Debug, Clone, Copy, udigest::Digestable)]
 pub struct Data<'a> {
     /// N0 - rsa modulus
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = &crate::common::encoding::Integer)]
     pub n: &'a Integer,
     /// A number close to square root of n
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = &crate::common::encoding::Integer)]
     pub n_root: &'a Integer,
 }
 
@@ -135,17 +135,17 @@ pub struct PrivateCommitment {
 #[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub p: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub q: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub a: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub b: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub t: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub sigma: Integer,
 }
 

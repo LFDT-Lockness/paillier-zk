@@ -113,10 +113,10 @@ pub struct SecurityParams {
 #[derive(Debug, Clone, Copy, udigest::Digestable)]
 pub struct Data<'a> {
     /// N0 in paper, public key that k -> K was encrypted on
-    #[udigest(with = crate::common::digest_encryption_key)]
+    #[udigest(as = crate::common::encoding::AnyEncryptionKey)]
     pub key: &'a dyn AnyEncryptionKey,
     /// K in paper
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = &crate::common::encoding::Integer)]
     pub ciphertext: &'a Ciphertext,
 }
 
@@ -134,11 +134,11 @@ pub struct PrivateData<'a> {
 #[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub s: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub a: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub c: Integer,
 }
 

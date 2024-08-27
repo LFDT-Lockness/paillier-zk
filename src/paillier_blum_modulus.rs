@@ -65,7 +65,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Data {
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub n: Integer,
 }
 
@@ -80,7 +80,7 @@ pub struct PrivateData {
 #[derive(Debug, Clone, udigest::Digestable)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Commitment {
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub w: Integer,
 }
 

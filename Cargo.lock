@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "paillier-zk"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "digest",
@@ -846,9 +846,9 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
 name = "udigest"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a435a16abb7029ba807a45242367b087dd767e87e2e5ebc5f0e4189ea114a23"
+checksum = "0f8c862324ffd970533e7fde91b00bf06cd973e2023bfa6c7df5f96a1c959a9d"
 dependencies = [
  "digest",
  "udigest-derive",
@@ -856,9 +856,9 @@ dependencies = [
 
 [[package]]
 name = "udigest-derive"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee6296c12e792dbc59565a58920d8d1842997ad5a72ddf2a51f70d70bd7af2ba"
+checksum = "d6132fb8382b1bdec1cd01062dbe1e88074610e8fe37c2d504043a45f6400108"
 dependencies = [
  "proc-macro2",
  "quote",

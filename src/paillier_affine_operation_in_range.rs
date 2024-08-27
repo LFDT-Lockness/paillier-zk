@@ -175,7 +175,7 @@ pub struct SecurityParams {
     /// Epsilon in paper, slackness parameter
     pub epsilon: usize,
     /// q in paper. Security parameter for challenge
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub q: Integer,
 }
 
@@ -184,19 +184,19 @@ pub struct SecurityParams {
 #[udigest(bound = "")]
 pub struct Data<'a, C: Curve> {
     /// N0 in paper, public key that C was encrypted on
-    #[udigest(with = crate::common::digest_encryption_key)]
+    #[udigest(as = crate::common::encoding::AnyEncryptionKey)]
     pub key0: &'a dyn AnyEncryptionKey,
     /// N1 in paper, public key that y -> Y was encrypted on
-    #[udigest(with = crate::common::digest_encryption_key)]
+    #[udigest(as = crate::common::encoding::AnyEncryptionKey)]
     pub key1: &'a dyn AnyEncryptionKey,
     /// C or C0 in paper, some data encrypted on N0
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = &crate::common::encoding::Integer)]
     pub c: &'a Ciphertext,
     /// D or C in paper, result of affine transformation of C0 with x and y
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = &crate::common::encoding::Integer)]
     pub d: &'a Integer,
     /// Y in paper, y encrypted on N1
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = &crate::common::encoding::Integer)]
     pub y: &'a Ciphertext,
     /// X in paper, obtained as g^x
     pub x: &'a Point<C>,
@@ -221,18 +221,18 @@ pub struct PrivateData<'a> {
 #[udigest(bound = "")]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(bound = ""))]
 pub struct Commitment<C: Curve> {
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub a: Integer,
     pub b_x: Point<C>,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub b_y: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub e: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub s: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub f: Integer,
-    #[udigest(with = crate::common::digest_integer)]
+    #[udigest(as = crate::common::encoding::Integer)]
     pub t: Integer,
 }
 

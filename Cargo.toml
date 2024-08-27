@@ -1,6 +1,6 @@
 [package]
 name = "paillier-zk"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "ZK-proofs for Paillier encryption scheme"
@@ -22,7 +22,7 @@ thiserror = "1"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_with = { version = "3", default-features = false, features = ["macros"], optional = true }
 
-udigest = { version = "0.2", default-features = false, features = ["inline-struct", "derive"] }
+udigest = { version = "0.2.1", default-features = false, features = ["inline-struct", "derive"] }
 rand_hash = "0.1"
 
 [dev-dependencies]
@@ -49,4 +49,3 @@ required-features = ["serde"]
 
 [package.metadata.docs.rs]
 all-features = true
-
