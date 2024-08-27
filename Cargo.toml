@@ -49,11 +49,3 @@ required-features = ["serde"]
 
 [package.metadata.docs.rs]
 all-features = true
-
-[patch.crates-io.udigest]
-git = "https://github.com/dfns/udigest"
-branch = "udigest_as"
-
-[patch.crates-io.udigest-derive]
-git = "https://github.com/dfns/udigest"
-branch = "udigest_as"
