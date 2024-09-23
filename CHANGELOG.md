@@ -1,3 +1,8 @@
+## v0.4.2
+* Update links in the crate settings, update readme [#53]
+
+[#53]: https://github.com/LFDT-Lockness/paillier-zk/pull/53
+
 ## v0.4.1
 * Prettify code by using `#[udigest(as = ...)]` attribute [#51]
 
